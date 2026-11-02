@@ -22,9 +22,7 @@
     return ser({ document: d.name, type: d.type, symbols: symbols });
   }
 
-  var before = d.getTimeline().libraryItem;
-  var beforeName = before ? before.name : "";
-  var beforeScene = d.currentTimeline;
+  var restore = saveEditState(d);
   var out = [];
   for (i = 0; i < __items.length; i++) {
     try {
@@ -37,18 +35,6 @@
     }
   }
 
-  var warning = "";
-  try {
-    if (beforeName) d.library.editItem(beforeName);
-    else {
-      d.exitEditMode();
-      // Canvas では editScene が使えないため、シーンが変わったときだけ呼ぶ
-      if (d.currentTimeline !== beforeScene) d.editScene(beforeScene);
-    }
-    var now = d.getTimeline().libraryItem;
-    if ((now ? now.name : "") !== beforeName) warning = "Edit state was not restored";
-  } catch (e) {
-    warning = "Edit state was not restored: " + String(e && e.message ? e.message : e);
-  }
+  var warning = restore();
   return ser({ document: d.name, type: d.type, symbols: out, warning: warning });
 })()

@@ -26,7 +26,8 @@ const doc = (name, type) => { const d = { name, type, width: 550, height: 400, f
     kf(2, 3, { name: "end", elements: [{ name: "", elementType: "instance", libraryItem: lib }] })]) },
   { name: "dir", layerType: "folder", frames: [] }] }] };
   let editing = null;
-  d.getTimeline = () => editing ? symTimeline(editing, "// " + editing) : d.timelines[0];
+  d.syms = {};
+  d.getTimeline = () => editing ? (d.syms[editing] ||= symTimeline(editing, process.env.FAKE_SYM_SCRIPT ?? "// " + editing)) : d.timelines[0];
   d.exitEditMode = () => { editing = null; };
   d.editScene = () => {};
   d.library = { items: [
@@ -42,6 +43,7 @@ if (!src.includes("HANG")) runInNewContext(src, {
   fl: { trace() {}, documents: docs, getDocumentDOM: () => docs[0] || null },
 });
 process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".scripts", JSON.stringify(docs.map((d) => d.timelines[0].layers[0].frames[0].actionScript)) + "\\n");
+process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([k, t]) => [k, t.layers[0].frames[0].actionScript]))) + "\\n");
 log("end");
 `;
 
@@ -234,11 +236,16 @@ test("apply_scripts writes edits, deletes on empty file, skips unchanged", { tim
         const file = join(out, "scenes/Scene 1/a_b/1.as");
 
         const none = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
-        assert.deepEqual(none.structuredContent, { applied: [], failed: [], unchanged: 1 });
+        assert.deepEqual(none.structuredContent, { applied: [], failed: [], unchanged: 2, warnings: [] });
 
         await writeFile(file, "play();");
         const edited = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
-        assert.deepEqual(edited.structuredContent, { applied: ["scenes/Scene 1/a_b/1.as"], failed: [], unchanged: 0 });
+        assert.deepEqual(edited.structuredContent, {
+            applied: ["scenes/Scene 1/a_b/1.as"],
+            failed: [],
+            unchanged: 1,
+            warnings: [],
+        });
         assert.deepEqual((await scriptsLog(dir)).at(-1), [["play();"]].flat(), "script written");
 
         await writeFile(file, "");
@@ -272,6 +279,41 @@ test("apply_scripts does not overwrite frames changed in Animate; rejects anothe
         assert.deepEqual(result.applied, []);
         assert.match(result.failed[0]?.error ?? "", /Changed in Animate/);
         assert.deepEqual((await scriptsLog(dir)).at(-1), ["changed"], "not overwritten");
+    });
+});
+
+test("apply_scripts applies library symbols, detects conflicts, continues past failures", {
+    timeout: 60_000,
+}, async () => {
+    await withServer({ FAKE_EXTRA: "11" }, async (client, dir) => {
+        const out = join(dir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        await writeFile(join(out, "library/dir/Hero/L/1.as"), "play();");
+        await writeFile(join(out, "scenes/Scene 1/a_b/1.as"), "");
+        const seen: number[] = [];
+        const r = await client.callTool({ name: "apply_scripts", arguments: { dir: out } }, undefined, {
+            onprogress: (p) => seen.push(p.progress),
+        });
+        assert.equal(r.isError, undefined, text(r));
+        const result = r.structuredContent as { applied: string[]; failed: unknown[]; warnings: string[] };
+        assert.deepEqual(result.applied.sort(), ["library/dir/Hero/L/1.as", "scenes/Scene 1/a_b/1.as"]);
+        assert.deepEqual(result.failed, []);
+        assert.deepEqual(result.warnings, []);
+        assert.deepEqual(seen, [1, 2]);
+        const sym = (await readFile(join(dir, "log.sym"), "utf8")).trim().split("\n").at(-1);
+        assert.equal(JSON.parse(sym ?? "{}")["dir/Hero"], "play();");
+    });
+    await withServer({ FAKE_SYM_SCRIPT: "changed" }, async (client, dir) => {
+        const out = join(dir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        const manifestPath = join(out, ".export.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        manifest.files["library/dir/Hero/L/1.as"].script = "old";
+        await writeFile(manifestPath, JSON.stringify(manifest));
+        const r = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
+        const result = r.structuredContent as { applied: string[]; failed: { error: string }[] };
+        assert.deepEqual(result.applied, []);
+        assert.match(result.failed[0]?.error ?? "", /Changed in Animate/);
     });
 });
 

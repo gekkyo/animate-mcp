@@ -116,7 +116,7 @@ async function main() {
             try {
                 const run = async (jsfl: string, items?: string[] | null) => {
                     const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n${items === undefined ? "" : `var __items = ${JSON.stringify(items)};\n`}`;
-                    const code = `${prelude}${loadJsfl("select-document")}\n${loadJsfl("export-common")}\n${loadJsfl(jsfl)}`;
+                    const code = `${prelude}${loadJsfl("select-document")}\n${loadJsfl("edit-state")}\n${loadJsfl("export-common")}\n${loadJsfl(jsfl)}`;
                     return JSON.parse(String(await runner.execute(code)));
                 };
                 const data = (await run("export-scenes")) as ExportData;
@@ -174,20 +174,52 @@ async function main() {
         "apply_scripts",
         {
             description:
-                "Apply edited Timeline scripts from an export_scripts directory back to the Animate document (scenes). Empty file deletes the frame script. Frames changed in Animate since Export are not overwritten. Does not save the .fla.",
+                "Apply edited Timeline scripts from an export_scripts directory back to the Animate document (scenes and library symbols). Empty file deletes the frame script. Frames changed in Animate since Export are not overwritten. Does not save the .fla.",
             inputSchema: { dir: z.string(), document: z.string().optional() },
         },
-        async ({ dir, document }) => {
+        async ({ dir, document }, extra) => {
             try {
                 const { document: exported, edits, unchanged, failed } = await collectEdits(dir);
                 if (document && document !== exported)
                     throw new Error(`Export was made from ${exported}, not ${document}`);
-                const code = `var __docName = ${JSON.stringify(exported)};\nvar __edits = ${JSON.stringify(edits)};\n${loadJsfl("select-document")}\n${loadJsfl("apply-scenes")}`;
-                const run = JSON.parse(String(await runner.execute(code))) as {
-                    applied: string[];
-                    failed: { file: string; error: string }[];
+                const run = async (chunk: typeof edits) => {
+                    const code = `var __docName = ${JSON.stringify(exported)};\nvar __edits = ${JSON.stringify(chunk)};\n${loadJsfl("select-document")}\n${loadJsfl("edit-state")}\n${loadJsfl("apply-scenes")}`;
+                    return JSON.parse(String(await runner.execute(code))) as {
+                        applied: string[];
+                        failed: { file: string; error: string }[];
+                        warning: string;
+                    };
                 };
-                const result = { applied: run.applied, failed: [...failed, ...run.failed], unchanged };
+                const applied: string[] = [];
+                const warnings: string[] = [];
+                // シーンは 1 Run、シンボルはタイムライン(item)10 個ずつ 1 Run
+                const chunks: (typeof edits)[] = [edits.filter((edit) => edit.item === undefined)];
+                const items = [...new Set(edits.flatMap((edit) => (edit.item === undefined ? [] : [edit.item])))];
+                for (let from = 0; from < items.length; from += TIMELINES_PER_RUN) {
+                    const group = new Set(items.slice(from, from + TIMELINES_PER_RUN));
+                    chunks.push(edits.filter((edit) => edit.item !== undefined && group.has(edit.item)));
+                }
+                const progressToken = extra._meta?.progressToken;
+                for (const [index, chunk] of chunks.entries()) {
+                    if (chunk.length > 0) {
+                        try {
+                            const result = await run(chunk);
+                            applied.push(...result.applied);
+                            failed.push(...result.failed);
+                            if (result.warning) warnings.push(result.warning);
+                        } catch (error) {
+                            const message = error instanceof Error ? error.message : String(error);
+                            failed.push(...chunk.map((edit) => ({ file: edit.file, error: message })));
+                            warnings.push(`Edit state may not have been restored: ${message}`);
+                        }
+                    }
+                    if (progressToken !== undefined)
+                        await extra.sendNotification({
+                            method: "notifications/progress",
+                            params: { progressToken, progress: index + 1, total: chunks.length },
+                        });
+                }
+                const result = { applied, failed, unchanged, warnings };
                 return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
             } catch (error) {
                 return {
