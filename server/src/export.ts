@@ -10,7 +10,13 @@ export type ExportFrame = {
     script: string;
     elements: ExportElement[];
 };
-export type ExportScene = { name: string; layers?: { name: string; frames: ExportFrame[] }[]; error?: string };
+export type ExportScene = {
+    name: string;
+    layers?: { index: number; name: string; frames: ExportFrame[] }[];
+    error?: string;
+};
+/** Apply 用の manifest 項目: フレームの位置(0 始まり)と書き出し時のスクリプト */
+export type ManifestFile = { scene: number; layer: number; start: number; script: string };
 export type ExportData = { document: string; type: string; scenes: ExportScene[] };
 
 /**
@@ -46,7 +52,7 @@ function uniq(used: Set<string>, name: string): string {
  */
 export async function writeExport(data: ExportData, dir: string) {
     const ext = data.type === "htmlcanvas" ? "js" : "as";
-    const files: Record<string, string> = {};
+    const files: Record<string, ManifestFile> = {};
     const writeToExportDir = async (rel: string, content: string) => {
         const path = join(dir, rel);
         await mkdir(dirname(path), { recursive: true });
@@ -57,7 +63,7 @@ export async function writeExport(data: ExportData, dir: string) {
     const index: string[] = [`# ${data.document}`, "", "| タイムライン | structure |", "| --- | --- |"];
     const sceneDirs = new Set<string>();
 
-    for (const scene of data.scenes) {
+    for (const [sceneIndex, scene] of data.scenes.entries()) {
         if (!scene.layers) {
             failed.push({ name: scene.name, error: scene.error ?? "unknown error" });
             continue;
@@ -80,7 +86,12 @@ export async function writeExport(data: ExportData, dir: string) {
                 let file = "";
                 if (keyframe.script.trim() !== "") {
                     file = `${base}/${layerDir}/${start}.${ext}`;
-                    files[file] = keyframe.script;
+                    files[file] = {
+                        scene: sceneIndex,
+                        layer: layer.index,
+                        start: keyframe.start,
+                        script: keyframe.script,
+                    };
                     await writeToExportDir(file, keyframe.script);
                 }
                 const elementNames = keyframe.elements.map(

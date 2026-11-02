@@ -21,7 +21,7 @@ const kf = (startFrame, duration, extra) => Object.assign({ startFrame, duration
 const expand = (kfs) => kfs.flatMap((k) => Array(k.duration).fill(k));
 const doc = (name, type) => ({ name, type, width: 550, height: 400, frameRate: 24, timelines: [{ name: "Scene 1", layers: [
   { name: "a/b", layerType: "normal", frames: expand([
-    kf(0, 2, { actionScript: "stop();\\n// 日本語", elements: [{ name: "hero", elementType: "instance", libraryItem: lib }] }),
+    kf(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [{ name: "hero", elementType: "instance", libraryItem: lib }] }),
     kf(2, 3, { name: "end", elements: [{ name: "", elementType: "instance", libraryItem: lib }] })]) },
   { name: "dir", layerType: "folder", frames: [] }] }] });
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
@@ -29,6 +29,7 @@ if (!src.includes("HANG")) runInNewContext(src, {
   FLfile: { platformPathToURI: (p) => p, write: (p, t) => writeFileSync(p, t) },
   fl: { trace() {}, documents: docs, getDocumentDOM: () => docs[0] || null },
 });
+process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".scripts", JSON.stringify(docs.map((d) => d.timelines[0].layers[0].frames[0].actionScript)) + "\\n");
 log("end");
 `;
 
@@ -171,6 +172,60 @@ test("export_scripts errors: multiple documents list names; no document", { time
     await withServer({ FAKE_NO_DOC: "1" }, async (client, dir) => {
         const r = await client.callTool({ name: "export_scripts", arguments: { dir: join(dir, "out") } });
         assert.equal(text(r), "No document open");
+    });
+});
+
+const scriptsLog = async (dir: string) =>
+    (await readFile(join(dir, "log.scripts"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((l) => JSON.parse(l));
+
+test("apply_scripts writes edits, deletes on empty file, skips unchanged", { timeout: 30_000 }, () =>
+    withServer({}, async (client, dir) => {
+        const out = join(dir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        const file = join(out, "scenes/Scene 1/a_b/1.as");
+
+        const none = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
+        assert.deepEqual(none.structuredContent, { applied: [], failed: [], unchanged: 1 });
+
+        await writeFile(file, "play();");
+        const edited = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
+        assert.deepEqual(edited.structuredContent, { applied: ["scenes/Scene 1/a_b/1.as"], failed: [], unchanged: 0 });
+        assert.deepEqual((await scriptsLog(dir)).at(-1), [["play();"]].flat(), "script written");
+
+        await writeFile(file, "");
+        await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
+        assert.deepEqual((await scriptsLog(dir)).at(-1), [""], "empty file deletes the script");
+    }),
+);
+
+test("apply_scripts does not overwrite frames changed in Animate; rejects another document", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({}, async (client, dir) => {
+        const out = join(dir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        const other = await client.callTool({ name: "apply_scripts", arguments: { dir: out, document: "b.fla" } });
+        assert.equal(other.isError, true);
+        assert.match(text(other), /a\.fla/);
+    });
+    await withServer({ FAKE_SCRIPT: "changed" }, async (client, dir) => {
+        // Export 済みの内容(FAKE_SCRIPT 違い)を手で用意する
+        const out = join(dir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        const file = join(out, "scenes/Scene 1/a_b/1.as");
+        const manifestPath = join(out, ".export.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        manifest.files["scenes/Scene 1/a_b/1.as"].script = "old";
+        await writeFile(manifestPath, JSON.stringify(manifest));
+        await writeFile(file, "mine");
+        const r = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
+        const result = r.structuredContent as { applied: string[]; failed: { error: string }[] };
+        assert.deepEqual(result.applied, []);
+        assert.match(result.failed[0]?.error ?? "", /Changed in Animate/);
+        assert.deepEqual((await scriptsLog(dir)).at(-1), ["changed"], "not overwritten");
     });
 });
 

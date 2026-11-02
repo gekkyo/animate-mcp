@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { collectEdits } from "./apply.js";
 import { type ExportData, safeName, writeExport } from "./export.js";
 import { createRunner, type Launcher } from "./runner.js";
 
@@ -110,7 +111,7 @@ async function main() {
         },
         async ({ document, dir }) => {
             try {
-                const code = `var __docName = ${JSON.stringify(document ?? "")};\n${loadJsfl("export-scenes")}`;
+                const code = `var __docName = ${JSON.stringify(document ?? "")};\n${loadJsfl("select-document")}\n${loadJsfl("export-scenes")}`;
                 const data = JSON.parse(String(await runner.execute(code))) as ExportData;
                 const outDir =
                     dir ?? join(homedir(), ".animate-mcp", "exports", safeName(data.document.replace(/\.fla$/i, "")));
@@ -119,6 +120,34 @@ async function main() {
                     content: [{ type: "text", text: JSON.stringify(result) }],
                     structuredContent: result,
                 };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+                    isError: true,
+                };
+            }
+        },
+    );
+
+    server.registerTool(
+        "apply_scripts",
+        {
+            description:
+                "Apply edited Timeline scripts from an export_scripts directory back to the Animate document (scenes). Empty file deletes the frame script. Frames changed in Animate since Export are not overwritten. Does not save the .fla.",
+            inputSchema: { dir: z.string(), document: z.string().optional() },
+        },
+        async ({ dir, document }) => {
+            try {
+                const { document: exported, edits, unchanged, failed } = await collectEdits(dir);
+                if (document && document !== exported)
+                    throw new Error(`Export was made from ${exported}, not ${document}`);
+                const code = `var __docName = ${JSON.stringify(exported)};\nvar __edits = ${JSON.stringify(edits)};\n${loadJsfl("select-document")}\n${loadJsfl("apply-scenes")}`;
+                const run = JSON.parse(String(await runner.execute(code))) as {
+                    applied: string[];
+                    failed: { file: string; error: string }[];
+                };
+                const result = { applied: run.applied, failed: [...failed, ...run.failed], unchanged };
+                return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
             } catch (error) {
                 return {
                     content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
