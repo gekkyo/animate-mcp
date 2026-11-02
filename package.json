@@ -1,7 +1,13 @@
 {
   "name": "animate-mcp",
   "version": "0.1.0",
-  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gekkyo/animate-mcp.git"
+  },
+  "bugs": "https://github.com/gekkyo/animate-mcp/issues",
+  "homepage": "https://github.com/gekkyo/animate-mcp#readme",
   "type": "module",
   "bin": {
     "animate-mcp": "server/dist/index.js"

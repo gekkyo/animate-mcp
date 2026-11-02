@@ -1,0 +1,43 @@
+name: Bug report / 不具合報告
+description: Report a problem / 不具合を報告する
+labels: [bug]
+body:
+  - type: input
+    id: animate
+    attributes:
+      label: Animate version / Animate のバージョン
+      placeholder: "2024 (24.0.x)"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 14 / Windows 11
+    validations:
+      required: true
+  - type: dropdown
+    id: doctype
+    attributes:
+      label: Document type / ドキュメントの種類
+      options: [ActionScript 3, HTML5 Canvas, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 再現手順
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual vs expected / 実際の結果と期待する結果
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages / エラーメッセージ
+      description: Tool error text, Animate Output panel. / ツールのエラー、Animate の出力パネルなど
+      render: text
