@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";

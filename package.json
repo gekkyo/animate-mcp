@@ -1,9 +1,16 @@
 {
   "name": "animate-mcp",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "bin": {
+    "animate-mcp": "server/dist/index.js"
+  },
+  "files": [
+    "server/dist",
+    "server/jsfl"
+  ],
   "scripts": {
+    "prepare": "npm run build",
     "build": "tsc --project server/tsconfig.json",
     "test": "tsx --test server/test/*.test.ts",
     "start": "node server/dist/index.js",
@@ -12,12 +19,12 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "@types/node": "^25.0.0",
+    "typescript": "^5.9.3",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
-    "@types/node": "^25.0.0",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "tsx": "^4.20.6"
   }
 }
