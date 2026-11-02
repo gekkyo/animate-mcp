@@ -19,11 +19,23 @@ const lib = { name: "Hero", itemType: "movie clip" };
 const kf = (startFrame, duration, extra) => Object.assign({ startFrame, duration, name: "", tweenType: "none", actionScript: "", elements: [] }, extra);
 // 実 Animate と同じく layer.frames は 1 フレームごとに 1 要素（キーフレームの frame を duration 回並べる）
 const expand = (kfs) => kfs.flatMap((k) => Array(k.duration).fill(k));
-const doc = (name, type) => ({ name, type, width: 550, height: 400, frameRate: 24, timelines: [{ name: "Scene 1", layers: [
+const symTimeline = (name, script) => ({ name, libraryItem: { name }, layers: [{ name: "L", layerType: "normal", frames: expand([kf(0, 1, { actionScript: script })]) }] });
+const doc = (name, type) => { const d = { name, type, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [{ name: "Scene 1", layers: [
   { name: "a/b", layerType: "normal", frames: expand([
     kf(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [{ name: "hero", elementType: "instance", libraryItem: lib }] }),
     kf(2, 3, { name: "end", elements: [{ name: "", elementType: "instance", libraryItem: lib }] })]) },
-  { name: "dir", layerType: "folder", frames: [] }] }] });
+  { name: "dir", layerType: "folder", frames: [] }] }] };
+  let editing = null;
+  d.getTimeline = () => editing ? symTimeline(editing, "// " + editing) : d.timelines[0];
+  d.exitEditMode = () => { editing = null; };
+  d.editScene = () => {};
+  d.library = { items: [
+    { name: "F", itemType: "folder" },
+    { name: "dir/Hero", itemType: "movie clip", linkageExportForAS: true, linkageClassName: "com.Hero" },
+    ...Array.from({ length: Number(process.env.FAKE_EXTRA ?? 0) }, (_, i) => ({ name: "S" + i, itemType: "graphic" })),
+    { name: "Broken", itemType: "button" }],
+    editItem: (n) => { if (n === "Broken" && !process.env.FAKE_NO_BROKEN) throw new Error("cannot edit"); editing = n; } };
+  return d; };
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
 if (!src.includes("HANG")) runInNewContext(src, {
   FLfile: { platformPathToURI: (p) => p, write: (p, t) => writeFileSync(p, t) },
@@ -157,6 +169,40 @@ test("export_scripts writes scripts, structure.md and manifest; Canvas uses .js"
         assert.match(await readFile(join(out, "scenes/Scene 1/a_b/1.js"), "utf8"), /^stop\(\)/);
     });
 });
+
+test("export_scripts exports library symbols in chunks, continues past failures, reports Linked class", {
+    timeout: 60_000,
+}, async () => {
+    await withServer({ FAKE_EXTRA: "11" }, async (client, dir) => {
+        const out = join(dir, "out");
+        const r = await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        assert.equal(r.isError, undefined, text(r));
+        assert.equal(await readFile(join(out, "library/dir/Hero/L/1.as"), "utf8"), "// dir/Hero");
+        const result = r.structuredContent as {
+            failed: { name: string; error: string }[];
+            linkedClasses: unknown[];
+            warnings: string[];
+        };
+        assert.deepEqual(result.failed, [{ name: "Broken", error: "cannot edit" }]);
+        assert.deepEqual(result.linkedClasses, [{ symbol: "dir/Hero", className: "com.Hero", path: "com/Hero.as" }]);
+        assert.deepEqual(result.warnings, []);
+        assert.equal((await readFile(join(dir, "log"), "utf8")).match(/start/g)?.length, 4, "scenes + list + 2 chunks");
+    });
+    await withServer({ FAKE_TYPE: "htmlcanvas" }, async (client, dir) => {
+        const r = await client.callTool({ name: "export_scripts", arguments: { dir: join(dir, "out") } });
+        assert.deepEqual((r.structuredContent as { linkedClasses: unknown[] }).linkedClasses, []);
+    });
+});
+
+test("export_scripts sends progress only when the client asks", { timeout: 60_000 }, () =>
+    withServer({ FAKE_EXTRA: "11" }, async (client, dir) => {
+        const seen: number[] = [];
+        await client.callTool({ name: "export_scripts", arguments: { dir: join(dir, "a") } }, undefined, {
+            onprogress: (p) => seen.push(p.progress),
+        });
+        assert.deepEqual(seen, [10, 13]);
+    }),
+);
 
 test("export_scripts errors: multiple documents list names; no document", { timeout: 20_000 }, async () => {
     await withServer({ FAKE_TWO: "1" }, async (client, dir) => {

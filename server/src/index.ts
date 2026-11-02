@@ -6,8 +6,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { collectEdits } from "./apply.js";
-import { type ExportData, safeName, writeExport } from "./export.js";
+import { type ExportData, type ExportScene, safeName, writeExport } from "./export.js";
 import { createRunner, type Launcher } from "./runner.js";
+
+/** 1 回の Run で読むタイムライン数(タイムアウト対策) */
+const TIMELINES_PER_RUN = 10;
 
 /**
  * Run file を Animate で開く Launcher を作る。成功は終了コード 0 で判定する。
@@ -106,16 +109,54 @@ async function main() {
         "export_scripts",
         {
             description:
-                "Export the active Animate document's scene Timeline scripts (AS3 / HTML5 Canvas) to files, with index.md and per-timeline structure.md. Default dir: ~/.animate-mcp/exports/<document>/.",
+                "Export the active Animate document's scene and library-symbol Timeline scripts (AS3 / HTML5 Canvas) to files, with index.md and per-timeline structure.md. Default dir: ~/.animate-mcp/exports/<document>/.",
             inputSchema: { document: z.string().optional(), dir: z.string().optional() },
         },
-        async ({ document, dir }) => {
+        async ({ document, dir }, extra) => {
             try {
-                const code = `var __docName = ${JSON.stringify(document ?? "")};\n${loadJsfl("select-document")}\n${loadJsfl("export-scenes")}`;
-                const data = JSON.parse(String(await runner.execute(code))) as ExportData;
+                const run = async (jsfl: string, items?: string[] | null) => {
+                    const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n${items === undefined ? "" : `var __items = ${JSON.stringify(items)};\n`}`;
+                    const code = `${prelude}${loadJsfl("select-document")}\n${loadJsfl("export-common")}\n${loadJsfl(jsfl)}`;
+                    return JSON.parse(String(await runner.execute(code)));
+                };
+                const data = (await run("export-scenes")) as ExportData;
+                const list = (await run("export-library", null)) as {
+                    symbols: { name: string; linked: string }[];
+                };
+                const linkedOf = new Map(list.symbols.map((symbol) => [symbol.name, symbol.linked]));
+                data.symbols = [];
+                const warnings: string[] = [];
+                const progressToken = extra._meta?.progressToken;
+                const total = list.symbols.length;
+                for (let from = 0; from < total; from += TIMELINES_PER_RUN) {
+                    const names = list.symbols.slice(from, from + TIMELINES_PER_RUN).map((symbol) => symbol.name);
+                    try {
+                        const chunk = (await run("export-library", names)) as {
+                            symbols: ExportScene[];
+                            warning: string;
+                        };
+                        data.symbols.push(...chunk.symbols);
+                        if (chunk.warning) warnings.push(chunk.warning);
+                    } catch (error) {
+                        const message = error instanceof Error ? error.message : String(error);
+                        data.symbols.push(...names.map((name) => ({ name, error: message })));
+                        warnings.push(`Edit state may not have been restored: ${message}`);
+                    }
+                    if (progressToken !== undefined)
+                        await extra.sendNotification({
+                            method: "notifications/progress",
+                            params: {
+                                progressToken,
+                                progress: Math.min(from + TIMELINES_PER_RUN, total),
+                                total,
+                                message: names.at(-1),
+                            },
+                        });
+                }
+                for (const symbol of data.symbols) (symbol as { linked?: string }).linked = linkedOf.get(symbol.name);
                 const outDir =
                     dir ?? join(homedir(), ".animate-mcp", "exports", safeName(data.document.replace(/\.fla$/i, "")));
-                const result = await writeExport(data, outDir);
+                const result = { ...(await writeExport(data, outDir)), warnings };
                 return {
                     content: [{ type: "text", text: JSON.stringify(result) }],
                     structuredContent: result,

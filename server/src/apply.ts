@@ -19,6 +19,8 @@ export async function collectEdits(dir: string) {
     const failed: { file: string; error: string }[] = [];
     let unchanged = 0;
     for (const [file, entry] of Object.entries(manifest.files)) {
+        // ライブラリのシンボルの反映はチケット 04 で対応するまで対象外
+        if (entry.item !== undefined) continue;
         try {
             const script = await readFile(join(dir, file), "utf8");
             if (script === entry.script) unchanged++;

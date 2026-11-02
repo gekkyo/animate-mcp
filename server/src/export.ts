@@ -15,9 +15,15 @@ export type ExportScene = {
     layers?: { index: number; name: string; frames: ExportFrame[] }[];
     error?: string;
 };
-/** Apply 用の manifest 項目: フレームの位置(0 始まり)と書き出し時のスクリプト */
-export type ManifestFile = { scene: number; layer: number; start: number; script: string };
-export type ExportData = { document: string; type: string; scenes: ExportScene[] };
+/** Apply 用の manifest 項目: フレームの位置(0 始まり)と書き出し時のスクリプト。ライブラリのシンボルは scene の代わりに item(ライブラリ内のパス) */
+export type ManifestFile = { scene: number; layer: number; start: number; script: string; item?: string };
+export type ExportData = {
+    document: string;
+    type: string;
+    scenes: ExportScene[];
+    /** ライブラリのシンボル(name はライブラリ内のパス)。linked は AS3 の Linked class 名 */
+    symbols?: (ExportScene & { linked?: string })[];
+};
 
 /**
  * ファイル名に使えない文字だけ "_" に置換する（名前はそのまま使う）。
@@ -48,7 +54,7 @@ function uniq(used: Set<string>, name: string): string {
  * フレーム番号は Animate の UI に合わせて 1 始まり。
  * @param data export-scenes.jsfl の結果
  * @param dir 出力先ディレクトリ
- * @returns 成功したシーンと失敗したシーン（Linked class はライブラリ対応までは空）
+ * @returns 成功/失敗したタイムライン名と Linked class（AS3 のみ。Canvas は空）
  */
 export async function writeExport(data: ExportData, dir: string) {
     const ext = data.type === "htmlcanvas" ? "js" : "as";
@@ -62,15 +68,30 @@ export async function writeExport(data: ExportData, dir: string) {
     const failed: { name: string; error: string }[] = [];
     const index: string[] = [`# ${data.document}`, "", "| タイムライン | structure |", "| --- | --- |"];
     const sceneDirs = new Set<string>();
+    const libraryDirs = new Set<string>();
 
-    for (const [sceneIndex, scene] of data.scenes.entries()) {
+    const timelines = [
+        ...data.scenes.map((scene, sceneIndex) => ({ scene, sceneIndex, item: undefined, linked: "" })),
+        ...(data.symbols ?? []).map((scene) => ({
+            scene,
+            sceneIndex: 0,
+            item: scene.name,
+            linked: scene.linked ?? "",
+        })),
+    ];
+    const linkedClasses: { symbol: string; className: string; path: string }[] = [];
+    for (const { scene, sceneIndex, item, linked } of timelines) {
         if (!scene.layers) {
             failed.push({ name: scene.name, error: scene.error ?? "unknown error" });
             continue;
         }
-        const base = `scenes/${uniq(sceneDirs, safeName(scene.name))}`;
+        const base = item
+            ? uniq(libraryDirs, `library/${item.split("/").map(safeName).join("/")}`)
+            : `scenes/${uniq(sceneDirs, safeName(scene.name))}`;
+        if (linked)
+            linkedClasses.push({ symbol: scene.name, className: linked, path: `${linked.replaceAll(".", "/")}.as` });
         const layerDirs = new Set<string>();
-        const md: string[] = [`# シーン: ${scene.name}`, ""];
+        const md: string[] = [`# ${item ? "シンボル" : "シーン"}: ${scene.name}`, ""];
         const names = new Map<string, string[]>();
         for (const layer of scene.layers) {
             const layerDir = uniq(layerDirs, safeName(layer.name));
@@ -91,6 +112,7 @@ export async function writeExport(data: ExportData, dir: string) {
                         layer: layer.index,
                         start: keyframe.start,
                         script: keyframe.script,
+                        ...(item ? { item } : {}),
                     };
                     await writeToExportDir(file, keyframe.script);
                 }
@@ -131,5 +153,5 @@ export async function writeExport(data: ExportData, dir: string) {
     await writeToExportDir("index.md", `${index.join("\n")}\n`);
     // Apply の衝突検知用: 書き出し時の内容を控える
     await writeToExportDir(".export.json", JSON.stringify({ document: data.document, type: data.type, files }));
-    return { dir, exported, failed, linkedClasses: [] as string[] };
+    return { dir, exported, failed, linkedClasses };
 }
