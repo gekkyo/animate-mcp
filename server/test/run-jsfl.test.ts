@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -229,11 +229,13 @@ const scriptsLog = async (dir: string) =>
         .split("\n")
         .map((l) => JSON.parse(l));
 
-test("apply_scripts writes edits, deletes on empty file, skips unchanged", { timeout: 30_000 }, () =>
-    withServer({}, async (client, dir) => {
+const SCENE_FILE = "scenes/Scene 1/a_b/1.as";
+
+test("apply_scripts writes edits, deletes on empty file, skips unchanged", { timeout: 30_000 }, async () => {
+    await withServer({}, async (client, dir) => {
         const out = join(dir, "out");
         await client.callTool({ name: "export_scripts", arguments: { dir: out } });
-        const file = join(out, "scenes/Scene 1/a_b/1.as");
+        const file = join(out, SCENE_FILE);
 
         const none = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
         assert.deepEqual(none.structuredContent, { applied: [], failed: [], unchanged: 2, warnings: [] });
@@ -241,16 +243,109 @@ test("apply_scripts writes edits, deletes on empty file, skips unchanged", { tim
         await writeFile(file, "play();");
         const edited = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
         assert.deepEqual(edited.structuredContent, {
-            applied: ["scenes/Scene 1/a_b/1.as"],
+            applied: [SCENE_FILE],
             failed: [],
             unchanged: 1,
             warnings: [],
         });
         assert.deepEqual((await scriptsLog(dir)).at(-1), [["play();"]].flat(), "script written");
-
-        await writeFile(file, "");
+        assert.equal(
+            JSON.parse(await readFile(join(out, ".export.json"), "utf8")).files[SCENE_FILE].script,
+            "play();",
+            "manifest records the applied content",
+        );
+        const again = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
+        assert.equal((again.structuredContent as { unchanged: number }).unchanged, 2, "nothing left to apply");
+    });
+    await withServer({}, async (client, dir) => {
+        const out = join(dir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        await writeFile(join(out, SCENE_FILE), "");
         await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
         assert.deepEqual((await scriptsLog(dir)).at(-1), [""], "empty file deletes the script");
+    });
+});
+
+test("apply_scripts counts a frame already holding the new script as applied", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SCRIPT: "play();" }, async (client, dir) => {
+        const out = join(dir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        const manifestPath = join(out, ".export.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        manifest.files[SCENE_FILE].script = "old";
+        await writeFile(manifestPath, JSON.stringify(manifest));
+        const r = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
+        assert.deepEqual((r.structuredContent as { applied: string[] }).applied, [SCENE_FILE]);
+    }),
+);
+
+test("apply_scripts rejects manifest paths outside the export directory", { timeout: 30_000 }, () =>
+    withServer({}, async (client, dir) => {
+        const out = join(dir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        const manifestPath = join(out, ".export.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        manifest.files["../secret.txt"] = { scene: 0, layer: 0, start: 0, script: "x" };
+        await writeFile(manifestPath, JSON.stringify(manifest));
+        const r = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
+        const failed = (r.structuredContent as { failed: { file: string; error: string }[] }).failed;
+        assert.equal(failed[0]?.file, "../secret.txt");
+        assert.match(failed[0]?.error ?? "", /outside the export directory/);
+    }),
+);
+
+test(
+    "export_scripts refuses to overwrite unapplied edits, force overwrites, stale files are removed",
+    {
+        timeout: 30_000,
+    },
+    () =>
+        withServer({}, async (client, dir) => {
+            const out = join(dir, "out");
+            const file = join(out, SCENE_FILE);
+            await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+            await writeFile(file, "mine");
+            const refused = await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+            assert.equal(refused.isError, true);
+            assert.match(text(refused), /Unapplied edits.*force: true/);
+            assert.equal(await readFile(file, "utf8"), "mine", "edit is kept");
+
+            const manifestPath = join(out, ".export.json");
+            const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+            const stale = "scenes/Scene 1/old/9.as";
+            manifest.files[stale] = { scene: 0, layer: 0, start: 8, script: "gone" };
+            await writeFile(join(out, "stale-marker"), "");
+            await writeFile(manifestPath, JSON.stringify(manifest));
+            await mkdir(join(out, "scenes/Scene 1/old"), { recursive: true });
+            await writeFile(join(out, stale), "gone");
+            const forced = await client.callTool({ name: "export_scripts", arguments: { dir: out, force: true } });
+            assert.equal(forced.isError, undefined, text(forced));
+            assert.equal(await readFile(file, "utf8"), "stop();\n// 日本語", "force overwrites");
+            await assert.rejects(readFile(join(out, stale), "utf8"), { code: "ENOENT" });
+            assert.equal(await readFile(join(out, "stale-marker"), "utf8"), "", "unrelated files are kept");
+        }),
+);
+
+test("relative dir is resolved to an absolute path", { timeout: 20_000 }, () =>
+    withServer({}, async (client, dir) => {
+        const out = join(dir, "out");
+        const r = await client.callTool({
+            name: "export_scripts",
+            arguments: { dir: relative(resolve("."), out) },
+        });
+        assert.equal((r.structuredContent as { dir: string }).dir, out);
+    }),
+);
+
+test("old leftovers in the runs directory are removed on the next Run", { timeout: 20_000 }, () =>
+    withServer({}, async (client, _dir, runsDir) => {
+        await client.callTool({ name: "run_jsfl", arguments: { code: "1" } });
+        const old = join(runsDir, "orphan.result.json");
+        await writeFile(old, "{}");
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        await utimes(old, twoHoursAgo, twoHoursAgo);
+        await client.callTool({ name: "run_jsfl", arguments: { code: "1" } });
+        assert.deepEqual(await readdir(runsDir), []);
     }),
 );
 
@@ -310,6 +405,7 @@ test("apply_scripts applies library symbols, detects conflicts, continues past f
         const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
         manifest.files["library/dir/Hero/L/1.as"].script = "old";
         await writeFile(manifestPath, JSON.stringify(manifest));
+        await writeFile(join(out, "library/dir/Hero/L/1.as"), "mine");
         const r = await client.callTool({ name: "apply_scripts", arguments: { dir: out } });
         const result = r.structuredContent as { applied: string[]; failed: { error: string }[] };
         assert.deepEqual(result.applied, []);

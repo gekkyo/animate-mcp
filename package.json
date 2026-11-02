@@ -1,6 +1,7 @@
 {
   "name": "animate-mcp",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "bin": {
     "animate-mcp": "server/dist/index.js"

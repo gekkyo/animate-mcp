@@ -2,16 +2,26 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { collectEdits } from "./apply.js";
+import { clearPreviousExport, collectEdits, markApplied } from "./apply.js";
 import { type ExportData, type ExportScene, safeName, writeExport } from "./export.js";
 import { createRunner, type Launcher } from "./runner.js";
 
 /** 1 回の Run で読むタイムライン数(タイムアウト対策) */
 const TIMELINES_PER_RUN = 10;
+
+/**
+ * ツールの例外を MCP のエラー結果に変換する。
+ * @param error catch した値
+ * @returns isError 付きのテキスト結果
+ */
+const failure = (error: unknown) => ({
+    content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+    isError: true,
+});
 
 /**
  * Run file を Animate で開く Launcher を作る。成功は終了コード 0 で判定する。
@@ -53,7 +63,7 @@ function isAnimateRunning(): Promise<boolean> {
 const loadJsfl = (name: string) => readFileSync(new URL(`../jsfl/${name}.jsfl`, import.meta.url), "utf8");
 
 /**
- * Runner を組み立て、MCP ツール（run_jsfl / get_document_info）を登録して stdio で待ち受ける。
+ * Runner を組み立て、MCP ツール（run_jsfl / get_document_info / export_scripts / apply_scripts）を登録して stdio で待ち受ける。
  * @returns 接続完了で resolve する Promise<void>（失敗時は reject し、呼び出し側が終了コードを設定する）
  */
 async function main() {
@@ -79,10 +89,7 @@ async function main() {
                     structuredContent: { result },
                 };
             } catch (error) {
-                return {
-                    content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-                    isError: true,
-                };
+                return failure(error);
             }
         },
     );
@@ -98,10 +105,7 @@ async function main() {
                     structuredContent: info as Record<string, unknown>,
                 };
             } catch (error) {
-                return {
-                    content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-                    isError: true,
-                };
+                return failure(error);
             }
         },
     );
@@ -110,10 +114,10 @@ async function main() {
         "export_scripts",
         {
             description:
-                "Export the active Animate document's scene and library-symbol Timeline scripts (AS3 / HTML5 Canvas) to files, with index.md and per-timeline structure.md. Default dir: ~/.animate-mcp/exports/<document>/.",
-            inputSchema: { document: z.string().optional(), dir: z.string().optional() },
+                "Export the active Animate document's scene and library-symbol Timeline scripts (AS3 / HTML5 Canvas) to files, with index.md and per-timeline structure.md. Default dir: ~/.animate-mcp/exports/<document>/. Refuses to overwrite edits not yet applied unless force is true; files of the previous Export are replaced.",
+            inputSchema: { document: z.string().optional(), dir: z.string().optional(), force: z.boolean().optional() },
         },
-        async ({ document, dir }, extra) => {
+        async ({ document, dir, force }, extra) => {
             try {
                 const run = async (jsfl: string, items?: string[] | null) => {
                     const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n${items === undefined ? "" : `var __items = ${JSON.stringify(items)};\n`}`;
@@ -155,18 +159,17 @@ async function main() {
                         });
                 }
                 for (const symbol of data.symbols) (symbol as { linked?: string }).linked = linkedOf.get(symbol.name);
-                const outDir =
-                    dir ?? join(homedir(), ".animate-mcp", "exports", safeName(data.document.replace(/\.fla$/i, "")));
+                const outDir = resolve(
+                    dir ?? join(homedir(), ".animate-mcp", "exports", safeName(data.document.replace(/\.fla$/i, ""))),
+                );
+                await clearPreviousExport(outDir, force ?? false);
                 const result = { ...(await writeExport(data, outDir)), warnings };
                 return {
                     content: [{ type: "text", text: JSON.stringify(result) }],
                     structuredContent: result,
                 };
             } catch (error) {
-                return {
-                    content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-                    isError: true,
-                };
+                return failure(error);
             }
         },
     );
@@ -180,11 +183,12 @@ async function main() {
         },
         async ({ dir, document }, extra) => {
             try {
-                const { document: exported, edits, unchanged, failed } = await collectEdits(dir);
+                const root = resolve(dir);
+                const { document: exported, edits, unchanged, failed } = await collectEdits(root);
                 if (document && document !== exported)
                     throw new Error(`Export was made from ${exported}, not ${document}`);
                 const run = async (chunk: typeof edits) => {
-                    const code = `var __docName = ${JSON.stringify(exported)};\nvar __edits = ${JSON.stringify(chunk)};\n${loadJsfl("select-document")}\n${loadJsfl("edit-state")}\n${loadJsfl("apply-scenes")}`;
+                    const code = `var __docName = ${JSON.stringify(exported)};\nvar __edits = ${JSON.stringify(chunk)};\n${loadJsfl("select-document")}\n${loadJsfl("edit-state")}\n${loadJsfl("export-common")}\n${loadJsfl("apply-scenes")}`;
                     return JSON.parse(String(await runner.execute(code))) as {
                         applied: string[];
                         failed: { file: string; error: string }[];
@@ -220,13 +224,14 @@ async function main() {
                             params: { progressToken, progress: index + 1, total: chunks.length },
                         });
                 }
+                await markApplied(
+                    root,
+                    edits.filter((edit) => applied.includes(edit.file)),
+                );
                 const result = { applied, failed, unchanged, warnings };
                 return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
             } catch (error) {
-                return {
-                    content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-                    isError: true,
-                };
+                return failure(error);
             }
         },
     );

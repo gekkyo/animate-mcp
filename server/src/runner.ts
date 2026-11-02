@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export type Launcher = (runFile: string) => Promise<void>;
@@ -41,6 +41,20 @@ FLfile.write(__path, __out);
 `;
 }
 
+/** 実行中の Run と区別するため、これより古いファイルだけを残骸とみなす */
+const STALE_MS = 60 * 60 * 1000;
+
+/**
+ * タイムアウト後に Animate が書いた Result file など、Run の残骸を消す。
+ * @param dir Run file / Result file の置き場
+ */
+async function removeStaleFiles(dir: string) {
+    for (const name of await readdir(dir)) {
+        const path = join(dir, name);
+        if (Date.now() - (await stat(path)).mtimeMs > STALE_MS) await rm(path, { force: true });
+    }
+}
+
 /**
  * JSFL を Animate で実行する Runner を作る。Run は直列化され、タイムアウトと後始末を持つ。
  * @param options.dir Run file / Result file の置き場（mode 0700 にする）
@@ -69,6 +83,7 @@ export function createRunner(options: {
         await mkdir(options.dir, { recursive: true, mode: 0o700 });
         // 既存ディレクトリでは mkdir の mode が効かないため
         await chmod(options.dir, 0o700);
+        await removeStaleFiles(options.dir);
         const id = randomUUID();
         const runFile = join(options.dir, `${id}.jsfl`);
         const resultFile = join(options.dir, `${id}.result.json`);
