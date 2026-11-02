@@ -1,5 +1,5 @@
-// 他の JSFL の前に連結される共通部品。直前に `var __docName = "..."` (空文字なら未指定) が差し込まれる。
-// 対象ドキュメントを返す。複数開いていて未指定ならドキュメント名一覧付きでエラーにする。
+// Shared part concatenated before other JSFL. `var __docName = "..."` (empty string = unspecified) is injected before it.
+// Returns the target document. If several are open and none is specified, throws an error listing the document names.
 function selectDocument() {
   var docs = fl.documents, d = null, i;
   if (!docs || docs.length === 0) throw new Error("No document open");

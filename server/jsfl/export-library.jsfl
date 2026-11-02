@@ -1,6 +1,6 @@
-// export-common の後に連結して評価する。直前に `var __docName` と `var __items` が差し込まれる。
-// __items が null ならシンボル一覧(と AS3 の Linked class)だけ返す。配列なら各シンボルのタイムラインを読む。
-// 読み取りは編集モードに入るため、終了時に元の編集状態へ戻す。戻せなければ warning に載せる。
+// Concatenated and evaluated after export-common. `var __docName` and `var __items` are injected before it.
+// If __items is null, only the symbol list (and AS3 Linked classes) is returned. If it is an array, each symbol's timeline is read.
+// Reading enters edit mode, so the original edit state is restored at the end; a failure goes to warning.
 (function () {
   var d = selectDocument(), i;
 

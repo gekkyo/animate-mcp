@@ -1,4 +1,4 @@
-// 他の JSFL の前に連結される共通部品: ser(JSON 手組み)と exportTimeline(タイムライン→レイヤー/フレーム配列)。
+// Shared part concatenated before other JSFL: ser (hand-built JSON) and exportTimeline (timeline -> layer/frame arrays).
 function ser(v) {
   if (v === null || v === undefined) return "null";
   if (typeof v === "number") return isFinite(v) ? String(v) : "null";

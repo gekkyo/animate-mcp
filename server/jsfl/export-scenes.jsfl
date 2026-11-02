@@ -1,5 +1,5 @@
-// export-common の後に連結して評価する。直前に `var __docName = "..."` (空文字なら未指定) が差し込まれる。
-// 結果は JSON 文字列（JSFL に JSON が無いため手組み）。
+// Concatenated and evaluated after export-common. `var __docName = "..."` (empty string = unspecified) is injected before it.
+// The result is a JSON string (hand-built, since JSFL has no JSON).
 (function () {
   var d = selectDocument(), i;
 

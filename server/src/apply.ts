@@ -1,6 +1,6 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
-import type { ManifestFile } from "./export.js";
+import { type ManifestFile, writeAtomic } from "./export.js";
 
 export type Edit = ManifestFile & { file: string; expected: string };
 
@@ -9,17 +9,17 @@ type Manifest = { document: string; type: string; files: Record<string, Manifest
 const MANIFEST = ".export.json";
 
 /**
- * Export 先の manifest を読む。
- * @param dir Export 先ディレクトリ
- * @returns manifest（無ければ reject）
+ * Reads the manifest of an export directory.
+ * @param dir Export directory
+ * @returns The manifest (rejects when missing)
  */
 const readManifest = async (dir: string) => JSON.parse(await readFile(join(dir, MANIFEST), "utf8")) as Manifest;
 
 /**
- * manifest のファイル名を Export 先の中に限って絶対パスにする（`../` で外を指す manifest を拒否する）。
- * @param dir Export 先ディレクトリ
- * @param file manifest のキー（dir からの相対パス）
- * @returns 絶対パス（dir の外なら例外）
+ * Turns a manifest file name into an absolute path inside the export directory (rejects a manifest that points outside via `../`).
+ * @param dir Export directory
+ * @param file Manifest key (path relative to dir)
+ * @returns Absolute path (throws when outside dir)
  */
 function insideDir(dir: string, file: string): string {
     const root = resolve(dir);
@@ -29,10 +29,10 @@ function insideDir(dir: string, file: string): string {
 }
 
 /**
- * Export 先の manifest と現在のファイル内容を比べ、Animate に反映する編集を集める。
- * 内容が変わっていないファイルは対象外、読めないファイルは失敗として返す。
- * @param dir Export 先ディレクトリ
- * @returns manifest のドキュメント名、反映する編集（script が新内容、expected が書き出し時の内容）、変更なしの数、読めなかったファイル
+ * Compares the manifest with the current file contents and collects the edits to apply to Animate.
+ * Unchanged files are skipped; unreadable files are returned as failures.
+ * @param dir Export directory
+ * @returns The manifest's document name, the edits to apply (script is the new content, expected is the content at Export), the unchanged count, and the unreadable files
  */
 export async function collectEdits(dir: string) {
     const manifest = await readManifest(dir);
@@ -52,21 +52,21 @@ export async function collectEdits(dir: string) {
 }
 
 /**
- * 反映できた内容を manifest に控え直す（次の Apply が「Animate 側が変わった」と誤判定しないように）。
- * @param dir Export 先ディレクトリ
- * @param edits Animate に反映できた編集
+ * Records applied content in the manifest (so the next Apply does not mistake it for a change made in Animate).
+ * @param dir Export directory
+ * @param edits Edits that were applied to Animate
  */
 export async function markApplied(dir: string, edits: Edit[]) {
     if (edits.length === 0) return;
     const manifest = await readManifest(dir);
     for (const edit of edits) manifest.files[edit.file].script = edit.script;
-    await writeFile(join(dir, MANIFEST), JSON.stringify(manifest));
+    await writeAtomic(join(dir, MANIFEST), JSON.stringify(manifest));
 }
 
 /**
- * 再 Export の前処理: 未反映の編集があれば拒否し、前回の Export が書いたファイルだけを消す（古いファイルを残さない）。
- * @param dir Export 先ディレクトリ
- * @param force true なら未反映の編集があっても上書きする
+ * Pre-step of a re-Export: rejects unapplied edits and removes only the files the previous Export wrote (leaves no stale files).
+ * @param dir Export directory
+ * @param force When true, overwrites even if there are unapplied edits
  */
 export async function clearPreviousExport(dir: string, force: boolean) {
     let manifest: Manifest;

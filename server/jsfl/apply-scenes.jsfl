@@ -1,8 +1,8 @@
-// export-common と edit-state の後に連結して評価する。直前に `var __docName` と `var __edits`
-// ([{file, scene, layer, start, expected, script, item?}]) が差し込まれる。item があればライブラリのシンボル内。
-// 書き出し後に Animate 側が変わっていたフレームは書き込まず failed に載せる(すでに script と同じ内容なら反映済みとして数える)。
-// script が空ならスクリプト削除。
-// シンボルは編集モードに入るため、終了時に元の編集状態へ戻す(戻せなければ warning)。
+// Concatenated and evaluated after export-common and edit-state. `var __docName` and `var __edits`
+// ([{file, scene, layer, start, expected, script, item?}]) are injected before it. With item, the frame is inside a library symbol.
+// A frame changed in Animate since Export is not written and goes to failed (if it already equals script it counts as applied).
+// An empty script deletes the frame script.
+// Symbols are edited in edit mode, so the original edit state is restored at the end (warning if it cannot be).
 (function () {
   var d = selectDocument(), applied = [], failed = [], editing = "";
   var restore = saveEditState(d);

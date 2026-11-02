@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -10,13 +10,32 @@ import { clearPreviousExport, collectEdits, markApplied } from "./apply.js";
 import { type ExportData, type ExportScene, safeName, writeExport } from "./export.js";
 import { createRunner, type Launcher } from "./runner.js";
 
-/** 1 回の Run で読むタイムライン数(タイムアウト対策) */
+const IS_WINDOWS = process.platform === "win32";
+
+/** Usage guidance for MCP clients (operational notes that do not fit in tool descriptions) */
+const INSTRUCTIONS = `Read and write Adobe Animate timeline scripts as files.
+
+Basic flow:
+1. Run export_scripts to export the active document. Read index.md, then each structure.md, then the scripts.
+2. Edit the exported .as / .js files (an empty file deletes that frame's script).
+3. Run apply_scripts to apply them. The .fla is not saved; the user saves it.
+- If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
+
+Notes:
+- When several documents are open, document is required. get_document_info returns the name.
+- AS3 and HTML5 Canvas have different APIs. Check the document type before trying things with run_jsfl.
+- Runtime errors appear in Animate's Output panel. Run fl.outputPanel.save(FLfile.platformPathToURI("<native OS path>")) with run_jsfl and read the saved file (saving under ~/.animate-mcp/ is recommended; write the path in the usual form for the OS).
+- When a script fails with a null error, first check the layer's frame length and instance names with run_jsfl.
+- If you add debug traces, always remove them after checking and Apply again.
+- run_jsfl runs arbitrary code. Ask the user before any operation that modifies the document.`;
+
+/** Timelines handled per Run (to avoid timeouts) */
 const TIMELINES_PER_RUN = 10;
 
 /**
- * ツールの例外を MCP のエラー結果に変換する。
- * @param error catch した値
- * @returns isError 付きのテキスト結果
+ * Converts a tool exception into an MCP error result.
+ * @param error The caught value
+ * @returns A text result with isError set
  */
 const failure = (error: unknown) => ({
     content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
@@ -24,13 +43,33 @@ const failure = (error: unknown) => ({
 });
 
 /**
- * Run file を Animate で開く Launcher を作る。成功は終了コード 0 で判定する。
- * @returns Launcher。引数 runFile（Run file の絶対パス）を開き、起動コマンドが正常終了したら resolve、失敗・異常終了なら reject する Promise<void> を返す
+ * Returns the newest "Adobe Animate <year>" in /Applications (2024 if none is found).
+ * @returns App name to pass to `open -a`
+ */
+const installedMacApp = () => {
+    try {
+        const apps = readdirSync("/Applications")
+            .filter((name) => /^Adobe Animate \d{4}$/.test(name))
+            .sort();
+        return apps.at(-1) ?? "Adobe Animate 2024";
+    } catch {
+        return "Adobe Animate 2024";
+    }
+};
+
+/**
+ * Creates a Launcher that opens a Run file in Animate. Success means exit code 0.
+ * @returns Launcher that opens runFile (absolute path of the Run file); the returned Promise<void> resolves when the launch command exits normally and rejects on failure or abnormal exit
  */
 function launcher(): Launcher {
-    // テスト用: 偽の Animate
+    // For tests: a fake Animate
     const custom = process.env.ANIMATE_MCP_LAUNCH_COMMAND;
-    const [command, args] = custom ? [custom, []] : ["open", ["-a", "Adobe Animate 2024"]];
+    // Windows opens via the .jsfl association (Animate); macOS names the app explicitly
+    const [command, args] = custom
+        ? [custom, []]
+        : IS_WINDOWS
+          ? ["cmd", ["/c", "start", ""]]
+          : ["open", ["-a", installedMacApp()]];
     return (runFile) =>
         new Promise((resolve, reject) => {
             const child = spawn(command, [...args, runFile], { stdio: "ignore" });
@@ -42,12 +81,27 @@ function launcher(): Launcher {
 }
 
 /**
- * Animate が起動中か判定する。pgrep -f はコマンドライン全体に一致し、パターンはテストで差し替え可能。
- * @returns 起動中なら true の Promise<boolean>（pgrep を実行できない場合は reject）
+ * Tells whether Animate is running. pgrep -f matches the whole command line, and the pattern can be overridden for tests.
+ * @returns Promise<boolean>, true when running (rejects when pgrep cannot be run)
  */
 function isAnimateRunning(): Promise<boolean> {
+    if (IS_WINDOWS) {
+        // tasklist exits 0 even with no match, so check whether the output contains the process name (the image name can be overridden by an env var)
+        const image = process.env.ANIMATE_MCP_PROCESS_PATTERN ?? "Animate.exe";
+        return new Promise((resolve, reject) => {
+            let out = "";
+            const child = spawn("tasklist", ["/FI", `IMAGENAME eq ${image}`, "/NH"], {
+                stdio: ["ignore", "pipe", "ignore"],
+            });
+            child.stdout.on("data", (chunk) => {
+                out += chunk;
+            });
+            child.once("error", reject);
+            child.once("exit", () => resolve(out.toLowerCase().includes(image.toLowerCase())));
+        });
+    }
     const pattern =
-        process.env.ANIMATE_MCP_PROCESS_PATTERN ?? "Adobe Animate 2024.app/Contents/MacOS/Adobe Animate 2024";
+        process.env.ANIMATE_MCP_PROCESS_PATTERN ?? "Adobe Animate [0-9]{4}\\.app/Contents/MacOS/Adobe Animate";
     return new Promise((resolve, reject) => {
         const child = spawn("pgrep", ["-f", pattern], { stdio: "ignore" });
         child.once("error", reject);
@@ -56,15 +110,22 @@ function isAnimateRunning(): Promise<boolean> {
 }
 
 /**
- * ツール用 JSFL を server/jsfl/<name>.jsfl から読み込む（src/ でも dist/ でも同じ場所を指す）。
- * @param name 拡張子なしのファイル名（例: "get-document-info"）
- * @returns JSFL のソース文字列
+ * Loads tool JSFL from server/jsfl/<name>.jsfl (the same place from src/ and dist/).
+ * @param name File name without extension (e.g. "get-document-info")
+ * @returns The JSFL source string
  */
 const loadJsfl = (name: string) => readFileSync(new URL(`../jsfl/${name}.jsfl`, import.meta.url), "utf8");
 
 /**
- * Runner を組み立て、MCP ツール（run_jsfl / get_document_info / export_scripts / apply_scripts）を登録して stdio で待ち受ける。
- * @returns 接続完了で resolve する Promise<void>（失敗時は reject し、呼び出し側が終了コードを設定する）
+ * Concatenates shared parts and the main JSFL in order.
+ * @param names File names without extension (shared parts first, the main script last)
+ * @returns The concatenated JSFL source
+ */
+const bundle = (...names: string[]) => names.map(loadJsfl).join("\n");
+
+/**
+ * Builds the Runner, registers the MCP tools (run_jsfl / get_document_info / export_scripts / apply_scripts) and listens on stdio.
+ * @returns Promise<void> that resolves once connected (rejects on failure; the caller sets the exit code)
  */
 async function main() {
     const runner = createRunner({
@@ -73,7 +134,7 @@ async function main() {
         isRunning: isAnimateRunning,
         timeoutMs: Number(process.env.ANIMATE_MCP_TIMEOUT_MS ?? 30_000),
     });
-    const server = new McpServer({ name: "animate-mcp", version: "0.1.0" });
+    const server = new McpServer({ name: "animate-mcp", version: "0.1.0" }, { instructions: INSTRUCTIONS });
     server.registerTool(
         "run_jsfl",
         {
@@ -99,7 +160,9 @@ async function main() {
         { description: "Get the active Animate document's name, size, frame rate and timeline names." },
         async () => {
             try {
-                const info = JSON.parse(String(await runner.execute(loadJsfl("get-document-info")))) as unknown;
+                const info = JSON.parse(
+                    String(await runner.execute(bundle("export-common", "get-document-info"))),
+                ) as unknown;
                 return {
                     content: [{ type: "text", text: JSON.stringify(info) }],
                     structuredContent: info as Record<string, unknown>,
@@ -121,7 +184,7 @@ async function main() {
             try {
                 const run = async (jsfl: string, items?: string[] | null) => {
                     const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n${items === undefined ? "" : `var __items = ${JSON.stringify(items)};\n`}`;
-                    const code = `${prelude}${loadJsfl("select-document")}\n${loadJsfl("edit-state")}\n${loadJsfl("export-common")}\n${loadJsfl(jsfl)}`;
+                    const code = `${prelude}${bundle("select-document", "edit-state", "export-common", jsfl)}`;
                     return JSON.parse(String(await runner.execute(code)));
                 };
                 const data = (await run("export-scenes")) as ExportData;
@@ -188,7 +251,7 @@ async function main() {
                 if (document && document !== exported)
                     throw new Error(`Export was made from ${exported}, not ${document}`);
                 const run = async (chunk: typeof edits) => {
-                    const code = `var __docName = ${JSON.stringify(exported)};\nvar __edits = ${JSON.stringify(chunk)};\n${loadJsfl("select-document")}\n${loadJsfl("edit-state")}\n${loadJsfl("export-common")}\n${loadJsfl("apply-scenes")}`;
+                    const code = `var __docName = ${JSON.stringify(exported)};\nvar __edits = ${JSON.stringify(chunk)};\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
                     return JSON.parse(String(await runner.execute(code))) as {
                         applied: string[];
                         failed: { file: string; error: string }[];
@@ -197,7 +260,7 @@ async function main() {
                 };
                 const applied: string[] = [];
                 const warnings: string[] = [];
-                // シーンは 1 Run、シンボルはタイムライン(item)10 個ずつ 1 Run
+                // Scenes go in one Run; symbols go 10 timelines (items) per Run
                 const chunks: (typeof edits)[] = [edits.filter((edit) => edit.item === undefined)];
                 const items = [...new Set(edits.flatMap((edit) => (edit.item === undefined ? [] : [edit.item])))];
                 for (let from = 0; from < items.length; from += TIMELINES_PER_RUN) {

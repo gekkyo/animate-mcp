@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 export type ExportElement = { name: string; item: string; type: string };
@@ -15,20 +15,20 @@ export type ExportScene = {
     layers?: { index: number; name: string; frames: ExportFrame[] }[];
     error?: string;
 };
-/** Apply 用の manifest 項目: フレームの位置(0 始まり)と書き出し時のスクリプト。ライブラリのシンボルは scene の代わりに item(ライブラリ内のパス) */
+/** Manifest entry for Apply: frame position (0-based) and the script at Export. A library symbol uses item (path in the library) instead of scene */
 export type ManifestFile = { scene: number; layer: number; start: number; script: string; item?: string };
 export type ExportData = {
     document: string;
     type: string;
     scenes: ExportScene[];
-    /** ライブラリのシンボル(name はライブラリ内のパス)。linked は AS3 の Linked class 名 */
+    /** Library symbols (name is the path in the library). linked is the AS3 Linked class name */
     symbols?: (ExportScene & { linked?: string })[];
 };
 
 /**
- * ファイル名に使えない文字だけ "_" に置換する（名前はそのまま使う）。
- * @param name 元の名前
- * @returns パスの 1 要素として安全な文字列
+ * Replaces only characters that are invalid in file names with "_" (the name is otherwise kept).
+ * @param name Original name
+ * @returns A string that is safe as one path segment
  */
 export const safeName = (name: string) =>
     [...name]
@@ -37,24 +37,35 @@ export const safeName = (name: string) =>
         .replace(/^\.+$/, "_") || "_";
 
 /**
- * 同じ親の下で名前が衝突したら `_2` `_3` を付けて一意にする。
- * @param used 使用済みの名前の集合（更新される）
- * @param name 希望の名前
- * @returns 一意な名前
+ * Makes a name unique under the same parent by appending `_2`, `_3` on collision.
+ * @param used Set of names already used (updated)
+ * @param name Desired name
+ * @returns A unique name
  */
 function uniq(used: Set<string>, name: string): string {
+    // macOS / Windows are case-insensitive, so compare in lowercase
     let candidate = name;
-    for (let suffix = 2; used.has(candidate); suffix++) candidate = `${name}_${suffix}`;
-    used.add(candidate);
+    for (let suffix = 2; used.has(candidate.toLowerCase()); suffix++) candidate = `${name}_${suffix}`;
+    used.add(candidate.toLowerCase());
     return candidate;
 }
 
 /**
- * Animate が返したデータを Export 形式（スクリプト・structure.md・index.md・衝突検知用 manifest）でディスクへ書き出す。
- * フレーム番号は Animate の UI に合わせて 1 始まり。
- * @param data export-scenes.jsfl の結果
- * @param dir 出力先ディレクトリ
- * @returns 成功/失敗したタイムライン名と Linked class（AS3 のみ。Canvas は空）
+ * Writes to a temp file, then replaces the target with rename (a crash mid-write cannot corrupt the original).
+ * @param path Destination
+ * @param content Content
+ */
+export async function writeAtomic(path: string, content: string) {
+    await writeFile(`${path}.tmp`, content);
+    await rename(`${path}.tmp`, path);
+}
+
+/**
+ * Writes the data Animate returned in the Export format (scripts, structure.md, index.md, and a manifest for conflict detection).
+ * Frame numbers are 1-based to match the Animate UI.
+ * @param data Result of export-scenes.jsfl
+ * @param dir Output directory
+ * @returns Names of exported / failed timelines and Linked classes (AS3 only; empty for Canvas)
  */
 export async function writeExport(data: ExportData, dir: string) {
     const ext = data.type === "htmlcanvas" ? "js" : "as";
@@ -66,7 +77,7 @@ export async function writeExport(data: ExportData, dir: string) {
     };
     const exported: string[] = [];
     const failed: { name: string; error: string }[] = [];
-    const index: string[] = [`# ${data.document}`, "", "| タイムライン | structure |", "| --- | --- |"];
+    const index: string[] = [`# ${data.document}`, "", "| Timeline | structure |", "| --- | --- |"];
     const sceneDirs = new Set<string>();
     const libraryDirs = new Set<string>();
 
@@ -91,14 +102,14 @@ export async function writeExport(data: ExportData, dir: string) {
         if (linked)
             linkedClasses.push({ symbol: scene.name, className: linked, path: `${linked.replaceAll(".", "/")}.as` });
         const layerDirs = new Set<string>();
-        const md: string[] = [`# ${item ? "シンボル" : "シーン"}: ${scene.name}`, ""];
+        const md: string[] = [`# ${item ? "Symbol" : "Scene"}: ${scene.name}`, ""];
         const names = new Map<string, string[]>();
         for (const layer of scene.layers) {
             const layerDir = uniq(layerDirs, safeName(layer.name));
             md.push(
-                `## レイヤー: ${layer.name}`,
+                `## Layer: ${layer.name}`,
                 "",
-                "| フレーム | 長さ | Tween | 要素 | ラベル | スクリプト |",
+                "| Frames | Length | Tween | Elements | Label | Script |",
                 "| --- | --- | --- | --- | --- | --- |",
             );
             for (const keyframe of layer.frames) {
@@ -124,7 +135,7 @@ export async function writeExport(data: ExportData, dir: string) {
                     keyframe.duration,
                     keyframe.tween,
                     keyframe.elements
-                        .map((element) => `${element.name || "(無名)"} / ${element.item || "-"} / ${element.type}`)
+                        .map((element) => `${element.name || "(unnamed)"} / ${element.item || "-"} / ${element.type}`)
                         .join("<br>"),
                     keyframe.label,
                     file,
@@ -134,7 +145,7 @@ export async function writeExport(data: ExportData, dir: string) {
                     const list = names.get(elementName) ?? [];
                     const key = `${layer.name}: `;
                     const last = list.at(-1);
-                    // 同じレイヤーで直前の区間と連続していれば範囲を延長する
+                    // Extend the range when it continues the previous one on the same layer
                     if (last?.startsWith(key) && last.endsWith(`-${keyframe.start}`)) {
                         list[list.length - 1] = `${last.slice(0, last.lastIndexOf("-"))}-${end}`;
                     } else list.push(`${key}${start}-${end}`);
@@ -143,7 +154,7 @@ export async function writeExport(data: ExportData, dir: string) {
             }
             md.push("");
         }
-        md.push("## 名前逆引き", "", "| 名前 | 存在するフレーム |", "| --- | --- |");
+        md.push("## Name lookup", "", "| Name | Frames |", "| --- | --- |");
         for (const [elementName, ranges] of names)
             md.push(`| ${elementName.replaceAll("|", "\\|")} | ${ranges.join("<br>").replaceAll("|", "\\|")} |`);
         await writeToExportDir(`${base}/structure.md`, `${md.join("\n")}\n`);
@@ -151,7 +162,7 @@ export async function writeExport(data: ExportData, dir: string) {
         exported.push(scene.name);
     }
     await writeToExportDir("index.md", `${index.join("\n")}\n`);
-    // Apply の衝突検知用: 書き出し時の内容を控える
-    await writeToExportDir(".export.json", JSON.stringify({ document: data.document, type: data.type, files }));
+    // For Apply's conflict detection: record the content at Export
+    await writeAtomic(join(dir, ".export.json"), JSON.stringify({ document: data.document, type: data.type, files }));
     return { dir, exported, failed, linkedClasses };
 }

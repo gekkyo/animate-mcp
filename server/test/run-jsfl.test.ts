@@ -6,8 +6,8 @@ import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-// 偽の Animate: 最小の FLfile/fl スタブで Run file を実行する。
-// HANG を含むコードには応答せず、FAKE_LOG に起動の開始/終了を記録する。
+// Fake Animate: runs the Run file with minimal FLfile/fl stubs.
+// Does not respond to code containing HANG, and logs launch start/end to FAKE_LOG.
 const fakeAnimate = `#!/usr/bin/env node
 const { appendFileSync, readFileSync, writeFileSync } = require("node:fs");
 const { runInNewContext } = require("node:vm");
@@ -17,7 +17,7 @@ log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
 const lib = { name: "Hero", itemType: "movie clip" };
 const kf = (startFrame, duration, extra) => Object.assign({ startFrame, duration, name: "", tweenType: "none", actionScript: "", elements: [] }, extra);
-// 実 Animate と同じく layer.frames は 1 フレームごとに 1 要素（キーフレームの frame を duration 回並べる）
+// Like real Animate, layer.frames has one element per frame (the keyframe's frame repeated duration times)
 const expand = (kfs) => kfs.flatMap((k) => Array(k.duration).fill(k));
 const symTimeline = (name, script) => ({ name, libraryItem: { name }, layers: [{ name: "L", layerType: "normal", frames: expand([kf(0, 1, { actionScript: script })]) }] });
 const doc = (name, type) => { const d = { name, type, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [{ name: "Scene 1", layers: [
@@ -48,10 +48,10 @@ log("end");
 `;
 
 /**
- * env 付きで Server を stdio 起動し、MCP クライアントを fn に渡して終了後に閉じる。
- * @param env Server に追加で渡す環境変数
- * @param fn テスト本体。引数は MCP クライアント、一時ディレクトリ、Runs ディレクトリ
- * @returns fn の完了で resolve する Promise<void>
+ * Starts the Server over stdio with env, passes an MCP client to fn, and closes it afterwards.
+ * @param env Extra environment variables for the Server
+ * @param fn Test body; receives the MCP client, a temp directory and the Runs directory
+ * @returns Promise<void> that resolves when fn completes
  */
 async function withServer(
     env: Record<string, string>,
@@ -71,7 +71,7 @@ async function withServer(
             ...process.env,
             ANIMATE_MCP_LAUNCH_COMMAND: launcher,
             ANIMATE_MCP_RUNS_DIR: runsDir,
-            // テストプロセス自身を「Animate 起動中」とみなす
+            // Treat the test process itself as "Animate running"
             ANIMATE_MCP_PROCESS_PATTERN: "node",
             FAKE_LOG: join(dir, "log"),
             ...env,
@@ -360,7 +360,7 @@ test("apply_scripts does not overwrite frames changed in Animate; rejects anothe
         assert.match(text(other), /a\.fla/);
     });
     await withServer({ FAKE_SCRIPT: "changed" }, async (client, dir) => {
-        // Export 済みの内容(FAKE_SCRIPT 違い)を手で用意する
+        // Prepare the exported content by hand (differs by FAKE_SCRIPT)
         const out = join(dir, "out");
         await client.callTool({ name: "export_scripts", arguments: { dir: out } });
         const file = join(out, "scenes/Scene 1/a_b/1.as");

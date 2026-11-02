@@ -5,12 +5,12 @@ import { join } from "node:path";
 export type Launcher = (runFile: string) => Promise<void>;
 
 /**
- * code を eval し、結果かエラーを Result file に JSON で書く Run file の中身を生成する。
- * @param code 実行する JSFL ソース
- * @param resultPath Result file の絶対パス
- * @returns Run file に書き出す JSFL ソース文字列
+ * Builds the Run file: it evals code and writes the result or error to the Result file as JSON.
+ * @param code JSFL source to run
+ * @param resultPath Absolute path of the Result file
+ * @returns JSFL source to write into the Run file
  */
-// shortcut: JSFL に JSON が無いためプリミティブのみ直列化（オブジェクトは文字列になる）。必要になったら対応する。
+// shortcut: JSFL has no JSON, so only primitives are serialized (objects become strings); extend when needed.
 function runFileSource(code: string, resultPath: string): string {
     return String.raw`var __path = FLfile.platformPathToURI(${JSON.stringify(resultPath)});
 function __q(s) {
@@ -41,28 +41,33 @@ FLfile.write(__path, __out);
 `;
 }
 
-/** 実行中の Run と区別するため、これより古いファイルだけを残骸とみなす */
+/** Only files older than this count as leftovers, so files of a running Run are kept */
 const STALE_MS = 60 * 60 * 1000;
 
 /**
- * タイムアウト後に Animate が書いた Result file など、Run の残骸を消す。
- * @param dir Run file / Result file の置き場
+ * Removes Run leftovers, such as a Result file Animate wrote after a timeout.
+ * @param dir Directory holding Run files / Result files
  */
 async function removeStaleFiles(dir: string) {
     for (const name of await readdir(dir)) {
         const path = join(dir, name);
-        if (Date.now() - (await stat(path)).mtimeMs > STALE_MS) await rm(path, { force: true });
+        try {
+            if (Date.now() - (await stat(path)).mtimeMs > STALE_MS) await rm(path, { force: true });
+        } catch (error) {
+            // Ignore files another process's Run removed at the same time
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
     }
 }
 
 /**
- * JSFL を Animate で実行する Runner を作る。Run は直列化され、タイムアウトと後始末を持つ。
- * @param options.dir Run file / Result file の置き場（mode 0700 にする）
- * @param options.launch Run file を Animate で開く Launcher
- * @param options.isRunning Animate が起動中かを返す関数
- * @param options.timeoutMs 1 回の Run のタイムアウト（ミリ秒。起動時間も含む）
- * @param options.pollMs Result file のポーリング間隔（ミリ秒。省略時 100）
- * @returns execute メソッドを持つ Runner
+ * Creates a Runner that runs JSFL in Animate. Runs are serialized, with a timeout and cleanup.
+ * @param options.dir Directory for Run files / Result files (set to mode 0700)
+ * @param options.launch Launcher that opens a Run file in Animate
+ * @param options.isRunning Function that tells whether Animate is running
+ * @param options.timeoutMs Timeout of one Run in milliseconds (includes launch time)
+ * @param options.pollMs Polling interval for the Result file in milliseconds (default 100)
+ * @returns Runner with an execute method
  */
 export function createRunner(options: {
     dir: string;
@@ -74,21 +79,24 @@ export function createRunner(options: {
     let queue: Promise<unknown> = Promise.resolve();
 
     /**
-     * 1 回の Run: Run file を書いて起動し、Result file をポーリングして結果を返す（終了時に両ファイルを削除）。
-     * @param code 実行する JSFL ソース
-     * @returns code の評価結果（Promise<unknown>）。Animate 未起動・JSFL の例外・タイムアウトは reject
+     * One Run: writes and launches the Run file, polls the Result file and returns the result (both files are deleted at the end).
+     * @param code JSFL source to run
+     * @returns Promise<unknown> with the evaluation result of code; rejects when Animate is not running, JSFL throws, or the Run times out
      */
     async function run(code: string): Promise<unknown> {
         if (!(await options.isRunning())) throw new Error("Animate not running: start Adobe Animate and try again");
         await mkdir(options.dir, { recursive: true, mode: 0o700 });
-        // 既存ディレクトリでは mkdir の mode が効かないため
+        // mkdir's mode has no effect on an existing directory
         await chmod(options.dir, 0o700);
         await removeStaleFiles(options.dir);
         const id = randomUUID();
         const runFile = join(options.dir, `${id}.jsfl`);
         const resultFile = join(options.dir, `${id}.result.json`);
         const deadline = Date.now() + options.timeoutMs;
-        const timedOut = () => new Error(`Run timed out after ${options.timeoutMs} ms`);
+        const timedOut = () =>
+            new Error(
+                `Run timed out after ${options.timeoutMs} ms (Animate did not run the .jsfl; on Windows check that .jsfl files are associated with Animate, or set ANIMATE_MCP_LAUNCH_COMMAND)`,
+            );
         try {
             await writeFile(runFile, runFileSource(code, resultFile), { mode: 0o600 });
             let timer: NodeJS.Timeout | undefined;
@@ -111,7 +119,7 @@ export function createRunner(options: {
                     if (typeof parsed.error === "string") throw new Error(parsed.error);
                     return parsed.result;
                 } catch (error) {
-                    // Result file が未作成または書き込み途中ならポーリング続行
+                    // Keep polling while the Result file is missing or still being written
                     if ((error as NodeJS.ErrnoException).code !== "ENOENT" && !(error instanceof SyntaxError))
                         throw error;
                 }
@@ -126,9 +134,9 @@ export function createRunner(options: {
 
     return {
         /**
-         * code を実行して結果を返す。Animate は起動したファイルを 1 つずつ処理するため Run は直列化する。
-         * @param code 実行する JSFL ソース
-         * @returns run と同じ結果の Promise<unknown>（前の Run が失敗しても次は実行される）
+         * Runs code and returns the result. Animate handles launched files one at a time, so Runs are serialized.
+         * @param code JSFL source to run
+         * @returns Promise<unknown> with the same result as run (the next Run still executes if the previous one failed)
          */
         execute(code: string): Promise<unknown> {
             const next = queue.then(() => run(code));
