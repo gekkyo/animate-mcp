@@ -1,0 +1,9 @@
+node_modules/
+server/dist/
+.idea/
+.DS_Store
+*.log
+.scratch/
+docs/
+AGENTS.md
+GLOSSARY.md
