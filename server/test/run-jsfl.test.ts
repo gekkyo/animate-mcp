@@ -15,10 +15,19 @@ const src = readFileSync(process.argv[2], "utf8");
 const log = (m) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, m + "\\n");
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
+const lib = { name: "Hero", itemType: "movie clip" };
+const kf = (startFrame, duration, extra) => Object.assign({ startFrame, duration, name: "", tweenType: "none", actionScript: "", elements: [] }, extra);
+// 実 Animate と同じく layer.frames は 1 フレームごとに 1 要素（キーフレームの frame を duration 回並べる）
+const expand = (kfs) => kfs.flatMap((k) => Array(k.duration).fill(k));
+const doc = (name, type) => ({ name, type, width: 550, height: 400, frameRate: 24, timelines: [{ name: "Scene 1", layers: [
+  { name: "a/b", layerType: "normal", frames: expand([
+    kf(0, 2, { actionScript: "stop();\\n// 日本語", elements: [{ name: "hero", elementType: "instance", libraryItem: lib }] }),
+    kf(2, 3, { name: "end", elements: [{ name: "", elementType: "instance", libraryItem: lib }] })]) },
+  { name: "dir", layerType: "folder", frames: [] }] }] });
+const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
 if (!src.includes("HANG")) runInNewContext(src, {
   FLfile: { platformPathToURI: (p) => p, write: (p, t) => writeFileSync(p, t) },
-  fl: { trace() {}, getDocumentDOM: () => process.env.FAKE_NO_DOC ? null :
-    { name: "a.fla", width: 550, height: 400, frameRate: 24, timelines: [{ name: "Scene 1" }] } },
+  fl: { trace() {}, documents: docs, getDocumentDOM: () => docs[0] || null },
 });
 log("end");
 `;
@@ -127,6 +136,43 @@ test("concurrent Runs are serialized", { timeout: 20_000 }, () =>
         );
     }),
 );
+
+test("export_scripts writes scripts, structure.md and manifest; Canvas uses .js", { timeout: 20_000 }, async () => {
+    await withServer({}, async (client, dir) => {
+        const out = join(dir, "out");
+        const r = await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        assert.equal(r.isError, undefined, text(r));
+        assert.equal(await readFile(join(out, "scenes/Scene 1/a_b/1.as"), "utf8"), "stop();\n// 日本語");
+        const md = await readFile(join(out, "scenes/Scene 1/structure.md"), "utf8");
+        assert.match(md, /\| hero \| a\/b: 1-2 \|/);
+        assert.match(md, /\| Hero \| a\/b: 3-5 \|/, "unnamed instance is listed by library item name");
+        assert.match(md, /\| end \|/);
+        assert.match(await readFile(join(out, "index.md"), "utf8"), /Scene 1/);
+        assert.ok(JSON.parse(await readFile(join(out, ".export.json"), "utf8")).files["scenes/Scene 1/a_b/1.as"]);
+    });
+    await withServer({ FAKE_TYPE: "htmlcanvas" }, async (client, dir) => {
+        const out = join(dir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: out } });
+        assert.match(await readFile(join(out, "scenes/Scene 1/a_b/1.js"), "utf8"), /^stop\(\)/);
+    });
+});
+
+test("export_scripts errors: multiple documents list names; no document", { timeout: 20_000 }, async () => {
+    await withServer({ FAKE_TWO: "1" }, async (client, dir) => {
+        const r = await client.callTool({ name: "export_scripts", arguments: { dir: join(dir, "out") } });
+        assert.equal(r.isError, true);
+        assert.match(text(r), /a\.fla, b\.fla/);
+        const ok = await client.callTool({
+            name: "export_scripts",
+            arguments: { document: "b.fla", dir: join(dir, "out") },
+        });
+        assert.equal(ok.isError, undefined, text(ok));
+    });
+    await withServer({ FAKE_NO_DOC: "1" }, async (client, dir) => {
+        const r = await client.callTool({ name: "export_scripts", arguments: { dir: join(dir, "out") } });
+        assert.equal(text(r), "No document open");
+    });
+});
 
 test("get_document_info returns info, or a clear error with no document", { timeout: 20_000 }, async () => {
     await withServer({}, async (client) => {

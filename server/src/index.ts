@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { type ExportData, safeName, writeExport } from "./export.js";
 import { createRunner, type Launcher } from "./runner.js";
 
 /**
@@ -90,6 +91,33 @@ async function main() {
                 return {
                     content: [{ type: "text", text: JSON.stringify(info) }],
                     structuredContent: info as Record<string, unknown>,
+                };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+                    isError: true,
+                };
+            }
+        },
+    );
+
+    server.registerTool(
+        "export_scripts",
+        {
+            description:
+                "Export the active Animate document's scene Timeline scripts (AS3 / HTML5 Canvas) to files, with index.md and per-timeline structure.md. Default dir: ~/.animate-mcp/exports/<document>/.",
+            inputSchema: { document: z.string().optional(), dir: z.string().optional() },
+        },
+        async ({ document, dir }) => {
+            try {
+                const code = `var __docName = ${JSON.stringify(document ?? "")};\n${loadJsfl("export-scenes")}`;
+                const data = JSON.parse(String(await runner.execute(code))) as ExportData;
+                const outDir =
+                    dir ?? join(homedir(), ".animate-mcp", "exports", safeName(data.document.replace(/\.fla$/i, "")));
+                const result = await writeExport(data, outDir);
+                return {
+                    content: [{ type: "text", text: JSON.stringify(result) }],
+                    structuredContent: result,
                 };
             } catch (error) {
                 return {
