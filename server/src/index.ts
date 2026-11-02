@@ -134,7 +134,7 @@ async function main() {
         isRunning: isAnimateRunning,
         timeoutMs: Number(process.env.ANIMATE_MCP_TIMEOUT_MS ?? 30_000),
     });
-    const server = new McpServer({ name: "animate-mcp", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+    const server = new McpServer({ name: "animate-mcp", version: "0.1.1" }, { instructions: INSTRUCTIONS });
     server.registerTool(
         "run_jsfl",
         {
