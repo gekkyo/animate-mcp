@@ -1,16 +1,42 @@
+<div align="center">
+
 # animate-mcp
+
+MCP 対応の AI エージェントから、Adobe Animate のスクリプトとタイムライン構造を編集します。
 
 [English](README.md) | 日本語
 
-Adobe Animate で JSFL を実行し、フレーム／シンボルのスクリプトをファイルとして編集できる MCP サーバーです。Adobe とは無関係の非公式ツールです。
+[![MCP compatible](https://img.shields.io/badge/MCP-compatible-blue)](https://modelcontextprotocol.io)
+[![npm](https://img.shields.io/npm/v/animate-mcp)](https://www.npmjs.com/package/animate-mcp)
+[![license MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
-## インストール
+</div>
 
-### 動作環境
+---
+
+## 概要
+
+`animate-mcp` は、AI エージェントが Adobe Animate を JSFL（Animate のスクリプト機能）経由で操作できるようにする、ローカルの MCP（Model Context Protocol）サーバーです。Adobe とは無関係の非公式ツールです。
+
+フレームスクリプトをファイルとして書き出し、エージェントが編集して、Animate に書き戻します。レイヤーやフレームの構造変更や、任意の JSFL の実行もできます。
+
+## 主な機能
+
+- シーンとライブラリシンボルの全フレームスクリプトを、構造の説明つきでファイルに書き出します。
+- 編集したファイルを Animate に書き戻します。Export 後に Animate 側で変更した箇所は、競合として検出して上書きしません。
+- レイヤーの追加・削除・移動・名前変更・種類変更（マスク、フォルダなど）ができます。
+- フレームの挿入・削除、キーフレームの操作、ラベル設定、トゥイーンの長さ調整、レイヤーの開始位置のずらしができます。
+- 任意の JSFL を実行して、結果を返します。
+- ActionScript 3 と HTML5 Canvas のドキュメントに対応しています。
+
+## 動作環境
 
 - Node.js
 - Adobe Animate（起動しておく必要があります）
+- MCP 対応のクライアント（Claude Code、Claude Desktop など）
 - 動作確認は Animate 2024 / macOS のみです。他の最近のバージョンでも動く見込みです。Windows は未検証です。
+
+## インストール
 
 ### Claude Code
 
@@ -44,7 +70,7 @@ Adobe Animate で JSFL を実行し、フレーム／シンボルのスクリプ
 - Export 後に Animate 側で変更した箇所は、Apply で競合として検出され、上書きされません。
 - 未反映の編集があると Export は拒否されます。破棄してよい場合のみ `force: true` を使ってください。
 - スクリプトのないフレームに追加するには、タイムラインのディレクトリに `as/<フレーム番号>.as`（HTML5 Canvas は `.js`）を作成して `apply_scripts` を実行します。トゥイーン内への追加は拒否されます。
-- レイヤーやフレームの構造変更には `edit_timeline` を使います。構造を変更した後は、スクリプトの編集や適用の前に必ず `export_scripts` を再実行してください。レイヤーやフレームの削除には `confirm: true` が必要です。
+- レイヤーやフレームの構造変更には `edit_timeline` を使います。`shiftLayerFrames` は他のレイヤーをずらさず、1つのレイヤーの内容を後ろへ移動します。構造を変更した後は、スクリプトの編集や適用の前に必ず `export_scripts` を再実行してください。レイヤーやフレームの削除には `confirm: true` が必要です。
 - 保存したい場合は、Animate 側で手動で保存してください。
 - ActionScript 3 と HTML5 Canvas の両ドキュメントに対応しています。
 

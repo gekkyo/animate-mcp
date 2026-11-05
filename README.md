@@ -1,16 +1,43 @@
+<div align="center">
+
 # animate-mcp
+
+Edit Adobe Animate scripts and timeline structure from an MCP-compatible AI agent.
 
 English | [日本語](README.ja.md)
 
-An MCP server that runs JSFL in Adobe Animate and lets an agent edit frame/symbol scripts as plain files. Unofficial; not affiliated with Adobe.
+[![MCP compatible](https://img.shields.io/badge/MCP-compatible-blue)](https://modelcontextprotocol.io)
+[![npm](https://img.shields.io/npm/v/animate-mcp)](https://www.npmjs.com/package/animate-mcp)
+[![license MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
-## Install
+</div>
 
-### Requirements
+---
+
+## Overview
+
+`animate-mcp` is a local Model Context Protocol (MCP) server that lets an AI agent control Adobe Animate through JSFL, Animate's scripting system. Unofficial; not affiliated with Adobe.
+
+It exports frame scripts as plain files, lets the agent edit them, and applies them back to Animate. It can also change layer and frame structure and run arbitrary JSFL.
+
+## Highlights
+
+- Export every frame script of scenes and library symbols to files, with a description of the structure.
+- Apply edited files back to Animate. Changes made in Animate after Export are detected as conflicts and never overwritten.
+- Add a new script to a frame that has none, just by creating a file.
+- Add, delete, move, rename, and retype layers (mask, folder, and more).
+- Insert or remove frames, work with keyframes, set labels, adjust tween length, and shift a layer's start.
+- Run arbitrary JSFL and return the result.
+- Supports ActionScript 3 and HTML5 Canvas documents.
+
+## Requirements
 
 - Node.js
 - Adobe Animate (must be running)
+- An MCP-compatible client (Claude Code, Claude Desktop, etc.)
 - Verified only on Animate 2024 / macOS. Other recent versions should work. Windows is untested.
+
+## Install
 
 ### Claude Code
 
@@ -44,7 +71,7 @@ Notes:
 - Changes made in Animate after an Export are detected as conflicts on Apply and are not overwritten.
 - Export is refused while unapplied edits exist. Use `force: true` only when it is fine to discard them.
 - To add a script to a frame with none, create `as/<frame>.as` in the timeline directory (use `.js` for HTML5 Canvas), then run `apply_scripts`; scripts inside tween spans are refused.
-- Use `edit_timeline` for layer and frame structure changes. Always run `export_scripts` again before editing or applying scripts; layer and frame deletions require `confirm: true`.
+- Use `edit_timeline` for layer and frame structure changes; `shiftLayerFrames` moves one layer's content later without shifting other layers. Always run `export_scripts` again before editing or applying scripts; layer and frame deletions require `confirm: true`.
 - To save, save manually in Animate.
 - Both ActionScript 3 and HTML5 Canvas documents are supported.
 
