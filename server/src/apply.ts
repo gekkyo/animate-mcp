@@ -18,6 +18,8 @@ type Manifest = {
     timelines?: ManifestTimeline[];
 };
 
+export type TimelineFingerprint = { scene: number; item?: string; structureFingerprint: string };
+
 const MANIFEST = ".export.json";
 
 /**
@@ -145,7 +147,14 @@ export async function collectEdits(dir: string) {
     }
     newScripts.sort((left, right) => left.file.localeCompare(right.file));
     warnings.sort();
-    return { document: manifest.document, edits, newScripts, unchanged, failed, warnings };
+    const fingerprints = (manifest.timelines ?? [])
+        .filter((timeline) => timeline.structureFingerprint)
+        .map((timeline) => ({
+            scene: timeline.scene,
+            ...(timeline.item ? { item: timeline.item } : {}),
+            structureFingerprint: timeline.structureFingerprint as string,
+        }));
+    return { document: manifest.document, edits, newScripts, unchanged, failed, warnings, fingerprints };
 }
 
 /**
@@ -154,7 +163,12 @@ export async function collectEdits(dir: string) {
  * @param edits Edits that were applied to Animate
  * @param newScripts New scripts that were applied to Animate
  */
-export async function markApplied(dir: string, edits: Edit[], newScripts: AppliedNewScript[] = []) {
+export async function markApplied(
+    dir: string,
+    edits: Edit[],
+    newScripts: AppliedNewScript[] = [],
+    fingerprints: TimelineFingerprint[] = [],
+) {
     if (edits.length === 0 && newScripts.length === 0) {
         return;
     }
@@ -190,6 +204,14 @@ export async function markApplied(dir: string, edits: Edit[], newScripts: Applie
             script: newScript.script,
             ...(newScript.item ? { item: newScript.item } : {}),
         };
+    }
+    for (const fingerprint of fingerprints) {
+        const timeline = manifest.timelines?.find(
+            (entry) => entry.scene === fingerprint.scene && entry.item === fingerprint.item,
+        );
+        if (timeline) {
+            timeline.structureFingerprint = fingerprint.structureFingerprint;
+        }
     }
     await writeAtomic(join(dir, MANIFEST), JSON.stringify(manifest));
 }

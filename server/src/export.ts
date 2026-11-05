@@ -13,6 +13,7 @@ export type ExportFrame = {
 export type ExportScene = {
     name: string;
     layers?: { index: number; name: string; frames: ExportFrame[] }[];
+    structureFingerprint?: string;
     error?: string;
 };
 /** Manifest entry for Apply: frame position (0-based) and the script at Export. A library symbol uses item (path in the library) instead of scene */
@@ -28,6 +29,7 @@ export type ManifestTimeline = {
     dir: string;
     scene: number;
     item?: string;
+    structureFingerprint?: string;
     layers: { index: number; dir: string; name: string }[];
 };
 
@@ -268,6 +270,7 @@ export async function writeExport(data: ExportData, dir: string) {
             dir: timelineDirectory,
             scene: sceneIndex,
             ...(libraryItemPath ? { item: libraryItemPath } : {}),
+            ...(scene.structureFingerprint ? { structureFingerprint: scene.structureFingerprint } : {}),
             layers: layerMappings,
         });
         await writeToExportDir(`${timelineDirectory}/structure.md`, structureMarkdown);

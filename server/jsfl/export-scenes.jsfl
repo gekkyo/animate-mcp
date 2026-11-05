@@ -7,7 +7,8 @@
   for (timelineIndex = 0; timelineIndex < document.timelines.length; timelineIndex++) {
     var timelineName = document.timelines[timelineIndex].name;
     try {
-      scenes.push({ name: timelineName, layers: exportTimeline(document.timelines[timelineIndex]) });
+      var timeline = document.timelines[timelineIndex];
+      scenes.push({ name: timelineName, layers: exportTimeline(timeline), structureFingerprint: structureFingerprint(timeline) });
     } catch (error) {
       scenes.push({ name: timelineName, error: String(error && error.message ? error.message : error) });
     }

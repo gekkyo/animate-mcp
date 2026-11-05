@@ -6,7 +6,13 @@ import { join, resolve } from "node:path";
 import { McpServer, type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { type AppliedNewScript, clearPreviousExport, collectEdits, markApplied } from "./apply.js";
+import {
+    type AppliedNewScript,
+    clearPreviousExport,
+    collectEdits,
+    markApplied,
+    type TimelineFingerprint,
+} from "./apply.js";
 import { type ExportData, type ExportScene, safeName, writeExport } from "./export.js";
 import { createRunner, type Launcher } from "./runner.js";
 
@@ -20,6 +26,7 @@ Basic flow:
 2. Edit the exported .as / .js files (an empty file deletes that frame's script).
 3. Run apply_scripts to apply them. The .fla is not saved; the user saves it.
 - To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.
+- Use edit_timeline for layer or frame structure changes. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
 - If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
 
 Notes:
@@ -42,6 +49,92 @@ const EXPORT_SCRIPTS_INPUT = {
     force: z.boolean().optional(),
 };
 const APPLY_SCRIPTS_INPUT = { dir: z.string(), document: z.string().optional() };
+const EDIT_TIMELINE_OP = z.discriminatedUnion("op", [
+    z.object({
+        op: z.literal("addLayer"),
+        name: z.string().min(1),
+        type: z.enum(["normal", "mask", "masked", "guide", "folder"]).optional(),
+        parent: z.string().optional(),
+        above: z.string().optional(),
+        below: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("deleteLayer"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        confirm: z.boolean().optional(),
+    }),
+    z.object({
+        op: z.literal("moveLayer"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        above: z.string().optional(),
+        below: z.string().optional(),
+        parent: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("renameLayer"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        name: z.string().min(1),
+    }),
+    z.object({
+        op: z.literal("setLayerType"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        type: z.enum(["normal", "mask", "masked", "guide", "folder"]),
+        parent: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("insertFrames"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        frame: z.number().int().positive(),
+        count: z.number().int().positive(),
+        ripple: z.boolean().optional(),
+    }),
+    z.object({
+        op: z.literal("removeFrames"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        frame: z.number().int().positive(),
+        count: z.number().int().positive(),
+        confirm: z.boolean().optional(),
+        ripple: z.boolean().optional(),
+    }),
+    z.object({
+        op: z.literal("insertKeyframe"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        frame: z.number().int().positive(),
+    }),
+    z.object({
+        op: z.literal("clearKeyframe"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        frame: z.number().int().positive(),
+    }),
+    z.object({
+        op: z.literal("setLabel"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        frame: z.number().int().positive(),
+        label: z.string(),
+    }),
+    z.object({
+        op: z.literal("setSpanLength"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        frame: z.number().int().positive(),
+        length: z.number().int().min(2),
+        ripple: z.boolean().optional(),
+    }),
+]);
+const EDIT_TIMELINE_INPUT = {
+    timeline: z.union([z.number().int().nonnegative(), z.string().min(1)]),
+    ops: z.array(EDIT_TIMELINE_OP).min(1),
+    document: z.string().optional(),
+};
 
 /**
  * Converts a tool exception into an MCP error result.
@@ -254,6 +347,7 @@ async function main() {
                 document: exportedDocument,
                 edits,
                 newScripts,
+                fingerprints,
                 unchanged,
                 failed,
                 warnings: collectWarnings,
@@ -261,24 +355,35 @@ async function main() {
             if (document && document !== exportedDocument) {
                 throw new Error(`Export was made from ${exportedDocument}, not ${document}`);
             }
-            const applyChunk = async (chunk: typeof edits, newChunk: typeof newScripts) => {
-                const code = `var __docName = ${JSON.stringify(exportedDocument)};\nvar __edits = ${JSON.stringify(chunk)};\nvar __newScripts = ${JSON.stringify(newChunk)};\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
+            const applyChunk = async (
+                chunk: typeof edits,
+                newChunk: typeof newScripts,
+                chunkFingerprints: typeof fingerprints,
+            ) => {
+                const code = `var __docName = ${JSON.stringify(exportedDocument)};\nvar __edits = ${JSON.stringify(chunk)};\nvar __newScripts = ${JSON.stringify(newChunk)};\nvar __fingerprints = ${JSON.stringify(chunkFingerprints)};\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
                 return JSON.parse(String(await runner.execute(code))) as {
                     applied: string[];
                     failed: { file: string; error: string }[];
                     warning: string;
                     warnings: string[];
                     newApplied: AppliedNewScript[];
+                    fingerprints: TimelineFingerprint[];
                 };
             };
             const applied: string[] = [];
             const warnings: string[] = [...collectWarnings];
             const newApplied: AppliedNewScript[] = [];
+            const fingerprintUpdates: TimelineFingerprint[] = [];
             // Scenes go in one Run; symbols go 10 timelines (items) per Run
-            const editChunks: { edits: typeof edits; newScripts: typeof newScripts }[] = [
+            const editChunks: {
+                edits: typeof edits;
+                newScripts: typeof newScripts;
+                fingerprints: typeof fingerprints;
+            }[] = [
                 {
                     edits: edits.filter((edit) => edit.item === undefined),
                     newScripts: newScripts.filter((script) => script.item === undefined),
+                    fingerprints: fingerprints.filter((fingerprint) => fingerprint.item === undefined),
                 },
             ];
             const itemNames = [...edits, ...newScripts]
@@ -292,6 +397,9 @@ async function main() {
                     newScripts: newScripts.filter(
                         (script) => script.item !== undefined && selectedItems.has(script.item),
                     ),
+                    fingerprints: fingerprints.filter(
+                        (fingerprint) => fingerprint.item !== undefined && selectedItems.has(fingerprint.item),
+                    ),
                 });
             }
             const progressToken = extra._meta?.progressToken;
@@ -301,10 +409,11 @@ async function main() {
                     const chunkNewScripts = pass === 1 ? chunk.newScripts : [];
                     if (chunkEdits.length > 0 || chunkNewScripts.length > 0) {
                         try {
-                            const applyResult = await applyChunk(chunkEdits, chunkNewScripts);
+                            const applyResult = await applyChunk(chunkEdits, chunkNewScripts, chunk.fingerprints);
                             applied.push(...applyResult.applied);
                             failed.push(...applyResult.failed);
                             newApplied.push(...applyResult.newApplied);
+                            fingerprintUpdates.push(...applyResult.fingerprints);
                             if (applyResult.warning) {
                                 warnings.push(applyResult.warning);
                             }
@@ -332,9 +441,30 @@ async function main() {
                 exportDirectory,
                 edits.filter((edit) => applied.includes(edit.file)),
                 newApplied,
+                fingerprintUpdates,
             );
             const result = { applied, failed, unchanged, warnings };
             return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+        } catch (error) {
+            return failure(error);
+        }
+    };
+
+    /** Edits one timeline's layer and frame structure, then requires a fresh Export. */
+    const handleEditTimeline: ToolCallback<typeof EDIT_TIMELINE_INPUT> = async ({ timeline, ops, document }) => {
+        try {
+            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "edit-timeline")}`;
+            const result = JSON.parse(String(await runner.execute(code))) as {
+                applied: typeof ops;
+                failed: { op: (typeof ops)[number]; error: string } | null;
+                skipped: typeof ops;
+                warnings: string[];
+                layers: { name: string; type: string; parent?: string; locked: boolean }[];
+            };
+            return {
+                content: [{ type: "text", text: `Export again before apply_scripts.\n${JSON.stringify(result)}` }],
+                structuredContent: result,
+            };
         } catch (error) {
             return failure(error);
         }
@@ -364,6 +494,16 @@ async function main() {
             inputSchema: EXPORT_SCRIPTS_INPUT,
         },
         handleExportScripts,
+    );
+
+    server.registerTool(
+        "edit_timeline",
+        {
+            description:
+                "Edit layers (addLayer, deleteLayer, moveLayer, renameLayer, setLayerType) and frames (insertFrames, removeFrames, insertKeyframe, clearKeyframe, setLabel, setSpanLength) in order. Layer references use a name and optional zero-based index; frame numbers are 1-based. Stops at the first failed op. deleteLayer and removeFrames require confirm: true. Tween interiors reject frame insertion/removal/keyframe changes. Always run export_scripts again before editing or applying scripts.",
+            inputSchema: EDIT_TIMELINE_INPUT,
+        },
+        handleEditTimeline,
     );
 
     server.registerTool(

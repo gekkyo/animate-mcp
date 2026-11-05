@@ -1,12 +1,13 @@
 // Concatenated and evaluated after export-common and edit-state. `var __docName`, `var __edits`
 // ([{file, scene, layer, start, expected, script, item?}]) and `var __newScripts`
-// ([{file, scene, layer, start, script, item?, layerDir, asLayer}]) are injected before it.
+// ([{file, scene, layer, start, script, item?, layerDir, asLayer}]) and `var __fingerprints`
+// ([{scene, item?, structureFingerprint}]) are injected before it.
 // A frame changed in Animate since Export is not written and goes to failed (if it already equals script it counts as applied).
 // An empty script deletes the frame script. New scripts are applied after existing-file edits.
 // Symbols are edited in edit mode, so the original edit state is restored at the end (warning if it cannot be).
 (function () {
   var document = selectDocument(), applied = [], failed = [], warnings = [], newApplied = [], editingItemName = "";
-  var createdAsTimelines = {}, restore = saveEditState(document);
+  var createdAsTimelines = {}, fingerprintMismatch = {}, restore = saveEditState(document);
 
   /** Returns the requested scene or library-item timeline. */
   function getTimeline(edit) {
@@ -39,9 +40,28 @@
     return length;
   }
 
+  /** Finds the exported fingerprint for a scene or library timeline. */
+  function expectedFingerprint(edit) {
+    for (var fingerprintIndex = 0; fingerprintIndex < __fingerprints.length; fingerprintIndex++) {
+      var fingerprint = __fingerprints[fingerprintIndex];
+      if (fingerprint.scene === edit.scene && fingerprint.item === edit.item) return fingerprint.structureFingerprint;
+    }
+    return "";
+  }
+
+  /** Refuses edits when the timeline structure no longer matches Export. */
+  function structureChanged(edit) {
+    var key = timelineKey(edit), expected = expectedFingerprint(edit);
+    if (!expected) return false;
+    if (fingerprintMismatch[key] !== undefined) return fingerprintMismatch[key];
+    fingerprintMismatch[key] = structureFingerprint(getTimeline(edit)) !== expected;
+    return fingerprintMismatch[key];
+  }
+
   for (var editIndex = 0; editIndex < __edits.length; editIndex++) {
     var edit = __edits[editIndex];
     try {
+      if (structureChanged(edit)) throw new Error("Structure changed since Export; export again");
       var timeline = getTimeline(edit);
       var frame = timeline && timeline.layers[edit.layer] && timeline.layers[edit.layer].frames[edit.start];
       if (!frame || frame.startFrame !== edit.start) {
@@ -63,6 +83,7 @@
     var originalLayerLock = false, targetLayer = null;
     try {
       var newTimeline = getTimeline(newScript), key = timelineKey(newScript), targetLayerIndex = -1;
+      if (structureChanged(newScript)) throw new Error("Structure changed since Export; export again");
       if (newScript.start >= timelineLength(newTimeline)) {
         throw new Error("Frame beyond timeline length");
       }
@@ -165,6 +186,18 @@
     }
   }
 
+  var updatedFingerprints = [], fingerprintedTimelines = {};
+  for (var appliedIndex = 0; appliedIndex < newApplied.length; appliedIndex++) {
+    var appliedScript = newApplied[appliedIndex], appliedKey = timelineKey(appliedScript);
+    if (fingerprintedTimelines[appliedKey]) continue;
+    var appliedTimeline = getTimeline(appliedScript), updatedFingerprint = {
+      scene: appliedScript.scene,
+      structureFingerprint: structureFingerprint(appliedTimeline)
+    };
+    if (appliedScript.item !== undefined) updatedFingerprint.item = appliedScript.item;
+    updatedFingerprints.push(updatedFingerprint);
+    fingerprintedTimelines[appliedKey] = true;
+  }
   var warning = editingItemName ? restore() : "";
-  return serialize({ applied: applied, failed: failed, warning: warning, warnings: warnings, newApplied: newApplied });
+  return serialize({ applied: applied, failed: failed, warning: warning, warnings: warnings, newApplied: newApplied, fingerprints: updatedFingerprints });
 })();

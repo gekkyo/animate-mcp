@@ -60,3 +60,32 @@ function exportTimeline(timeline) {
   }
   return layers;
 }
+
+/** Hashes timeline structure without script contents so edits can detect stale exports. */
+function structureFingerprint(timeline) {
+  var structure = [], layerIndex, frameIndex, layer, parentIndex, keyframes, frame;
+  for (layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
+    layer = timeline.layers[layerIndex];
+    parentIndex = -1;
+    for (var candidateIndex = 0; candidateIndex < timeline.layers.length; candidateIndex++) {
+      if (timeline.layers[candidateIndex] === layer.parentLayer) {
+        parentIndex = candidateIndex;
+        break;
+      }
+    }
+    keyframes = [];
+    for (frameIndex = 0; frameIndex < layer.frames.length; frameIndex++) {
+      frame = layer.frames[frameIndex];
+      if (frame && frame.startFrame === frameIndex) keyframes.push([frameIndex, frame.duration]);
+    }
+    structure.push([layer.name || "", layer.layerType || "normal", parentIndex, keyframes]);
+  }
+  var text = serialize(structure), hash = 2166136261;
+  for (var characterIndex = 0; characterIndex < text.length; characterIndex++) {
+    hash ^= text.charCodeAt(characterIndex);
+    hash = (hash + (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)) >>> 0;
+  }
+  var hex = hash.toString(16);
+  while (hex.length < 8) hex = "0" + hex;
+  return "fnv1a32:" + hex;
+}

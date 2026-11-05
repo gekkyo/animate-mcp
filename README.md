@@ -44,6 +44,7 @@ Notes:
 - Changes made in Animate after an Export are detected as conflicts on Apply and are not overwritten.
 - Export is refused while unapplied edits exist. Use `force: true` only when it is fine to discard them.
 - To add a script to a frame with none, create `as/<frame>.as` in the timeline directory (use `.js` for HTML5 Canvas), then run `apply_scripts`; scripts inside tween spans are refused.
+- Use `edit_timeline` for layer and frame structure changes. Always run `export_scripts` again before editing or applying scripts; layer and frame deletions require `confirm: true`.
 - To save, save manually in Animate.
 - Both ActionScript 3 and HTML5 Canvas documents are supported.
 
@@ -52,6 +53,7 @@ Notes:
 | Tool                | Description                                                                                  |
 |---------------------|----------------------------------------------------------------------------------------------|
 | `export_scripts`    | Writes the timeline structure and all frame scripts (scenes and library symbols)             |
+| `edit_timeline`    | Adds, removes, moves and edits layers and frames in a scene or library symbol                |
 | `apply_scripts`     | Writes edited scripts back into the open document                                            |
 | `get_document_info` | Returns name, size, frame rate and timeline names of the open documents                      |
 | `run_jsfl`          | Runs arbitrary JSFL and returns the result (primitive values only; objects become strings)   |

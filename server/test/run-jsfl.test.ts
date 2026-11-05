@@ -19,8 +19,9 @@ const lib = { name: "Hero", itemType: "movie clip" };
 const makeKeyframe = (startFrame, duration, extra) => Object.assign({ startFrame, duration, name: "", tweenType: "none", actionScript: "", elements: [] }, extra);
 // Like real Animate, layer.frames has one element per frame (the keyframe's frame repeated duration times)
 const expand = (keyframes) => keyframes.flatMap((keyframe) => Array(keyframe.duration).fill(keyframe));
-const layer = (name, frames, layerType = "normal", locked = false) => {
+const layer = (name, frames, layerType = "normal", locked = false, parentLayer = null) => {
   const result = { name, frames, layerType, locked, writeWasUnlocked: false };
+  if (parentLayer) result.parentLayer = parentLayer;
   if (locked) {
     for (const frame of new Set(frames)) {
       let actionScript = frame.actionScript;
@@ -38,8 +39,40 @@ const layer = (name, frames, layerType = "normal", locked = false) => {
 };
 const makeTimeline = (name, frames, layers, libraryItem) => {
   const timeline = { name, frameCount: frames, currentLayer: 0, currentFrame: 0, layers, libraryItem,
+    recalculateFrameCount() { this.frameCount = Math.max(0, ...this.layers.map((candidate) => candidate.frames.length)); },
+    recalculateLayer(targetLayer) {
+      let start = 0;
+      while (start < targetLayer.frames.length) {
+        const frame = targetLayer.frames[start];
+        let end = start + 1;
+        while (end < targetLayer.frames.length && targetLayer.frames[end] === frame) end++;
+        frame.startFrame = start;
+        frame.duration = end - start;
+        start = end;
+      }
+      this.recalculateFrameCount();
+    },
+    insertFrames(count, allLayers, frameNumberIndex) {
+      const targets = allLayers ? this.layers.filter((candidate) => candidate.layerType !== "folder") : [this.layers[this.currentLayer]];
+      for (const target of targets) {
+        if (target.locked) throw new Error("Layer is locked");
+        const index = Math.min(frameNumberIndex, target.frames.length);
+        const active = target.frames[Math.min(index, target.frames.length - 1)];
+        const insertAt = active && active.startFrame === index ? index + 1 : index;
+        const content = active || makeKeyframe(insertAt, count);
+        target.frames.splice(insertAt, 0, ...Array(count).fill(content));
+        this.recalculateLayer(target);
+      }
+    },
+    removeFrames(startFrameIndex, endFrameIndex) {
+      const target = this.layers[this.currentLayer];
+      if (target.locked) throw new Error("Layer is locked");
+      target.frames.splice(startFrameIndex, endFrameIndex - startFrameIndex);
+      this.recalculateLayer(target);
+    },
     insertKeyframe(frameNumber) {
       const currentLayer = this.layers[this.currentLayer];
+      if (currentLayer.locked) throw new Error("Layer is locked");
       const oldFrame = currentLayer.frames[frameNumber];
       if (!oldFrame) {
         currentLayer.frames[frameNumber] = makeKeyframe(frameNumber, 1);
@@ -50,10 +83,49 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
       oldFrame.duration = frameNumber - oldFrame.startFrame;
       const insertedFrame = Object.assign({}, oldFrame, { startFrame: frameNumber, duration: oldEnd - frameNumber, actionScript: "" });
       for (let index = frameNumber; index < oldEnd; index++) { currentLayer.frames[index] = insertedFrame; }
+      if (process.env.FAKE_PERSIST_AS && currentLayer.name.toLowerCase() === "as") {
+        writeFileSync(process.env.FAKE_LOG + ".as-keyframe-created", "yes");
+      }
+    },
+    convertToKeyframes(frameNumber) {
+      this.insertKeyframe(frameNumber);
+    },
+    clearKeyframes(frameNumber) {
+      const currentLayer = this.layers[this.currentLayer];
+      if (currentLayer.locked) throw new Error("Layer is locked");
+      const frame = currentLayer.frames[frameNumber];
+      if (!frame || frame.startFrame !== frameNumber) return;
+      if (frameNumber === 0) {
+        const blank = makeKeyframe(0, frame.duration);
+        for (let index = 0; index < frame.duration; index++) currentLayer.frames[index] = blank;
+      } else {
+        const previous = currentLayer.frames[frameNumber - 1];
+        previous.duration += frame.duration;
+        for (let index = frameNumber; index < frameNumber + frame.duration; index++) currentLayer.frames[index] = previous;
+      }
+      this.recalculateLayer(currentLayer);
+    },
+    setFrameProperty(property, value, startFrameIndex, endFrameIndex) {
+      const target = this.layers[this.currentLayer];
+      if (target.locked) throw new Error("Layer is locked");
+      const end = endFrameIndex === undefined ? startFrameIndex + 1 : endFrameIndex;
+      for (let index = startFrameIndex; index < end; index++) target.frames[index][property] = value;
+    },
+    deleteLayer(layerIndex) {
+      const removed = this.layers.splice(layerIndex, 1)[0];
+      for (const candidate of this.layers) if (candidate.parentLayer === removed) delete candidate.parentLayer;
+      this.currentLayer = Math.min(this.currentLayer, this.layers.length - 1);
+      this.recalculateFrameCount();
+    },
+    reorderLayer(layerToMove, layerToPutItBy, addBefore = true) {
+      const moved = this.layers.splice(layerToMove, 1)[0];
+      let target = layerToPutItBy - (layerToMove < layerToPutItBy ? 1 : 0);
+      if (!addBefore) target++;
+      this.layers.splice(target, 0, moved);
     },
     addNewLayer(layerName, layerType, addAbove) {
-      const newLayer = layer(layerName, expand([makeKeyframe(0, 1)]), layerType);
-      const index = addAbove ? 0 : this.layers.length;
+      const newLayer = layer(layerName, expand([makeKeyframe(0, this.frameCount)]), layerType);
+      const index = this.layers.length ? this.currentLayer + (addAbove ? 0 : 1) : 0;
       this.layers.splice(index, 0, newLayer);
       this.currentLayer = index;
       if (process.env.FAKE_PERSIST_AS && layerName.toLowerCase() === "as") {
@@ -70,9 +142,11 @@ const doc = (documentName, documentType) => {
     makeKeyframe(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [{ name: "hero", elementType: "instance", libraryItem: lib }] }),
     makeKeyframe(2, 3, { name: "end", ...(process.env.FAKE_TWEEN ? { tweenType: process.env.FAKE_TWEEN } : {}), elements: [{ name: "", elementType: "instance", libraryItem: lib }] }),
   ];
+  if (process.env.FAKE_INNER_KEYFRAME) sceneFrames[1].duration = 3;
   const sceneLayers = [layer("a/b", expand(sceneFrames)),
     ...(process.env.FAKE_SECOND_LAYER ? [layer(process.env.FAKE_SECOND_LAYER, expand([makeKeyframe(0, 5)]))] : []),
     layer("dir", [], "folder")];
+  if (process.env.FAKE_INNER_KEYFRAME) sceneLayers[0].frames[3] = makeKeyframe(3, 1);
   if (process.env.FAKE_AS_LAYER) {
     sceneLayers.unshift(layer(process.env.FAKE_AS_LAYER, expand([makeKeyframe(0, 5)]), "normal", Boolean(process.env.FAKE_LOCK_AS)));
   }
@@ -91,8 +165,15 @@ const doc = (documentName, documentType) => {
     editItem: (itemName) => { if (itemName === "Broken" && !process.env.FAKE_NO_BROKEN) throw new Error("cannot edit"); editing = itemName; } };
   return document; };
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
+if (process.env.FAKE_PERSIST_AS && docs[0] && existsSync(process.env.FAKE_LOG + ".scene-script")) {
+  const actionLayer = docs[0].timelines[0].layers.find((candidate) => candidate.name === "a/b");
+  actionLayer.frames[0].actionScript = readFileSync(process.env.FAKE_LOG + ".scene-script", "utf8");
+}
 if (process.env.FAKE_PERSIST_AS && src.includes("var __newScripts") && existsSync(process.env.FAKE_LOG + ".as-created")) {
-  docs[0].timelines[0].layers.unshift(layer("as", expand([makeKeyframe(0, 5)])));
+  const asFrames = existsSync(process.env.FAKE_LOG + ".as-keyframe-created")
+    ? expand([makeKeyframe(0, 3), makeKeyframe(3, 2)])
+    : expand([makeKeyframe(0, 5)]);
+  docs[0].timelines[0].layers.unshift(layer("as", asFrames));
 }
 if (process.env.FAKE_CONFLICT_NEW && src.includes("var __newScripts")) {
   const targetLayer = docs[0].timelines[0].layers.find((candidate) => candidate.name === "a/b");
@@ -112,10 +193,13 @@ if (process.env.FAKE_LOG && src.includes("var __newScripts")) {
   if (!src.includes("var __newScripts = [];")) stage.push("new");
   appendFileSync(process.env.FAKE_LOG + ".order", stage.join("+") + "\\n");
 }
-process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".scripts", JSON.stringify(docs.map((document) => document.timelines[0].layers[0].frames[0].actionScript)) + "\\n");
+if (process.env.FAKE_PERSIST_AS && src.includes("play();")) {
+  writeFileSync(process.env.FAKE_LOG + ".scene-script", "play();");
+}
+process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".scripts", JSON.stringify(docs.map((document) => document.timelines[0].layers[0]?.frames[0]?.actionScript)) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers[0].frames[0].actionScript]))) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym-layers", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers.map((candidate) => ({ name: candidate.name, script: candidate.frames[0]?.actionScript }))]))) + "\\n");
-process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".layers", JSON.stringify(docs[0].timelines[0].layers.map((candidate) => ({ name: candidate.name, locked: candidate.locked, writeWasUnlocked: candidate.writeWasUnlocked, frames: candidate.frames.map((frame, index) => frame.startFrame === index ? { start: frame.startFrame, script: frame.actionScript, tween: frame.tweenType } : null).filter(Boolean) }))) + "\\n");
+process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".layers", JSON.stringify(docs[0].timelines[0].layers.map((candidate) => ({ name: candidate.name, type: candidate.layerType, parent: candidate.parentLayer?.name, locked: candidate.locked, writeWasUnlocked: candidate.writeWasUnlocked, frames: candidate.frames.map((frame, index) => frame.startFrame === index ? { start: frame.startFrame, duration: frame.duration, script: frame.actionScript, tween: frame.tweenType, label: frame.name } : null).filter(Boolean) }))) + "\\n");
 log("end");
 `;
 
@@ -199,7 +283,7 @@ test("hung launcher times out; special values survive", { timeout: 20_000 }, asy
             assert.deepEqual(await readdir(runsDir), []);
         },
     );
-    await withServer({}, async (client) => {
+    await withServer({}, async (client, _tempDir) => {
         const result = await client.callTool({ name: "run_jsfl", arguments: { code: "'a\\tb\\n\"c\"'" } });
         assert.deepEqual(result.structuredContent, { result: 'a\tb\n"c"' });
     });
@@ -237,7 +321,9 @@ test("export_scripts writes scripts, structure.md and manifest; Canvas uses .js"
         assert.match(structureMd, /\| Hero \| a\/b: 3-5 \|/, "unnamed instance is listed by library item name");
         assert.match(structureMd, /\| end \|/);
         assert.match(await readFile(join(exportDir, "index.md"), "utf8"), /Scene 1/);
-        assert.ok(JSON.parse(await readFile(join(exportDir, ".export.json"), "utf8")).files["scenes/Scene 1/a_b/1.as"]);
+        const manifest = JSON.parse(await readFile(join(exportDir, ".export.json"), "utf8"));
+        assert.ok(manifest.files["scenes/Scene 1/a_b/1.as"]);
+        assert.match(manifest.timelines[0].structureFingerprint, /^fnv1a32:/);
     });
     await withServer({ FAKE_TYPE: "htmlcanvas" }, async (client, tempDir) => {
         const exportDir = join(tempDir, "out");
@@ -318,6 +404,203 @@ const symbolLayersLog = async (tempDir: string) =>
         .trim()
         .split("\n")
         .map((logLine) => JSON.parse(logLine));
+
+const editTimeline = (client: Client, timeline: number | string, ops: unknown[]) =>
+    client.callTool({ name: "edit_timeline", arguments: { timeline, ops } });
+
+test("edit_timeline applies layer operations, parenting and relative placement", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SECOND_LAYER: "Other" }, async (client) => {
+        const result = await editTimeline(client, 0, [
+            { op: "addLayer", name: "Folder", type: "folder" },
+            { op: "addLayer", name: "Child", parent: "Folder" },
+            { op: "addLayer", name: "Mask", type: "mask" },
+            { op: "addLayer", name: "Masked", type: "masked", parent: "Mask" },
+            { op: "addLayer", name: "Mover", above: "Other" },
+            { op: "addLayer", name: "After", below: "Other" },
+            { op: "setLayerType", layer: "Child", type: "masked", parent: "Mask" },
+            { op: "setLayerType", layer: "Child", type: "normal", parent: "Folder" },
+            { op: "moveLayer", layer: "Mover", below: "Child", parent: "Folder" },
+            { op: "renameLayer", layer: "a/b", name: "Renamed" },
+            { op: "setLayerType", layer: "Other", type: "guide" },
+        ]);
+        const summary = result.structuredContent as {
+            applied: unknown[];
+            failed: unknown;
+            skipped: unknown[];
+            warnings: string[];
+            layers: { name: string; type: string; parent?: string; locked: boolean }[];
+        };
+        assert.equal(result.isError, undefined, text(result));
+        assert.equal(summary.applied.length, 11);
+        assert.equal(summary.failed, null);
+        assert.deepEqual(summary.skipped, []);
+        assert.match(text(result), /Export again before apply_scripts/);
+        assert.equal(summary.layers.find((entry) => entry.name === "Child")?.parent, "Folder");
+        assert.equal(summary.layers.find((entry) => entry.name === "Masked")?.parent, "Mask");
+        assert.equal(summary.layers.find((entry) => entry.name === "Child")?.type, "normal");
+        assert.equal(summary.layers.find((entry) => entry.name === "Other")?.type, "guide");
+        assert.equal(summary.layers.find((entry) => entry.name === "Mover")?.parent, "Folder");
+        assert.ok(
+            summary.layers.findIndex((entry) => entry.name === "Mover") >
+                summary.layers.findIndex((entry) => entry.name === "Child"),
+        );
+        assert.ok(
+            summary.layers.findIndex((entry) => entry.name === "After") >
+                summary.layers.findIndex((entry) => entry.name === "Other"),
+        );
+    }),
+);
+
+test("edit_timeline requires confirmation, stops after failure, and disambiguates duplicate names", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({}, async (client) => {
+        const result = await editTimeline(client, 0, [
+            { op: "renameLayer", layer: "a/b", name: "Before failure" },
+            { op: "deleteLayer", layer: "Before failure" },
+            { op: "renameLayer", layer: "dir", name: "Skipped" },
+        ]);
+        const summary = result.structuredContent as {
+            applied: unknown[];
+            failed: { error: string };
+            skipped: unknown[];
+            layers: { name: string }[];
+        };
+        assert.equal(summary.applied.length, 1);
+        assert.match(summary.failed.error, /confirm required/);
+        assert.equal(summary.skipped.length, 1);
+        assert.ok(summary.layers.some((entry) => entry.name === "Before failure"));
+        assert.ok(!summary.layers.some((entry) => entry.name === "Skipped"));
+        const unconfirmedFrames = await editTimeline(client, 0, [
+            { op: "removeFrames", layer: "a/b", frame: 1, count: 1 },
+        ]);
+        assert.match(
+            (unconfirmedFrames.structuredContent as { failed: { error: string } }).failed.error,
+            /confirm required/,
+        );
+        const confirmed = await editTimeline(client, 0, [{ op: "deleteLayer", layer: "a/b", confirm: true }]);
+        assert.equal((confirmed.structuredContent as { failed: unknown }).failed, null, text(confirmed));
+    });
+    await withServer({ FAKE_SECOND_LAYER: "a/b" }, async (client) => {
+        const ambiguous = await editTimeline(client, 0, [{ op: "renameLayer", layer: "a/b", name: "Nope" }]);
+        assert.match((ambiguous.structuredContent as { failed: { error: string } }).failed.error, /ambiguous/);
+        const selected = await editTimeline(client, 0, [{ op: "renameLayer", layer: "a/b", index: 1, name: "Second" }]);
+        assert.equal((selected.structuredContent as { failed: unknown }).failed, null);
+        assert.equal(
+            (selected.structuredContent as { layers: { name: string }[] }).layers.filter(
+                (entry) => entry.name === "Second",
+            ).length,
+            1,
+        );
+    });
+});
+
+test("edit_timeline supports frame edits and labels", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SECOND_LAYER: "Other" }, async (client, tempDir) => {
+        const result = await editTimeline(client, 0, [
+            { op: "insertFrames", layer: "a/b", frame: 3, count: 1 },
+            { op: "setLabel", layer: "a/b", frame: 1, label: "intro" },
+            { op: "insertKeyframe", layer: "a/b", frame: 2 },
+            { op: "clearKeyframe", layer: "a/b", frame: 2 },
+            { op: "removeFrames", layer: "a/b", frame: 3, count: 1, confirm: true },
+        ]);
+        const summary = result.structuredContent as { applied: unknown[]; failed: unknown; warnings: string[] };
+        assert.equal(summary.applied.length, 5);
+        assert.equal(summary.failed, null);
+        assert.equal(summary.warnings.length, 2, "single-layer frame shifts warn");
+        const layers = (await layersLog(tempDir)).at(-1);
+        const targetLayer = layers.find((entry: { name: string }) => entry.name === "a/b");
+        assert.equal(targetLayer.frames[0].label, "intro");
+        assert.equal(targetLayer.frames[0].duration, 2, "clearing the inserted keyframe joins its span");
+        assert.equal(layers.find((entry: { name: string }) => entry.name === "Other").frames[0].duration, 5);
+    }),
+);
+
+test("edit_timeline ripple inserts and removes the same range on every layer", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SECOND_LAYER: "Other" }, async (client, tempDir) => {
+        const result = await editTimeline(client, 0, [
+            { op: "insertFrames", layer: "a/b", frame: 3, count: 1, ripple: true },
+            { op: "removeFrames", layer: "a/b", frame: 3, count: 1, confirm: true, ripple: true },
+        ]);
+        assert.equal((result.structuredContent as { failed: unknown }).failed, null);
+        assert.deepEqual((result.structuredContent as { warnings: string[] }).warnings, []);
+        const layers = (await layersLog(tempDir)).at(-1);
+        assert.equal(layers.find((entry: { name: string }) => entry.name === "a/b").frames[0].duration, 2);
+        assert.equal(layers.find((entry: { name: string }) => entry.name === "Other").frames[0].duration, 5);
+    }),
+);
+
+test("edit_timeline restores locks and edits library-item timelines", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_AS_LAYER: "AS", FAKE_LOCK_AS: "1" }, async (client) => {
+        const result = await editTimeline(client, 0, [{ op: "setLabel", layer: "AS", frame: 1, label: "locked edit" }]);
+        const layer = (result.structuredContent as { layers: { name: string; locked: boolean }[] }).layers[0];
+        assert.equal(layer.name, "AS");
+        assert.equal(layer.locked, true);
+    });
+    await withServer({}, async (client) => {
+        const result = await editTimeline(client, "dir/Hero", [{ op: "renameLayer", layer: "L", name: "Actions" }]);
+        assert.equal(result.isError, undefined, text(result));
+        assert.equal((result.structuredContent as { layers: { name: string }[] }).layers[0].name, "Actions");
+    });
+});
+
+test("edit_timeline rejects tween interiors but setSpanLength may resize a tween span", { timeout: 30_000 }, () =>
+    withServer({ FAKE_TWEEN: "motion" }, async (client) => {
+        for (const op of [
+            { op: "insertFrames", layer: "a/b", frame: 4, count: 1 },
+            { op: "removeFrames", layer: "a/b", frame: 4, count: 1, confirm: true },
+            { op: "insertKeyframe", layer: "a/b", frame: 4 },
+            { op: "clearKeyframe", layer: "a/b", frame: 4 },
+        ]) {
+            const result = await editTimeline(client, 0, [op]);
+            assert.match(
+                (result.structuredContent as { failed: { error: string } }).failed.error,
+                /Frame is inside a tween/,
+            );
+        }
+        const start = await editTimeline(client, 0, [{ op: "insertKeyframe", layer: "a/b", frame: 3 }]);
+        assert.equal((start.structuredContent as { failed: unknown }).failed, null);
+        const resized = await editTimeline(client, 0, [{ op: "setSpanLength", layer: "a/b", frame: 4, length: 4 }]);
+        assert.equal((resized.structuredContent as { failed: unknown }).failed, null);
+    }),
+);
+
+test("edit_timeline setSpanLength grows, shrinks, enforces minimum, rejects inner keys and ripples", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({ FAKE_SECOND_LAYER: "Other" }, async (client, tempDir) => {
+        const grew = await editTimeline(client, 0, [{ op: "setSpanLength", layer: "a/b", frame: 4, length: 4 }]);
+        assert.equal((grew.structuredContent as { failed: unknown }).failed, null);
+        assert.match((grew.structuredContent as { warnings: string[] }).warnings[0], /Only layer a\/b shifted/);
+        let layers = (await layersLog(tempDir)).at(-1);
+        assert.equal(layers.find((entry: { name: string }) => entry.name === "a/b").frames[1].duration, 4);
+        assert.equal(layers.find((entry: { name: string }) => entry.name === "Other").frames[0].duration, 5);
+
+        const shrunk = await editTimeline(client, 0, [{ op: "setSpanLength", layer: "a/b", frame: 4, length: 2 }]);
+        assert.equal((shrunk.structuredContent as { failed: unknown }).failed, null);
+        layers = (await layersLog(tempDir)).at(-1);
+        assert.equal(layers.find((entry: { name: string }) => entry.name === "a/b").frames[1].duration, 2);
+    });
+    await withServer({ FAKE_SECOND_LAYER: "Other" }, async (client, tempDir) => {
+        const ripple = await editTimeline(client, 0, [
+            { op: "setSpanLength", layer: "a/b", frame: 4, length: 5, ripple: true },
+        ]);
+        assert.equal((ripple.structuredContent as { failed: unknown }).failed, null);
+        const layers = (await layersLog(tempDir)).at(-1);
+        assert.equal(layers.find((entry: { name: string }) => entry.name === "a/b").frames[1].duration, 5);
+        assert.equal(layers.find((entry: { name: string }) => entry.name === "Other").frames[0].duration, 7);
+        assert.deepEqual((ripple.structuredContent as { warnings: string[] }).warnings, []);
+    });
+    await withServer({ FAKE_INNER_KEYFRAME: "1" }, async (client) => {
+        const result = await editTimeline(client, 0, [{ op: "setSpanLength", layer: "a/b", frame: 3, length: 4 }]);
+        assert.match(
+            (result.structuredContent as { failed: { error: string } }).failed.error,
+            /Another keyframe lies inside the span/,
+        );
+        const tooShort = await editTimeline(client, 0, [{ op: "setSpanLength", layer: "a/b", frame: 3, length: 1 }]);
+        assert.equal(tooShort.isError, true, "length below 2 is rejected by the input schema");
+    });
+});
 
 const SCENE_FILE = "scenes/Scene 1/a_b/1.as";
 
@@ -462,7 +745,7 @@ test("apply_scripts rejects new scripts inside tweens and beyond timeline length
     }),
 );
 
-test("apply_scripts rejects a new frame script written in Animate after Export", { timeout: 30_000 }, () =>
+test("apply_scripts rejects structural changes made in Animate after Export", { timeout: 30_000 }, () =>
     withServer({ FAKE_CONFLICT_NEW: "1" }, async (client, tempDir) => {
         const exportDir = join(tempDir, "out");
         await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
@@ -471,9 +754,35 @@ test("apply_scripts rejects a new frame script written in Animate after Export",
         const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
         const summary = result.structuredContent as { applied: string[]; failed: { error: string }[] };
         assert.deepEqual(summary.applied, []);
-        assert.match(summary.failed[0]?.error ?? "", /Changed in Animate since Export/);
+        assert.match(summary.failed[0]?.error ?? "", /Structure changed since Export/);
     }),
 );
+
+test("apply_scripts rejects a stale fingerprint and keeps backward compatibility", { timeout: 30_000 }, async () => {
+    await withServer({}, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const manifestPath = join(exportDir, ".export.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        manifest.timelines[0].structureFingerprint = "stale";
+        await writeFile(manifestPath, JSON.stringify(manifest));
+        await writeFile(join(exportDir, SCENE_FILE), "mine");
+        const refused = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        const failures = (refused.structuredContent as { failed: { error: string }[] }).failed;
+        assert.match(failures[0]?.error ?? "", /Structure changed since Export/);
+    });
+    await withServer({}, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const manifestPath = join(exportDir, ".export.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        delete manifest.timelines[0].structureFingerprint;
+        await writeFile(manifestPath, JSON.stringify(manifest));
+        await writeFile(join(exportDir, SCENE_FILE), "legacy edit");
+        const accepted = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        assert.deepEqual((accepted.structuredContent as { applied: string[] }).applied, [SCENE_FILE]);
+    });
+});
 
 test("apply_scripts accepts hand-placed files in known layers and warns for unknown layers", { timeout: 30_000 }, () =>
     withServer({ FAKE_SECOND_LAYER: "Other" }, async (client, tempDir) => {
@@ -526,6 +835,20 @@ test("apply_scripts preserves layer indices after creating as and remains idempo
         assert.equal(manifest.files[SCENE_FILE].layer, 1);
         assert.equal(manifest.files[newFile].layer, 0);
         assert.equal(manifest.timelines[0].layers.find((entry: { name: string }) => entry.name === "a/b").index, 1);
+        assert.match(manifest.timelines[0].structureFingerprint, /^fnv1a32:/);
+
+        await writeFile(join(exportDir, SCENE_FILE), "play-again();");
+        const afterStructureUpdate = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        assert.deepEqual(
+            (afterStructureUpdate.structuredContent as { applied: string[] }).applied,
+            [SCENE_FILE],
+            text(afterStructureUpdate),
+        );
+        assert.deepEqual(
+            (afterStructureUpdate.structuredContent as { failed: unknown[] }).failed,
+            [],
+            text(afterStructureUpdate),
+        );
 
         const again = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
         assert.deepEqual(again.structuredContent, { applied: [], failed: [], unchanged: 3, warnings: [] });

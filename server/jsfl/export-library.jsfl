@@ -34,7 +34,8 @@
       var symbol = findSymbolItem(__items[itemIndex]);
       if (!symbol) throw new Error("Library item not found");
       document.library.editItem(__items[itemIndex]);
-      exportedSymbols.push({ name: __items[itemIndex], layers: exportTimeline(document.getTimeline()) });
+      var timeline = document.getTimeline();
+      exportedSymbols.push({ name: __items[itemIndex], layers: exportTimeline(timeline), structureFingerprint: structureFingerprint(timeline) });
     } catch (error) {
       exportedSymbols.push({ name: __items[itemIndex], error: String(error && error.message ? error.message : error) });
     }
