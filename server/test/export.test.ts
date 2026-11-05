@@ -7,6 +7,11 @@ import { writeExport } from "../src/export.js";
 
 test("layer names differing only in case get separate folders", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "export-"));
+    /**
+     * Creates a one-frame script-bearing layer frame.
+     * @param script Script text for the frame
+     * @returns A single-frame timeline
+     */
     const frame = (script: string) => [{ start: 0, duration: 1, label: "", tween: "none", script, elements: [] }];
     await writeExport(
         {

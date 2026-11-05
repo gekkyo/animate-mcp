@@ -12,13 +12,38 @@ const fakeAnimate = `#!/usr/bin/env node
 const { appendFileSync, existsSync, readFileSync, writeFileSync } = require("node:fs");
 const { runInNewContext } = require("node:vm");
 const src = readFileSync(process.argv[2], "utf8");
+/**
+ * Writes a message to the configured fake-runtime log when logging is enabled.
+ * @param message Message to append to the fake-runtime log
+ */
 const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, message + "\\n");
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
 const lib = { name: "Hero", itemType: "movie clip" };
+/**
+ * Creates a fake Animate keyframe with default properties and any supplied overrides.
+ * @param startFrame Starting frame index
+ * @param duration Number of frames in the keyframe
+ * @param extra Additional keyframe properties to apply
+ * @returns The constructed keyframe
+ */
 const makeKeyframe = (startFrame, duration, extra) => Object.assign({ startFrame, duration, name: "", tweenType: "none", actionScript: "", elements: [] }, extra);
 // Like real Animate, layer.frames has one element per frame (the keyframe's frame repeated duration times)
+/**
+ * Expands keyframes into one entry per timeline frame.
+ * @param keyframes Keyframes to expand
+ * @returns The expanded frame array
+ */
 const expand = (keyframes) => keyframes.flatMap((keyframe) => Array(keyframe.duration).fill(keyframe));
+/**
+ * Creates a fake Animate layer and enforces lock behavior on its frames.
+ * @param name Layer name
+ * @param frames Expanded layer frame array
+ * @param layerType Animate layer type
+ * @param locked Whether the layer starts locked
+ * @param parentLayer Parent layer, if any
+ * @returns The constructed layer
+ */
 const layer = (name, frames, layerType = "normal", locked = false, parentLayer = null) => {
   const result = { name, frames, layerType, locked, writeWasUnlocked: false };
   if (parentLayer) result.parentLayer = parentLayer;
@@ -26,7 +51,12 @@ const layer = (name, frames, layerType = "normal", locked = false, parentLayer =
     for (const frame of new Set(frames)) {
       let actionScript = frame.actionScript;
       Object.defineProperty(frame, "actionScript", {
+        /** Returns the frame's current ActionScript. */
         get: () => actionScript,
+        /**
+         * Updates the frame's ActionScript, enforcing the layer lock.
+         * @param value New ActionScript text
+         */
         set: (value) => {
           if (result.locked) throw new Error("Layer is locked");
           result.writeWasUnlocked = true;
@@ -37,9 +67,22 @@ const layer = (name, frames, layerType = "normal", locked = false, parentLayer =
   }
   return result;
 };
+/**
+ * Creates a fake Animate timeline with the operations used by the tests.
+ * @param name Timeline name
+ * @param frames Initial timeline frame count
+ * @param layers Timeline layers
+ * @param libraryItem Library item associated with the timeline, if any
+ * @returns The constructed timeline
+ */
 const makeTimeline = (name, frames, layers, libraryItem) => {
   const timeline = { name, frameCount: frames, currentLayer: 0, currentFrame: 0, selectedFrames: null, clipboard: null, layers, libraryItem,
+    /** Recalculates the timeline frame count from its layers. */
     recalculateFrameCount() { this.frameCount = Math.max(0, ...this.layers.map((candidate) => candidate.frames.length)); },
+    /**
+     * Recalculates keyframe spans on a layer and updates the timeline frame count.
+     * @param targetLayer Layer whose keyframe spans to recalculate
+     */
     recalculateLayer(targetLayer) {
       let start = 0;
       while (start < targetLayer.frames.length) {
@@ -52,6 +95,12 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
       }
       this.recalculateFrameCount();
     },
+    /**
+     * Inserts frames into the current layer or all non-folder layers.
+     * @param count Number of frames to insert
+     * @param allLayers Whether to insert into every non-folder layer
+     * @param frameNumberIndex Zero-based insertion frame index
+     */
     insertFrames(count, allLayers, frameNumberIndex) {
       const targets = allLayers ? this.layers.filter((candidate) => candidate.layerType !== "folder") : [this.layers[this.currentLayer]];
       for (const target of targets) {
@@ -64,12 +113,21 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
         this.recalculateLayer(target);
       }
     },
+    /**
+     * Removes a range of frames from the current layer.
+     * @param startFrameIndex Zero-based start frame index
+     * @param endFrameIndex Exclusive end frame index
+     */
     removeFrames(startFrameIndex, endFrameIndex) {
       const target = this.layers[this.currentLayer];
       if (target.locked) throw new Error("Layer is locked");
       target.frames.splice(startFrameIndex, endFrameIndex - startFrameIndex);
       this.recalculateLayer(target);
     },
+    /**
+     * Inserts a keyframe at the requested frame on the current layer.
+     * @param frameNumber Zero-based frame index for the new keyframe
+     */
     insertKeyframe(frameNumber) {
       const currentLayer = this.layers[this.currentLayer];
       if (currentLayer.locked) throw new Error("Layer is locked");
@@ -87,9 +145,17 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
         writeFileSync(process.env.FAKE_LOG + ".as-keyframe-created", "yes");
       }
     },
+    /**
+     * Converts the requested frame on the current layer to a keyframe.
+     * @param frameNumber Zero-based frame index to convert
+     */
     convertToKeyframes(frameNumber) {
       this.insertKeyframe(frameNumber);
     },
+    /**
+     * Clears a keyframe on the current layer and merges its span with the prior span.
+     * @param frameNumber Zero-based frame index of the keyframe to clear
+     */
     clearKeyframes(frameNumber) {
       const currentLayer = this.layers[this.currentLayer];
       if (currentLayer.locked) throw new Error("Layer is locked");
@@ -105,18 +171,35 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
       }
       this.recalculateLayer(currentLayer);
     },
+    /**
+     * Sets a property on frames in the current layer.
+     * @param property Frame property to update
+     * @param value New property value
+     * @param startFrameIndex Zero-based start frame index
+     * @param endFrameIndex Exclusive end frame index, or undefined for one frame
+     */
     setFrameProperty(property, value, startFrameIndex, endFrameIndex) {
       const target = this.layers[this.currentLayer];
       if (target.locked) throw new Error("Layer is locked");
       const end = endFrameIndex === undefined ? startFrameIndex + 1 : endFrameIndex;
       for (let index = startFrameIndex; index < end; index++) target.frames[index][property] = value;
     },
+    /**
+     * Selects the current layer by index.
+     * @param layerIndex Zero-based layer index
+     */
     setSelectedLayers(layerIndex) {
       this.currentLayer = layerIndex;
     },
+    /**
+     * Selects a frame range on the current layer.
+     * @param startFrameIndex Zero-based start frame index
+     * @param endFrameIndex Exclusive end frame index
+     */
     setSelectedFrames(startFrameIndex, endFrameIndex) {
       this.selectedFrames = [this.currentLayer, startFrameIndex, endFrameIndex];
     },
+    /** Cuts the selected range from its layer into the timeline clipboard. */
     cutFrames() {
       const [layerIndex, startFrameIndex, endFrameIndex] = this.selectedFrames;
       const target = this.layers[layerIndex];
@@ -125,6 +208,10 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
       target.frames.splice(startFrameIndex, endFrameIndex - startFrameIndex);
       this.recalculateLayer(target);
     },
+    /**
+     * Pastes the clipboard into the current layer at the given frame.
+     * @param startFrameIndex Zero-based frame index for the paste
+     */
     pasteFrames(startFrameIndex) {
       const target = this.layers[this.currentLayer];
       if (target.locked) throw new Error("Layer is locked");
@@ -142,18 +229,35 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
       target.frames.splice(0, target.frames.length, ...frames);
       this.recalculateLayer(target);
     },
+    /**
+     * Deletes a layer and clears child references to it.
+     * @param layerIndex Zero-based index of the layer to delete
+     */
     deleteLayer(layerIndex) {
       const removed = this.layers.splice(layerIndex, 1)[0];
       for (const candidate of this.layers) if (candidate.parentLayer === removed) delete candidate.parentLayer;
       this.currentLayer = Math.min(this.currentLayer, this.layers.length - 1);
       this.recalculateFrameCount();
     },
+    /**
+     * Moves a layer before or after another layer.
+     * @param layerToMove Zero-based index of the layer to move
+     * @param layerToPutItBy Zero-based index of the reference layer
+     * @param addBefore Whether to place the moved layer before the reference layer
+     */
     reorderLayer(layerToMove, layerToPutItBy, addBefore = true) {
       const moved = this.layers.splice(layerToMove, 1)[0];
       let target = layerToPutItBy - (layerToMove < layerToPutItBy ? 1 : 0);
       if (!addBefore) target++;
       this.layers.splice(target, 0, moved);
     },
+    /**
+     * Adds a layer adjacent to the current layer and selects it.
+     * @param layerName Name of the new layer
+     * @param layerType Animate layer type
+     * @param addAbove Whether to insert above the current layer
+     * @returns The zero-based index of the new layer
+     */
     addNewLayer(layerName, layerType, addAbove) {
       const newLayer = layer(layerName, expand([makeKeyframe(0, this.frameCount)]), layerType);
       const index = this.layers.length ? this.currentLayer + (addAbove ? 0 : 1) : 0;
@@ -167,7 +271,19 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
   };
   return timeline;
 };
+/**
+ * Creates a one-frame fake timeline for a library symbol.
+ * @param symbolName Library symbol name
+ * @param script Initial ActionScript for the symbol
+ * @returns The constructed symbol timeline
+ */
 const symTimeline = (symbolName, script) => makeTimeline(symbolName, 1, [layer("L", expand([makeKeyframe(0, 1, { actionScript: script })]))], { name: symbolName });
+/**
+ * Builds a fake Animate document and its scene and library timelines.
+ * @param documentName Document name
+ * @param documentType Document type
+ * @returns The constructed fake document
+ */
 const doc = (documentName, documentType) => {
   const sceneFrames = [
     makeKeyframe(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [{ name: "hero", elementType: "instance", libraryItem: lib }] }),
@@ -185,14 +301,24 @@ const doc = (documentName, documentType) => {
   const document = { name: documentName, type: documentType, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
   let editing = null;
   document.syms = {};
+  /**
+   * Returns the active library-symbol timeline or the main scene timeline.
+   * @returns The currently active timeline
+   */
   document.getTimeline = () => editing ? (document.syms[editing] ||= symTimeline(editing, process.env.FAKE_SYM_SCRIPT ?? "// " + editing)) : document.timelines[0];
+  /** Exits library-item editing mode. */
   document.exitEditMode = () => { editing = null; };
+  /** Provides the scene-editing stub required by the fake Animate API. */
   document.editScene = () => {};
   document.library = { items: [
     { name: "F", itemType: "folder" },
     { name: "dir/Hero", itemType: "movie clip", linkageExportForAS: true, linkageClassName: "com.Hero" },
     ...Array.from({ length: Number(process.env.FAKE_EXTRA ?? 0) }, (_, index) => ({ name: "S" + index, itemType: "graphic" })),
     { name: "Broken", itemType: "button" }],
+    /**
+     * Opens a library item for timeline editing.
+     * @param itemName Library item name to open
+     */
     editItem: (itemName) => { if (itemName === "Broken" && !process.env.FAKE_NO_BROKEN) throw new Error("cannot edit"); editing = itemName; } };
   return document; };
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
@@ -215,8 +341,30 @@ if (process.env.FAKE_CONFLICT_NEW && src.includes("var __newScripts")) {
   for (let index = 3; index < end; index++) { targetLayer.frames[index] = newFrame; }
 }
 if (!src.includes("HANG")) runInNewContext(src, {
-  FLfile: { platformPathToURI: (path) => path, write: (path, content) => writeFileSync(path, content) },
-  fl: { trace() {}, documents: docs, getDocumentDOM: () => docs[0] || null },
+  FLfile: {
+    /**
+     * Converts a platform path to its fake URI representation.
+     * @param path Path to convert
+     * @returns The unchanged path
+     */
+    platformPathToURI: (path) => path,
+    /**
+     * Writes content to a fake Animate file path.
+     * @param path Destination path
+     * @param content File contents
+     */
+    write: (path, content) => writeFileSync(path, content),
+  },
+  fl: {
+    /** Provides the no-op trace method used by the fake Animate API. */
+    trace() {},
+    documents: docs,
+    /**
+     * Returns the first open fake document, or null when no document is open.
+     * @returns The active document or null
+     */
+    getDocumentDOM: () => docs[0] || null,
+  },
 });
 if (process.env.FAKE_LOG && src.includes("var __newScripts")) {
   const stage = [];
@@ -273,6 +421,11 @@ async function withServer(
     }
 }
 
+/**
+ * Extracts the first text item from an MCP tool result.
+ * @param result MCP tool result with optional content
+ * @returns The first text item, or an empty string
+ */
 const text = (result: { content?: unknown }) => (result.content as Array<{ text: string }>)[0]?.text ?? "";
 
 test("run_jsfl success, JSFL error, cleanup", { timeout: 20_000 }, () =>
@@ -420,22 +573,44 @@ test("export_scripts errors: multiple documents list names; no document", { time
     });
 });
 
+/**
+ * Reads and parses the fake runtime's script-write log.
+ * @param tempDir Directory containing the fake-runtime logs
+ * @returns Parsed script log entries
+ */
 const scriptsLog = async (tempDir: string) =>
     (await readFile(join(tempDir, "log.scripts"), "utf8"))
         .trim()
         .split("\n")
         .map((logLine) => JSON.parse(logLine));
+/**
+ * Reads and parses the fake runtime's layer-state log.
+ * @param tempDir Directory containing the fake-runtime logs
+ * @returns Parsed layer snapshots
+ */
 const layersLog = async (tempDir: string) =>
     (await readFile(join(tempDir, "log.layers"), "utf8"))
         .trim()
         .split("\n")
         .map((logLine) => JSON.parse(logLine));
+/**
+ * Reads and parses the fake runtime's symbol-layer log.
+ * @param tempDir Directory containing the fake-runtime logs
+ * @returns Parsed symbol-layer snapshots
+ */
 const symbolLayersLog = async (tempDir: string) =>
     (await readFile(join(tempDir, "log.sym-layers"), "utf8"))
         .trim()
         .split("\n")
         .map((logLine) => JSON.parse(logLine));
 
+/**
+ * Calls the edit_timeline MCP tool with the supplied operations.
+ * @param client Connected MCP client
+ * @param timeline Timeline index or library item name
+ * @param ops Timeline operations to apply
+ * @returns The MCP tool call promise
+ */
 const editTimeline = (client: Client, timeline: number | string, ops: unknown[]) =>
     client.callTool({ name: "edit_timeline", arguments: { timeline, ops } });
 

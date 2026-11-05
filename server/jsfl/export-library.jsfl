@@ -1,10 +1,16 @@
 // Concatenated and evaluated after export-common. `var __docName` and `var __items` are injected before it.
 // If __items is null, only the symbol list (and AS3 Linked classes) is returned. If it is an array, each symbol's timeline is read.
 // Reading enters edit mode, so the original edit state is restored at the end; a failure goes to warning.
+/** Exports library symbols and their timelines as JSON text.
+ * @returns The serialized library export.
+ */
 (function () {
   var document = selectDocument(), itemIndex;
 
-  /** Finds a library item by its full name. */
+  /** Finds a library item by its full name.
+   * @param symbolName The full library item name.
+   * @returns The matching library item, or null when it is not found.
+   */
   function findSymbolItem(symbolName) {
     var libraryItems = document.library.items;
     for (var libraryIndex = 0; libraryIndex < libraryItems.length; libraryIndex++) {

@@ -1,10 +1,17 @@
 // `var __timelineRef` (scene index or library item path) and `var __ops` are injected before this file.
+/** Applies timeline operations and returns their results as JSON text.
+ * @returns The serialized operation results.
+ */
 (function () {
   var document = selectDocument(), restore = saveEditState(document), timeline = null;
   var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.currentLayer;
   var originalFrame = originalTimeline.currentFrame, applied = [], failed = null, skipped = [], warnings = [];
 
-  /** Finds a uniquely named layer and optionally verifies its index. */
+  /** Finds a uniquely named layer and optionally verifies its index.
+   * @param name The layer name to find.
+   * @param requestedIndex The expected zero-based layer index, when specified.
+   * @returns The matching zero-based layer index.
+   */
   function findLayerIndex(name, requestedIndex) {
     var found = -1, matches = 0;
     for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
@@ -24,12 +31,18 @@
     return found;
   }
 
-  /** Finds a uniquely named layer used as a parent or placement reference. */
+  /** Finds a uniquely named layer used as a parent or placement reference.
+   * @param name The referenced layer name.
+   * @returns The matching zero-based layer index.
+   */
   function findReference(name) {
     return findLayerIndex(name, undefined);
   }
 
-  /** Finds a layer's current zero-based position by object identity. */
+  /** Finds a layer's current zero-based position by object identity.
+   * @param targetLayer The layer object to locate.
+   * @returns The layer's zero-based index, or -1 when it is not present.
+   */
   function layerPosition(targetLayer) {
     for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
       if (timeline.layers[layerIndex] === targetLayer) return layerIndex;
@@ -37,7 +50,11 @@
     return -1;
   }
 
-  /** Temporarily unlocks target layers and restores their original lock states. */
+  /** Temporarily unlocks target layers and restores their original lock states.
+   * @param layers The layers to unlock while the operation runs.
+   * @param callback The operation to run while the layers are unlocked.
+   * @returns The callback's result.
+   */
   function withUnlockedLayers(layers, callback) {
     var states = [];
     for (var layerIndex = 0; layerIndex < layers.length; layerIndex++) {
@@ -53,7 +70,11 @@
     }
   }
 
-  /** Verifies that the selected parent layer can contain the requested layer type. */
+  /** Verifies that the selected parent layer can contain the requested layer type.
+   * @param name The parent layer name, when specified.
+   * @param layerType The type of layer that will use the parent.
+   * @returns The matching parent layer, or null when no parent is specified.
+   */
   function parentFor(name, layerType) {
     if (name === undefined) return null;
     var parentIndex = findReference(name), parent = timeline.layers[parentIndex];
@@ -62,7 +83,10 @@
     return parent;
   }
 
-  /** Verifies that relative placement does not put a child before its parent. */
+  /** Verifies that relative placement does not put a child before its parent.
+   * @param layerIndex The child's zero-based layer index.
+   * @param parentLayer The parent layer to validate.
+   */
   function validateParentPosition(layerIndex, parentLayer) {
     if (!parentLayer) return;
     var parentIndex = -1;
@@ -72,7 +96,11 @@
     if (parentIndex < 0 || parentIndex >= layerIndex) throw new Error('Parent must appear above the layer');
   }
 
-  /** Returns the layers affected by a frame operation. */
+  /** Returns the layers affected by a frame operation.
+   * @param layerIndex The target layer's zero-based index.
+   * @param ripple Whether the operation affects all non-folder layers.
+   * @returns The layers affected by the operation.
+   */
   function affectedLayers(layerIndex, ripple) {
     var layers = [];
     if (ripple) {
@@ -85,7 +113,10 @@
     return layers;
   }
 
-  /** Rejects a frame position inside a tween span. */
+  /** Rejects a frame position inside a tween span.
+   * @param layer The layer containing the frame.
+   * @param frameIndex The zero-based frame position to validate.
+   */
   function rejectTween(layer, frameIndex) {
     if (frameIndex >= layer.frames.length) return;
     var frame = layer.frames[frameIndex], spanStart = frame.startFrame;
@@ -95,14 +126,22 @@
     }
   }
 
-  /** Rejects any tween interiors affected by removing a range. */
+  /** Rejects any tween interiors affected by removing a range.
+   * @param layers The layers affected by the removal.
+   * @param frameIndex The zero-based start of the range.
+   * @param count The number of frames in the range.
+   */
   function rejectTweenRange(layers, frameIndex, count) {
     for (var layerIndex = 0; layerIndex < layers.length; layerIndex++) {
       for (var offset = 0; offset < count; offset++) rejectTween(layers[layerIndex], frameIndex + offset);
     }
   }
 
-  /** Moves a layer's full frame sequence while preserving its original keyframe spans. */
+  /** Moves a layer's full frame sequence while preserving its original keyframe spans.
+   * @param layerIndex The layer's zero-based index.
+   * @param layer The layer whose frames to move.
+   * @param offset The number of frames to shift the layer forward.
+   */
   function shiftLayerFrames(layerIndex, layer, offset) {
     if (offset < 1) throw new Error('offset must be at least 1');
     if (!layer.frames || layer.frames.length === 0) throw new Error('Layer has no frames');
@@ -114,6 +153,7 @@
       }
     }
     if (keyframes.length === 0) throw new Error('Layer has no frames');
+    /** Cuts and pastes the layer's frames at the requested offset. */
     withUnlockedLayers([layer], function () {
       timeline.setSelectedLayers(layerIndex);
       timeline.setSelectedFrames(0, originalLength, true);
@@ -148,7 +188,9 @@
     warnings.push('Only layer ' + layer.name + ' shifted; other layers were not shifted.');
   }
 
-  /** Applies a layer operation. */
+  /** Applies a layer operation.
+   * @param op The layer operation to apply.
+   */
   function applyLayerOp(op) {
     var layerIndex, layer, parent, placementIndex, addAbove, returnedIndex, desiredIndex, currentParent;
     if (op.op === 'addLayer') {
@@ -186,10 +228,12 @@
     layer = timeline.layers[layerIndex];
     if (op.op === 'deleteLayer') {
       if (op.confirm !== true) throw new Error('confirm required');
+      /** Deletes the selected layer. */
       withUnlockedLayers([layer], function () { timeline.deleteLayer(layerIndex); });
       return;
     }
     if (op.op === 'renameLayer') {
+      /** Renames the selected layer. */
       withUnlockedLayers([layer], function () { layer.name = op.name; });
       return;
     }
@@ -202,6 +246,7 @@
       }
       if (op.type === 'masked' && !parent) throw new Error('Parent layer is required for a masked layer');
       if (parent) validateParentPosition(layerIndex, parent);
+      /** Updates the selected layer's type and parent. */
       withUnlockedLayers([layer], function () {
         layer.layerType = op.type;
         layer.parentLayer = parent;
@@ -236,6 +281,7 @@
         var moveParentAfter = moveParentIndex - (layerIndex < moveParentIndex ? 1 : 0);
         if (desiredIndex <= moveParentAfter) throw new Error('Parent must appear above the layer');
       }
+      /** Reorders the selected layer and optionally changes its parent. */
       withUnlockedLayers([layer], function () {
         if (placementIndex !== layerIndex) timeline.reorderLayer(layerIndex, placementIndex, addAbove);
         if (op.parent !== undefined) layer.parentLayer = parent;
@@ -244,7 +290,9 @@
     }
   }
 
-  /** Applies a frame operation. */
+  /** Applies a frame operation.
+   * @param op The frame operation to apply.
+   */
   function applyFrameOp(op) {
     var layerIndex = findLayerIndex(op.layer, op.index), layer = timeline.layers[layerIndex];
     var frameIndex = op.frame - 1, count, layers, layerIndexToEdit, spanStart, spanLength, spanEnd, delta;
@@ -269,6 +317,7 @@
       } else {
         rejectTweenRange(layers, frameIndex, count);
       }
+      /** Inserts or removes frames on the affected layers. */
       withUnlockedLayers(layers, function () {
         if (op.op === 'insertFrames') {
           timeline.currentLayer = layerIndex;
@@ -287,6 +336,7 @@
     if (op.op === 'insertKeyframe') {
       rejectTween(layer, frameIndex);
       if (layer.frames[frameIndex].startFrame === frameIndex) return;
+      /** Converts the selected frame to a keyframe. */
       withUnlockedLayers([layer], function () {
         timeline.currentLayer = layerIndex;
         timeline.convertToKeyframes(frameIndex);
@@ -296,6 +346,7 @@
     if (op.op === 'clearKeyframe') {
       rejectTween(layer, frameIndex);
       if (layer.frames[frameIndex].startFrame !== frameIndex) throw new Error('Frame is not a keyframe');
+      /** Clears the selected keyframe. */
       withUnlockedLayers([layer], function () {
         timeline.currentLayer = layerIndex;
         timeline.clearKeyframes(frameIndex);
@@ -303,6 +354,7 @@
       return;
     }
     if (op.op === 'setLabel') {
+      /** Sets the selected frame's label. */
       withUnlockedLayers([layer], function () {
         timeline.currentLayer = layerIndex;
         timeline.setFrameProperty('name', op.label, frameIndex, frameIndex + 1);
@@ -323,6 +375,7 @@
         for (var resizeLayerIndex = 0; resizeLayerIndex < layers.length; resizeLayerIndex++) {
           if (layers[resizeLayerIndex].frames.length < spanEnd) throw new Error('Frame beyond timeline length');
         }
+        /** Resizes the selected frame span. */
         withUnlockedLayers(layers, function () {
           if (op.length > spanLength) {
             timeline.currentLayer = layerIndex;
@@ -339,7 +392,9 @@
     }
   }
 
-  /** Returns the final layer list. */
+  /** Returns the final layer list.
+   * @returns The current layers and their parent relationships.
+   */
   function listLayers() {
     var result = [];
     for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {

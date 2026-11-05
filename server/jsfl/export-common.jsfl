@@ -1,5 +1,8 @@
 // Shared before other JSFL files: JSON serialization and timeline-to-layer/frame conversion.
-/** Serializes a value as JSON without relying on a JSFL JSON implementation. */
+/** Serializes a value as JSON without relying on a JSFL JSON implementation.
+ * @param value The value to serialize.
+ * @returns The JSON text representation.
+ */
 function serialize(value) {
   if (value === null || value === undefined) return "null";
   if (typeof value === "number") return isFinite(value) ? String(value) : "null";
@@ -27,7 +30,10 @@ function serialize(value) {
   return escapedValue + '"';
 }
 
-/** Converts an Animate timeline into layer and keyframe data for export. */
+/** Converts an Animate timeline into layer and keyframe data for export.
+ * @param timeline The timeline to export.
+ * @returns The exported layer and keyframe data.
+ */
 function exportTimeline(timeline) {
   var layers = [];
   for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
@@ -61,7 +67,10 @@ function exportTimeline(timeline) {
   return layers;
 }
 
-/** Hashes timeline structure without script contents so edits can detect stale exports. */
+/** Hashes timeline structure without script contents so edits can detect stale exports.
+ * @param timeline The timeline whose structure to hash.
+ * @returns The structure fingerprint.
+ */
 function structureFingerprint(timeline) {
   var structure = [], layerIndex, frameIndex, layer, parentIndex, keyframes, frame;
   for (layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {

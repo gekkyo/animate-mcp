@@ -5,11 +5,17 @@
 // A frame changed in Animate since Export is not written and goes to failed (if it already equals script it counts as applied).
 // An empty script deletes the frame script. New scripts are applied after existing-file edits.
 // Symbols are edited in edit mode, so the original edit state is restored at the end (warning if it cannot be).
+/** Applies exported script edits and returns the results as JSON text.
+ * @returns The serialized edit results.
+ */
 (function () {
   var document = selectDocument(), applied = [], failed = [], warnings = [], newApplied = [], editingItemName = "";
   var createdAsTimelines = {}, fingerprintMismatch = {}, restore = saveEditState(document);
 
-  /** Returns the requested scene or library-item timeline. */
+  /** Returns the requested scene or library-item timeline.
+   * @param edit The edit identifying the target timeline.
+   * @returns The target timeline.
+   */
   function getTimeline(edit) {
     if (edit.item !== undefined) {
       if (editingItemName !== edit.item) {
@@ -21,12 +27,18 @@
     return document.timelines[edit.scene];
   }
 
-  /** Identifies a timeline for per-Run layer-index tracking. */
+  /** Identifies a timeline for per-Run layer-index tracking.
+   * @param edit The edit identifying the target timeline.
+   * @returns The timeline key.
+   */
   function timelineKey(edit) {
     return edit.item !== undefined ? "item:" + edit.item : "scene:" + edit.scene;
   }
 
-  /** Returns the timeline's frame count, using its longest layer on older Animate versions. */
+  /** Returns the timeline's frame count, using its longest layer on older Animate versions.
+   * @param timeline The timeline to measure.
+   * @returns The timeline frame count.
+   */
   function timelineLength(timeline) {
     if (typeof timeline.frameCount === "number") {
       return timeline.frameCount;
@@ -40,7 +52,10 @@
     return length;
   }
 
-  /** Finds the exported fingerprint for a scene or library timeline. */
+  /** Finds the exported fingerprint for a scene or library timeline.
+   * @param edit The edit identifying the target timeline.
+   * @returns The exported structure fingerprint, or an empty string when none exists.
+   */
   function expectedFingerprint(edit) {
     for (var fingerprintIndex = 0; fingerprintIndex < __fingerprints.length; fingerprintIndex++) {
       var fingerprint = __fingerprints[fingerprintIndex];
@@ -49,7 +64,10 @@
     return "";
   }
 
-  /** Refuses edits when the timeline structure no longer matches Export. */
+  /** Refuses edits when the timeline structure no longer matches Export.
+   * @param edit The edit identifying the target timeline.
+   * @returns Whether the timeline structure differs from the exported structure.
+   */
   function structureChanged(edit) {
     var key = timelineKey(edit), expected = expectedFingerprint(edit);
     if (!expected) return false;

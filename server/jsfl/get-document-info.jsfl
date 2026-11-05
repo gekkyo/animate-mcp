@@ -1,4 +1,7 @@
 // Concatenated and evaluated after export-common. The last expression returns JSON text via serialize.
+/** Returns the open document's metadata as JSON text.
+ * @returns The serialized document metadata.
+ */
 (function () {
   var document = fl.getDocumentDOM();
   if (!document) throw new Error("No document open");

@@ -4,18 +4,21 @@ import { join } from "node:path";
 
 export type Launcher = (runFile: string) => Promise<void>;
 
+// shortcut: JSFL has no JSON, so only primitives are serialized (objects become strings); extend when needed.
 /**
  * Builds the Run file: it evals code and writes the result or error to the Result file as JSON.
  * @param code JSFL source to run
  * @param resultPath Absolute path of the Result file
  * @returns JSFL source to write into the Run file
  */
-// shortcut: JSFL has no JSON, so only primitives are serialized (objects become strings); extend when needed.
 function runFileSource(code: string, resultPath: string): string {
     return String.raw`// Resolve the Result file path.
 var __path = FLfile.platformPathToURI(${JSON.stringify(resultPath)});
 
-// Quote strings for the JSON result file.
+/** Escapes a string for inclusion in the JSON result file.
+ * @param text Value to escape
+ * @returns Quoted and escaped string
+ */
 function __quote(text) {
   text = String(text);
   var output = '"';
@@ -29,7 +32,10 @@ function __quote(text) {
   return output + '"';
 }
 
-// Serialize the evaluated value, including a fallback for older Animate versions.
+/** Serializes an evaluated value, with a fallback for older Animate versions.
+ * @param value Value to serialize
+ * @returns JSON-compatible text representation
+ */
 function __serialize(value) {
   if (typeof JSON !== 'undefined') return JSON.stringify(value);
   if (typeof value === 'number') return isFinite(value) ? String(value) : 'null';
@@ -110,6 +116,9 @@ export function createRunner(options: {
         const runFile = join(options.dir, `${runId}.jsfl`);
         const resultFile = join(options.dir, `${runId}.result.json`);
         const deadline = Date.now() + options.timeoutMs;
+        /** Creates the timeout error for a Run that Animate did not finish in time.
+         * @returns Timeout error
+         */
         const timedOut = () =>
             new Error(
                 `Run timed out after ${options.timeoutMs} ms (Animate did not run the .jsfl; on Windows check that .jsfl files are associated with Animate, or set ANIMATE_MCP_LAUNCH_COMMAND)`,
@@ -120,9 +129,21 @@ export function createRunner(options: {
             try {
                 await Promise.race([
                     options.launch(runFile),
-                    new Promise<never>((_, reject) => {
-                        timer = setTimeout(() => reject(timedOut()), options.timeoutMs);
-                    }),
+                    new Promise<never>(
+                        /** Rejects the launch race when the Run timeout expires.
+                         * @param _ Unused resolve callback
+                         * @param reject Rejects the launch race
+                         */
+                        (_, reject) => {
+                            timer = setTimeout(
+                                /** Rejects the pending launch with the timeout error.
+                                 * @returns Timer handle
+                                 */
+                                () => reject(timedOut()),
+                                options.timeoutMs,
+                            );
+                        },
+                    ),
                 ]);
             } finally {
                 clearTimeout(timer);
@@ -143,7 +164,12 @@ export function createRunner(options: {
                         throw error;
                     }
                 }
-                await new Promise((resolve) => setTimeout(resolve, options.pollMs ?? DEFAULT_POLL_MS));
+                await new Promise(
+                    /** Waits for the next Result file poll interval.
+                     * @param resolve Resolves when the polling delay ends
+                     */
+                    (resolve) => setTimeout(resolve, options.pollMs ?? DEFAULT_POLL_MS),
+                );
             }
             throw timedOut();
         } finally {
@@ -159,8 +185,18 @@ export function createRunner(options: {
          * @returns Promise<unknown> with the same result as run (the next Run still executes if the previous one failed)
          */
         execute(code: string): Promise<unknown> {
-            const next = queue.then(() => run(code));
-            queue = next.catch(() => undefined);
+            const next = queue.then(
+                /** Runs this request after the previous queued Run settles.
+                 * @returns Result of this Run
+                 */
+                () => run(code),
+            );
+            queue = next.catch(
+                /** Keeps the queue usable after a failed Run.
+                 * @returns Undefined to settle the queue
+                 */
+                () => undefined,
+            );
             return next;
         },
     };

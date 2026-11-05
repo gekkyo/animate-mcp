@@ -81,13 +81,32 @@ export async function collectEdits(dir: string) {
             continue;
         }
         const topAsLayer = timeline.layers
-            .filter((layer) => layer.name.toLowerCase() === "as")
-            .sort((left, right) => left.index - right.index)[0];
+            .filter(
+                /** Selects layers named AS, case-insensitively.
+                 * @param layer Layer to check
+                 * @returns Whether the layer is named AS
+                 */
+                (layer) => layer.name.toLowerCase() === "as",
+            )
+            .sort(
+                /** Orders layers by their timeline index.
+                 * @param left First layer to compare
+                 * @param right Second layer to compare
+                 * @returns Negative, zero, or positive ordering result
+                 */
+                (left, right) => left.index - right.index,
+            )[0];
         for (const layerEntry of layerEntries) {
             if (!layerEntry.isDirectory()) {
                 continue;
             }
-            const mappedLayer = timeline.layers.find((layer) => layer.dir === layerEntry.name);
+            const mappedLayer = timeline.layers.find(
+                /** Finds the manifest layer mapped to this directory.
+                 * @param layer Manifest layer mapping to check
+                 * @returns The matching layer, if present
+                 */
+                (layer) => layer.dir === layerEntry.name,
+            );
             const asLayer = mappedLayer?.name.toLowerCase() === "as" || layerEntry.name.toLowerCase() === "as";
             const targetLayer = mappedLayer ?? (asLayer ? topAsLayer : undefined);
             let scriptEntries: import("node:fs").Dirent[];
@@ -145,15 +164,34 @@ export async function collectEdits(dir: string) {
             }
         }
     }
-    newScripts.sort((left, right) => left.file.localeCompare(right.file));
+    newScripts.sort(
+        /** Orders discovered scripts by relative path.
+         * @param left First script to compare
+         * @param right Second script to compare
+         * @returns Locale ordering result for the script paths
+         */
+        (left, right) => left.file.localeCompare(right.file),
+    );
     warnings.sort();
     const fingerprints = (manifest.timelines ?? [])
-        .filter((timeline) => timeline.structureFingerprint)
-        .map((timeline) => ({
-            scene: timeline.scene,
-            ...(timeline.item ? { item: timeline.item } : {}),
-            structureFingerprint: timeline.structureFingerprint as string,
-        }));
+        .filter(
+            /** Keeps timelines that have a recorded structure fingerprint.
+             * @param timeline Timeline manifest entry to check
+             * @returns Whether the timeline has a fingerprint
+             */
+            (timeline) => timeline.structureFingerprint,
+        )
+        .map(
+            /** Extracts a timeline fingerprint for Apply.
+             * @param timeline Timeline manifest entry to convert
+             * @returns Fingerprint data for the timeline
+             */
+            (timeline) => ({
+                scene: timeline.scene,
+                ...(timeline.item ? { item: timeline.item } : {}),
+                structureFingerprint: timeline.structureFingerprint as string,
+            }),
+        );
     return { document: manifest.document, edits, newScripts, unchanged, failed, warnings, fingerprints };
 }
 
@@ -162,6 +200,7 @@ export async function collectEdits(dir: string) {
  * @param dir Export directory
  * @param edits Edits that were applied to Animate
  * @param newScripts New scripts that were applied to Animate
+ * @param fingerprints Updated timeline fingerprints from Animate
  */
 export async function markApplied(
     dir: string,
@@ -180,12 +219,25 @@ export async function markApplied(
     }
     for (const newScript of newScripts) {
         const timeline = manifest.timelines?.find(
+            /** Finds the manifest timeline corresponding to a new script.
+             * @param entry Timeline manifest entry to check
+             * @returns The matching timeline, if present
+             */
             (entry) => entry.scene === newScript.scene && entry.item === newScript.item,
         );
         if (!timeline) {
             continue;
         }
-        if (newScript.asLayer && !timeline.layers.some((layer) => layer.name.toLowerCase() === "as")) {
+        if (
+            newScript.asLayer &&
+            !timeline.layers.some(
+                /** Checks whether the timeline already contains an AS layer.
+                 * @param layer Manifest layer mapping to check
+                 * @returns Whether the layer is named AS
+                 */
+                (layer) => layer.name.toLowerCase() === "as",
+            )
+        ) {
             for (const layer of timeline.layers) {
                 layer.index++;
             }
@@ -195,7 +247,14 @@ export async function markApplied(
                 }
             }
             timeline.layers.push({ index: newScript.layer, dir: newScript.layerDir, name: newScript.layerName });
-            timeline.layers.sort((left, right) => left.index - right.index);
+            timeline.layers.sort(
+                /** Orders layer mappings by their timeline index.
+                 * @param left First layer mapping to compare
+                 * @param right Second layer mapping to compare
+                 * @returns Negative, zero, or positive ordering result
+                 */
+                (left, right) => left.index - right.index,
+            );
         }
         manifest.files[newScript.file] = {
             scene: newScript.scene,
@@ -207,6 +266,10 @@ export async function markApplied(
     }
     for (const fingerprint of fingerprints) {
         const timeline = manifest.timelines?.find(
+            /** Finds the manifest timeline corresponding to a fingerprint.
+             * @param entry Timeline manifest entry to check
+             * @returns The matching timeline, if present
+             */
             (entry) => entry.scene === fingerprint.scene && entry.item === fingerprint.item,
         );
         if (timeline) {
@@ -235,7 +298,15 @@ export async function clearPreviousExport(dir: string, force: boolean) {
         const { edits } = await collectEdits(dir);
         if (edits.length > 0) {
             throw new Error(
-                `Unapplied edits in ${dir}: ${edits.map((edit) => edit.file).join(", ")}. Run apply_scripts first, or pass force: true to overwrite.`,
+                `Unapplied edits in ${dir}: ${edits
+                    .map(
+                        /** Gets the path of an unapplied edit for the error message.
+                         * @param edit Unapplied script edit
+                         * @returns Relative path of the edited file
+                         */
+                        (edit) => edit.file,
+                    )
+                    .join(", ")}. Run apply_scripts first, or pass force: true to overwrite.`,
             );
         }
     }

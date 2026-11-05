@@ -1,6 +1,8 @@
 // Shared part concatenated before other JSFL. `var __docName = "..."` (empty string = unspecified) is injected before it.
 // Returns the target document. If several are open and none is specified, throws an error listing the document names.
-/** Selects the requested open document, or the only open document. */
+/** Selects the requested open document, or the only open document.
+ * @returns The selected document.
+ */
 function selectDocument() {
   var documents = fl.documents, document = null, documentIndex;
   if (!documents || documents.length === 0) throw new Error("No document open");

@@ -1,11 +1,16 @@
 // Shared part concatenated before other JSFL.
 // Records the current edit state and returns a restore function. It returns a warning string on failure (empty string on success).
-/** Captures a document's edit state and returns a function that restores it. */
+/** Captures a document's edit state and returns a function that restores it.
+ * @param doc The document whose edit state to capture.
+ * @returns A function that restores the saved edit state.
+ */
 function saveEditState(doc) {
   var priorLibraryItem = doc.getTimeline().libraryItem;
   var priorItemName = priorLibraryItem ? priorLibraryItem.name : "";
   var priorTimeline = doc.currentTimeline;
-  /** Restores the saved edit state and returns an empty string or warning. */
+  /** Restores the saved edit state and returns an empty string or warning.
+   * @returns An empty string on success, or a warning when restoration fails.
+   */
   return function () {
     try {
       if (priorItemName) doc.library.editItem(priorItemName);

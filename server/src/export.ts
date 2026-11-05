@@ -42,7 +42,13 @@ type RenderedScript = { path: string; layerIndex: number; frameStart: number; sc
  */
 export const safeName = (name: string) =>
     [...name]
-        .map((char) => (char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char) ? "_" : char))
+        .map(
+            /** Replaces one invalid filename character with an underscore.
+             * @param char Character to check
+             * @returns Safe character
+             */
+            (char) => (char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char) ? "_" : char),
+        )
         .join("")
         .replace(/^\.+$/, "_") || "_";
 
@@ -72,7 +78,14 @@ export async function writeAtomic(path: string, content: string) {
     await rename(`${path}.tmp`, path);
 }
 
-/** Adds an element's frame range, extending a consecutive range on the same layer. */
+/** Adds an element's frame range, extending a consecutive range on the same layer.
+ * @param elementRangesByName Mutable ranges grouped by element name
+ * @param elementNames Element names to add
+ * @param layerName Name of the layer containing the elements
+ * @param start First frame in the range, 1-based
+ * @param end Last frame in the range, 1-based
+ * @param frameStart Keyframe start index, 0-based
+ */
 function addElementFrameRanges(
     elementRangesByName: Map<string, string[]>,
     elementNames: string[],
@@ -94,21 +107,43 @@ function addElementFrameRanges(
     }
 }
 
-/** Renders one keyframe's Markdown row and its optional script-file path. */
+/** Renders one keyframe's Markdown row and its optional script-file path.
+ * @param keyframe Keyframe data to render
+ * @param scriptFile Relative script-file path, or an empty string when absent
+ * @returns Markdown row, element names, and frame range
+ */
 function renderKeyframeMarkdown(keyframe: ExportFrame, scriptFile: string) {
     const start = keyframe.start + 1;
     const end = keyframe.start + keyframe.duration;
-    const elementNames = keyframe.elements.map((element) => element.name || element.item || `(${element.type})`);
+    const elementNames = keyframe.elements.map(
+        /** Gets the display name for a keyframe element.
+         * @param element Element to describe
+         * @returns Element name, library item, or type fallback
+         */
+        (element) => element.name || element.item || `(${element.type})`,
+    );
     const cells = [
         `${start}-${end}`,
         keyframe.duration,
         keyframe.tween,
         keyframe.elements
-            .map((element) => `${element.name || "(unnamed)"} / ${element.item || "-"} / ${element.type}`)
+            .map(
+                /** Formats one element's details for the Markdown table.
+                 * @param element Element to format
+                 * @returns Formatted element description
+                 */
+                (element) => `${element.name || "(unnamed)"} / ${element.item || "-"} / ${element.type}`,
+            )
             .join("<br>"),
         keyframe.label,
         scriptFile,
-    ].map((cell) => String(cell).replaceAll("|", "\\|"));
+    ].map(
+        /** Escapes table delimiters in one Markdown cell.
+         * @param cell Cell value to escape
+         * @returns Escaped cell text
+         */
+        (cell) => String(cell).replaceAll("|", "\\|"),
+    );
 
     return {
         markdownLine: `| ${cells.join(" | ")} |`,
@@ -118,7 +153,15 @@ function renderKeyframeMarkdown(keyframe: ExportFrame, scriptFile: string) {
     };
 }
 
-/** Renders one layer's Markdown table and writes its scripts during traversal. */
+/** Renders one layer's Markdown table and writes its scripts during traversal.
+ * @param layer Layer and keyframe data to render
+ * @param timelineDirectory Relative timeline directory
+ * @param layerDirectory Relative layer directory
+ * @param scriptExtension File extension for frame scripts
+ * @param elementRangesByName Mutable element-to-frame-range index
+ * @param writeScriptFile Callback that writes a rendered script file
+ * @returns Markdown lines for the layer
+ */
 async function renderLayerMarkdown(
     layer: { index: number; name: string; frames: ExportFrame[] },
     timelineDirectory: string,
@@ -161,7 +204,15 @@ async function renderLayerMarkdown(
     return markdownLines;
 }
 
-/** Renders a scene or symbol's structure Markdown, writing its scripts during traversal. */
+/** Renders a scene or symbol's structure Markdown, writing its scripts during traversal.
+ * @param scene Scene or library symbol to render
+ * @param timelineDirectory Relative timeline directory
+ * @param scriptExtension File extension for frame scripts
+ * @param libraryItemPath Library item path for symbols, or undefined for scenes
+ * @param writeScriptFile Callback that writes a rendered script file
+ * @param layerMappings Mutable layer mappings to include in the manifest
+ * @returns Complete structure Markdown
+ */
 async function renderSceneMarkdown(
     scene: ExportScene,
     timelineDirectory: string,
@@ -206,7 +257,10 @@ export async function writeExport(data: ExportData, dir: string) {
     const scriptExtension = data.type === "htmlcanvas" ? "js" : "as";
     const files: Record<string, ManifestFile> = {};
     const manifestTimelines: ManifestTimeline[] = [];
-    /** Writes an export artifact, creating its parent directories first. */
+    /** Writes an export artifact, creating its parent directories first.
+     * @param relativePath Path relative to the export directory
+     * @param content File content to write
+     */
     const writeToExportDir = async (relativePath: string, content: string) => {
         const path = join(dir, relativePath);
         await mkdir(dirname(path), { recursive: true });
@@ -219,18 +273,31 @@ export async function writeExport(data: ExportData, dir: string) {
     const libraryDirectories = new Set<string>();
 
     const timelines = [
-        ...data.scenes.map((scene, sceneIndex) => ({
-            scene,
-            sceneIndex,
-            libraryItemPath: undefined,
-            linkedClassName: "",
-        })),
-        ...(data.symbols ?? []).map((symbol) => ({
-            scene: symbol,
-            sceneIndex: 0,
-            libraryItemPath: symbol.name,
-            linkedClassName: symbol.linked ?? "",
-        })),
+        ...data.scenes.map(
+            /** Converts a scene into the common timeline representation.
+             * @param scene Scene to include
+             * @param sceneIndex Zero-based scene index
+             * @returns Timeline entry for the scene
+             */
+            (scene, sceneIndex) => ({
+                scene,
+                sceneIndex,
+                libraryItemPath: undefined,
+                linkedClassName: "",
+            }),
+        ),
+        ...(data.symbols ?? []).map(
+            /** Converts a library symbol into the common timeline representation.
+             * @param symbol Symbol to include
+             * @returns Timeline entry for the symbol
+             */
+            (symbol) => ({
+                scene: symbol,
+                sceneIndex: 0,
+                libraryItemPath: symbol.name,
+                linkedClassName: symbol.linked ?? "",
+            }),
+        ),
     ];
     const linkedClasses: { symbol: string; className: string; path: string }[] = [];
     for (const { scene, sceneIndex, libraryItemPath, linkedClassName } of timelines) {
@@ -254,6 +321,9 @@ export async function writeExport(data: ExportData, dir: string) {
             timelineDirectory,
             scriptExtension,
             libraryItemPath,
+            /** Records a rendered script in the manifest and writes its file.
+             * @param scriptFile Rendered script metadata and content
+             */
             async (scriptFile) => {
                 files[scriptFile.path] = {
                     scene: sceneIndex,

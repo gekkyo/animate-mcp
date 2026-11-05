@@ -159,7 +159,13 @@ const failure = (error: unknown) => ({
 const installedMacApp = () => {
     try {
         const apps = readdirSync("/Applications")
-            .filter((name) => /^Adobe Animate \d{4}$/.test(name))
+            .filter(
+                /** Keeps application directory names for Adobe Animate releases.
+                 * @param name Application directory entry
+                 * @returns Whether the entry names an Adobe Animate release
+                 */
+                (name) => /^Adobe Animate \d{4}$/.test(name),
+            )
             .sort();
         return apps.at(-1) ?? "Adobe Animate 2024";
     } catch {
@@ -184,14 +190,30 @@ function launcher(): Launcher {
     } else {
         [command, args] = ["open", ["-a", installedMacApp()]];
     }
-    return (runFile) =>
-        new Promise((resolve, reject) => {
-            const child = spawn(command, [...args, runFile], { stdio: "ignore" });
-            child.once("error", reject);
-            child.once("exit", (code) =>
-                code === 0 ? resolve() : reject(new Error(`Launcher exited with code ${code}`)),
-            );
-        });
+    return (
+        /** Opens the Run file with the selected launch command.
+         * @param runFile Absolute path of the Run file
+         * @returns Resolves when the launch command exits normally; rejects on launch failure or abnormal exit
+         */
+        (runFile) =>
+            new Promise(
+                /** Settles according to the launch command's exit status.
+                 * @param resolve Resolves after a successful launch
+                 * @param reject Rejects when spawning fails or the command exits abnormally
+                 */
+                (resolve, reject) => {
+                    const child = spawn(command, [...args, runFile], { stdio: "ignore" });
+                    child.once("error", reject);
+                    child.once(
+                        "exit",
+                        /** Resolves or rejects based on the child process exit code.
+                         * @param code Child process exit code, or null when terminated by a signal
+                         */
+                        (code) => (code === 0 ? resolve() : reject(new Error(`Launcher exited with code ${code}`))),
+                    );
+                },
+            )
+    );
 }
 
 /**
@@ -202,25 +224,53 @@ function isAnimateRunning(): Promise<boolean> {
     if (IS_WINDOWS) {
         // tasklist exits 0 even with no match, so check whether the output contains the process name (the image name can be overridden by an env var)
         const image = process.env.ANIMATE_MCP_PROCESS_PATTERN ?? "Animate.exe";
-        return new Promise((resolve, reject) => {
-            let output = "";
-            const child = spawn("tasklist", ["/FI", `IMAGENAME eq ${image}`, "/NH"], {
-                stdio: ["ignore", "pipe", "ignore"],
-            });
-            child.stdout.on("data", (chunk) => {
-                output += chunk;
-            });
-            child.once("error", reject);
-            child.once("exit", () => resolve(output.toLowerCase().includes(image.toLowerCase())));
-        });
+        return new Promise(
+            /** Resolves whether the matching process is listed.
+             * @param resolve Resolves with the process-presence result
+             * @param reject Rejects if tasklist cannot be started
+             */
+            (resolve, reject) => {
+                let output = "";
+                const child = spawn("tasklist", ["/FI", `IMAGENAME eq ${image}`, "/NH"], {
+                    stdio: ["ignore", "pipe", "ignore"],
+                });
+                child.stdout.on(
+                    "data",
+                    /** Appends a tasklist output chunk for the process check.
+                     * @param chunk Output bytes to append
+                     */
+                    (chunk) => {
+                        output += chunk;
+                    },
+                );
+                child.once("error", reject);
+                child.once(
+                    "exit",
+                    /** Resolves whether tasklist output contains the process image. */
+                    () => resolve(output.toLowerCase().includes(image.toLowerCase())),
+                );
+            },
+        );
     }
     const pattern =
         process.env.ANIMATE_MCP_PROCESS_PATTERN ?? "Adobe Animate [0-9]{4}\\.app/Contents/MacOS/Adobe Animate";
-    return new Promise((resolve, reject) => {
-        const child = spawn("pgrep", ["-f", pattern], { stdio: "ignore" });
-        child.once("error", reject);
-        child.once("exit", (code) => resolve(code === 0));
-    });
+    return new Promise(
+        /** Resolves whether pgrep found a matching process.
+         * @param resolve Resolves with the process-presence result
+         * @param reject Rejects if pgrep cannot be started
+         */
+        (resolve, reject) => {
+            const child = spawn("pgrep", ["-f", pattern], { stdio: "ignore" });
+            child.once("error", reject);
+            child.once(
+                "exit",
+                /** Resolves based on pgrep's exit status.
+                 * @param code pgrep exit code
+                 */
+                (code) => resolve(code === 0),
+            );
+        },
+    );
 }
 
 /**
@@ -250,7 +300,10 @@ async function main() {
     });
     const server = new McpServer({ name: "animate-mcp", version: "0.1.1" }, { instructions: INSTRUCTIONS });
 
-    /** Executes arbitrary JSFL and returns its result. */
+    /** Executes arbitrary JSFL and returns its result.
+     * @param code JSFL source to execute
+     * @returns Tool result containing the JSFL value, or an MCP error result
+     */
     const handleRunJsfl: ToolCallback<typeof RUN_JSFL_INPUT> = async ({ code }) => {
         try {
             const result = await runner.execute(code);
@@ -263,7 +316,9 @@ async function main() {
         }
     };
 
-    /** Returns information about the active Animate document. */
+    /** Returns information about the active Animate document.
+     * @returns Tool result containing the parsed document information, or an MCP error result
+     */
     const handleGetDocumentInfo: ToolCallback = async () => {
         try {
             const info = JSON.parse(
@@ -278,9 +333,20 @@ async function main() {
         }
     };
 
-    /** Exports document timeline scripts and reports progress for library symbols. */
+    /** Exports document timeline scripts and reports progress for library symbols.
+     * @param document Optional document name to select
+     * @param dir Optional export output directory
+     * @param force Whether to overwrite unapplied edits
+     * @param extra MCP callback context for progress notifications
+     * @returns Tool result containing export details, or an MCP error result
+     */
     const handleExportScripts: ToolCallback<typeof EXPORT_SCRIPTS_INPUT> = async ({ document, dir, force }, extra) => {
         try {
+            /** Runs one JSFL export operation for the selected document and optional library items.
+             * @param jsfl Export JSFL script name
+             * @param items Optional symbol names to export, or null to list symbols
+             * @returns Parsed result returned by Animate
+             */
             const runJsflOnce = async (jsfl: string, items?: string[] | null) => {
                 let prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
                 if (items !== undefined) {
@@ -293,15 +359,27 @@ async function main() {
             const libraryList = (await runJsflOnce("export-library", null)) as {
                 symbols: { name: string; linked: string }[];
             };
-            const linkedBySymbolName = new Map(libraryList.symbols.map((symbol) => [symbol.name, symbol.linked]));
+            const linkedBySymbolName = new Map(
+                libraryList.symbols.map(
+                    /** Extracts a symbol's name and linked class.
+                     * @param symbol Library symbol entry
+                     * @returns Symbol name and linked class pair
+                     */
+                    (symbol) => [symbol.name, symbol.linked],
+                ),
+            );
             exportData.symbols = [];
             const warnings: string[] = [];
             const progressToken = extra._meta?.progressToken;
             const total = libraryList.symbols.length;
             for (let fromIndex = 0; fromIndex < total; fromIndex += TIMELINES_PER_RUN) {
-                const names = libraryList.symbols
-                    .slice(fromIndex, fromIndex + TIMELINES_PER_RUN)
-                    .map((symbol) => symbol.name);
+                const names = libraryList.symbols.slice(fromIndex, fromIndex + TIMELINES_PER_RUN).map(
+                    /** Gets the name of each symbol in the current export batch.
+                     * @param symbol Library symbol entry
+                     * @returns Symbol name
+                     */
+                    (symbol) => symbol.name,
+                );
                 try {
                     const chunk = (await runJsflOnce("export-library", names)) as {
                         symbols: ExportScene[];
@@ -313,7 +391,15 @@ async function main() {
                     }
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
-                    exportData.symbols.push(...names.map((name) => ({ name, error: message })));
+                    exportData.symbols.push(
+                        ...names.map(
+                            /** Creates an error entry for a symbol whose export failed.
+                             * @param name Symbol name
+                             * @returns Failed symbol result
+                             */
+                            (name) => ({ name, error: message }),
+                        ),
+                    );
                     warnings.push(`Edit state may not have been restored: ${message}`);
                 }
                 if (progressToken !== undefined) {
@@ -345,7 +431,12 @@ async function main() {
         }
     };
 
-    /** Applies exported script edits to Animate and reports progress. */
+    /** Applies exported script edits to Animate and reports progress.
+     * @param dir Export directory containing the edited scripts
+     * @param document Optional expected document name
+     * @param extra MCP callback context for progress notifications
+     * @returns Tool result containing applied, failed, unchanged, and warning details
+     */
     const handleApplyScripts: ToolCallback<typeof APPLY_SCRIPTS_INPUT> = async ({ dir, document }, extra) => {
         try {
             const exportDirectory = resolve(dir);
@@ -361,6 +452,12 @@ async function main() {
             if (document && document !== exportedDocument) {
                 throw new Error(`Export was made from ${exportedDocument}, not ${document}`);
             }
+            /** Applies one batch of existing and new scripts to Animate.
+             * @param chunk Existing script edits in this batch
+             * @param newChunk New frame scripts in this batch
+             * @param chunkFingerprints Timeline fingerprints used to detect stale exports
+             * @returns Parsed Apply result from Animate
+             */
             const applyChunk = async (
                 chunk: typeof edits,
                 newChunk: typeof newScripts,
@@ -387,23 +484,67 @@ async function main() {
                 fingerprints: typeof fingerprints;
             }[] = [
                 {
-                    edits: edits.filter((edit) => edit.item === undefined),
-                    newScripts: newScripts.filter((script) => script.item === undefined),
-                    fingerprints: fingerprints.filter((fingerprint) => fingerprint.item === undefined),
+                    edits: edits.filter(
+                        /** Selects scene edits for the initial batch.
+                         * @param edit Script edit to check
+                         * @returns Whether the edit belongs to a scene
+                         */
+                        (edit) => edit.item === undefined,
+                    ),
+                    newScripts: newScripts.filter(
+                        /** Selects new scene scripts for the initial batch.
+                         * @param script New script to check
+                         * @returns Whether the script belongs to a scene
+                         */
+                        (script) => script.item === undefined,
+                    ),
+                    fingerprints: fingerprints.filter(
+                        /** Selects scene fingerprints for the initial batch.
+                         * @param fingerprint Timeline fingerprint to check
+                         * @returns Whether the fingerprint belongs to a scene
+                         */
+                        (fingerprint) => fingerprint.item === undefined,
+                    ),
                 },
             ];
             const itemNames = [...edits, ...newScripts]
-                .map((edit) => edit.item)
-                .filter((item): item is string => item !== undefined);
+                .map(
+                    /** Gets the library item associated with an edit.
+                     * @param edit Script edit to inspect
+                     * @returns Its library item, if any
+                     */
+                    (edit) => edit.item,
+                )
+                .filter(
+                    /** Keeps only defined library item names.
+                     * @param item Optional library item name
+                     * @returns Whether the name is defined
+                     */
+                    (item): item is string => item !== undefined,
+                );
             const timelineItems = [...new Set(itemNames)];
             for (let startIndex = 0; startIndex < timelineItems.length; startIndex += TIMELINES_PER_RUN) {
                 const selectedItems = new Set(timelineItems.slice(startIndex, startIndex + TIMELINES_PER_RUN));
                 editChunks.push({
-                    edits: edits.filter((edit) => edit.item !== undefined && selectedItems.has(edit.item)),
+                    edits: edits.filter(
+                        /** Selects edits belonging to the current symbol batch.
+                         * @param edit Script edit to check
+                         * @returns Whether its library item is selected
+                         */
+                        (edit) => edit.item !== undefined && selectedItems.has(edit.item),
+                    ),
                     newScripts: newScripts.filter(
+                        /** Selects new scripts belonging to the current symbol batch.
+                         * @param script New script to check
+                         * @returns Whether its library item is selected
+                         */
                         (script) => script.item !== undefined && selectedItems.has(script.item),
                     ),
                     fingerprints: fingerprints.filter(
+                        /** Selects fingerprints belonging to the current symbol batch.
+                         * @param fingerprint Timeline fingerprint to check
+                         * @returns Whether its library item is selected
+                         */
                         (fingerprint) => fingerprint.item !== undefined && selectedItems.has(fingerprint.item),
                     ),
                 });
@@ -427,10 +568,16 @@ async function main() {
                         } catch (error) {
                             const message = error instanceof Error ? error.message : String(error);
                             failed.push(
-                                ...[...chunkEdits, ...chunkNewScripts].map((edit) => ({
-                                    file: edit.file,
-                                    error: message,
-                                })),
+                                ...[...chunkEdits, ...chunkNewScripts].map(
+                                    /** Records a failed file from the batch.
+                                     * @param edit Script edit or new script that failed
+                                     * @returns File and error details
+                                     */
+                                    (edit) => ({
+                                        file: edit.file,
+                                        error: message,
+                                    }),
+                                ),
                             );
                             warnings.push(`Edit state may not have been restored: ${message}`);
                         }
@@ -445,7 +592,13 @@ async function main() {
             }
             await markApplied(
                 exportDirectory,
-                edits.filter((edit) => applied.includes(edit.file)),
+                edits.filter(
+                    /** Selects edits successfully applied to Animate.
+                     * @param edit Script edit to check
+                     * @returns Whether its file appears in the applied results
+                     */
+                    (edit) => applied.includes(edit.file),
+                ),
                 newApplied,
                 fingerprintUpdates,
             );
@@ -456,7 +609,12 @@ async function main() {
         }
     };
 
-    /** Edits one timeline's layer and frame structure, then requires a fresh Export. */
+    /** Edits one timeline's layer and frame structure, then requires a fresh Export.
+     * @param timeline Timeline name or zero-based index
+     * @param ops Ordered layer and frame operations
+     * @param document Optional document name to select
+     * @returns Tool result containing applied, failed, skipped, warning, and layer details
+     */
     const handleEditTimeline: ToolCallback<typeof EDIT_TIMELINE_INPUT> = async ({ timeline, ops, document }) => {
         try {
             const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "edit-timeline")}`;
@@ -526,7 +684,12 @@ async function main() {
     await server.connect(transport);
 }
 
-main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-});
+main().catch(
+    /** Reports startup failures and sets a failing process exit code.
+     * @param error Startup failure to report
+     */
+    (error: unknown) => {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+    },
+);
