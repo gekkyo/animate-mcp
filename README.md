@@ -43,6 +43,7 @@ Notes:
 - When several documents are open, specify which one with `document`.
 - Changes made in Animate after an Export are detected as conflicts on Apply and are not overwritten.
 - Export is refused while unapplied edits exist. Use `force: true` only when it is fine to discard them.
+- To add a script to a frame with none, create `as/<frame>.as` in the timeline directory (use `.js` for HTML5 Canvas), then run `apply_scripts`; scripts inside tween spans are refused.
 - To save, save manually in Animate.
 - Both ActionScript 3 and HTML5 Canvas documents are supported.
 

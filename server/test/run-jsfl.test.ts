@@ -9,7 +9,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 // Fake Animate: runs the Run file with minimal FLfile/fl stubs.
 // Does not respond to code containing HANG, and logs launch start/end to FAKE_LOG.
 const fakeAnimate = `#!/usr/bin/env node
-const { appendFileSync, readFileSync, writeFileSync } = require("node:fs");
+const { appendFileSync, existsSync, readFileSync, writeFileSync } = require("node:fs");
 const { runInNewContext } = require("node:vm");
 const src = readFileSync(process.argv[2], "utf8");
 const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, message + "\\n");
@@ -19,12 +19,65 @@ const lib = { name: "Hero", itemType: "movie clip" };
 const makeKeyframe = (startFrame, duration, extra) => Object.assign({ startFrame, duration, name: "", tweenType: "none", actionScript: "", elements: [] }, extra);
 // Like real Animate, layer.frames has one element per frame (the keyframe's frame repeated duration times)
 const expand = (keyframes) => keyframes.flatMap((keyframe) => Array(keyframe.duration).fill(keyframe));
-const symTimeline = (symbolName, script) => ({ name: symbolName, libraryItem: { name: symbolName }, layers: [{ name: "L", layerType: "normal", frames: expand([makeKeyframe(0, 1, { actionScript: script })]) }] });
-const doc = (documentName, documentType) => { const document = { name: documentName, type: documentType, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [{ name: "Scene 1", layers: [
-  { name: "a/b", layerType: "normal", frames: expand([
+const layer = (name, frames, layerType = "normal", locked = false) => {
+  const result = { name, frames, layerType, locked, writeWasUnlocked: false };
+  if (locked) {
+    for (const frame of new Set(frames)) {
+      let actionScript = frame.actionScript;
+      Object.defineProperty(frame, "actionScript", {
+        get: () => actionScript,
+        set: (value) => {
+          if (result.locked) throw new Error("Layer is locked");
+          result.writeWasUnlocked = true;
+          actionScript = value;
+        },
+      });
+    }
+  }
+  return result;
+};
+const makeTimeline = (name, frames, layers, libraryItem) => {
+  const timeline = { name, frameCount: frames, currentLayer: 0, currentFrame: 0, layers, libraryItem,
+    insertKeyframe(frameNumber) {
+      const currentLayer = this.layers[this.currentLayer];
+      const oldFrame = currentLayer.frames[frameNumber];
+      if (!oldFrame) {
+        currentLayer.frames[frameNumber] = makeKeyframe(frameNumber, 1);
+        return;
+      }
+      if (oldFrame.startFrame === frameNumber) return;
+      const oldEnd = oldFrame.startFrame + oldFrame.duration;
+      oldFrame.duration = frameNumber - oldFrame.startFrame;
+      const insertedFrame = Object.assign({}, oldFrame, { startFrame: frameNumber, duration: oldEnd - frameNumber, actionScript: "" });
+      for (let index = frameNumber; index < oldEnd; index++) { currentLayer.frames[index] = insertedFrame; }
+    },
+    addNewLayer(layerName, layerType, addAbove) {
+      const newLayer = layer(layerName, expand([makeKeyframe(0, 1)]), layerType);
+      const index = addAbove ? 0 : this.layers.length;
+      this.layers.splice(index, 0, newLayer);
+      this.currentLayer = index;
+      if (process.env.FAKE_PERSIST_AS && layerName.toLowerCase() === "as") {
+        writeFileSync(process.env.FAKE_LOG + ".as-created", "yes");
+      }
+      return index;
+    },
+  };
+  return timeline;
+};
+const symTimeline = (symbolName, script) => makeTimeline(symbolName, 1, [layer("L", expand([makeKeyframe(0, 1, { actionScript: script })]))], { name: symbolName });
+const doc = (documentName, documentType) => {
+  const sceneFrames = [
     makeKeyframe(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [{ name: "hero", elementType: "instance", libraryItem: lib }] }),
-    makeKeyframe(2, 3, { name: "end", elements: [{ name: "", elementType: "instance", libraryItem: lib }] })]) },
-  { name: "dir", layerType: "folder", frames: [] }] }] };
+    makeKeyframe(2, 3, { name: "end", ...(process.env.FAKE_TWEEN ? { tweenType: process.env.FAKE_TWEEN } : {}), elements: [{ name: "", elementType: "instance", libraryItem: lib }] }),
+  ];
+  const sceneLayers = [layer("a/b", expand(sceneFrames)),
+    ...(process.env.FAKE_SECOND_LAYER ? [layer(process.env.FAKE_SECOND_LAYER, expand([makeKeyframe(0, 5)]))] : []),
+    layer("dir", [], "folder")];
+  if (process.env.FAKE_AS_LAYER) {
+    sceneLayers.unshift(layer(process.env.FAKE_AS_LAYER, expand([makeKeyframe(0, 5)]), "normal", Boolean(process.env.FAKE_LOCK_AS)));
+  }
+  const sceneTimeline = makeTimeline("Scene 1", 5, sceneLayers);
+  const document = { name: documentName, type: documentType, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
   let editing = null;
   document.syms = {};
   document.getTimeline = () => editing ? (document.syms[editing] ||= symTimeline(editing, process.env.FAKE_SYM_SCRIPT ?? "// " + editing)) : document.timelines[0];
@@ -38,12 +91,31 @@ const doc = (documentName, documentType) => { const document = { name: documentN
     editItem: (itemName) => { if (itemName === "Broken" && !process.env.FAKE_NO_BROKEN) throw new Error("cannot edit"); editing = itemName; } };
   return document; };
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
+if (process.env.FAKE_PERSIST_AS && src.includes("var __newScripts") && existsSync(process.env.FAKE_LOG + ".as-created")) {
+  docs[0].timelines[0].layers.unshift(layer("as", expand([makeKeyframe(0, 5)])));
+}
+if (process.env.FAKE_CONFLICT_NEW && src.includes("var __newScripts")) {
+  const targetLayer = docs[0].timelines[0].layers.find((candidate) => candidate.name === "a/b");
+  const oldFrame = targetLayer.frames[3];
+  const end = oldFrame.startFrame + oldFrame.duration;
+  oldFrame.duration = 3 - oldFrame.startFrame;
+  const newFrame = Object.assign({}, oldFrame, { startFrame: 3, duration: end - 3, actionScript: "changed in Animate" });
+  for (let index = 3; index < end; index++) { targetLayer.frames[index] = newFrame; }
+}
 if (!src.includes("HANG")) runInNewContext(src, {
   FLfile: { platformPathToURI: (path) => path, write: (path, content) => writeFileSync(path, content) },
   fl: { trace() {}, documents: docs, getDocumentDOM: () => docs[0] || null },
 });
+if (process.env.FAKE_LOG && src.includes("var __newScripts")) {
+  const stage = [];
+  if (!src.includes("var __edits = [];")) stage.push("edits");
+  if (!src.includes("var __newScripts = [];")) stage.push("new");
+  appendFileSync(process.env.FAKE_LOG + ".order", stage.join("+") + "\\n");
+}
 process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".scripts", JSON.stringify(docs.map((document) => document.timelines[0].layers[0].frames[0].actionScript)) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers[0].frames[0].actionScript]))) + "\\n");
+process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym-layers", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers.map((candidate) => ({ name: candidate.name, script: candidate.frames[0]?.actionScript }))]))) + "\\n");
+process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".layers", JSON.stringify(docs[0].timelines[0].layers.map((candidate) => ({ name: candidate.name, locked: candidate.locked, writeWasUnlocked: candidate.writeWasUnlocked, frames: candidate.frames.map((frame, index) => frame.startFrame === index ? { start: frame.startFrame, script: frame.actionScript, tween: frame.tweenType } : null).filter(Boolean) }))) + "\\n");
 log("end");
 `;
 
@@ -236,6 +308,16 @@ const scriptsLog = async (tempDir: string) =>
         .trim()
         .split("\n")
         .map((logLine) => JSON.parse(logLine));
+const layersLog = async (tempDir: string) =>
+    (await readFile(join(tempDir, "log.layers"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((logLine) => JSON.parse(logLine));
+const symbolLayersLog = async (tempDir: string) =>
+    (await readFile(join(tempDir, "log.sym-layers"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((logLine) => JSON.parse(logLine));
 
 const SCENE_FILE = "scenes/Scene 1/a_b/1.as";
 
@@ -284,6 +366,226 @@ test("apply_scripts counts a frame already holding the new script as applied", {
         await writeFile(manifestPath, JSON.stringify(manifest));
         const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
         assert.deepEqual((result.structuredContent as { applied: string[] }).applied, [SCENE_FILE]);
+    }),
+);
+
+test("apply_scripts creates the as layer at the top and registers a new script", { timeout: 30_000 }, () =>
+    withServer({}, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const file = "scenes/Scene 1/as/4.as";
+        await mkdir(join(exportDir, "scenes/Scene 1/as"), { recursive: true });
+        await writeFile(join(exportDir, file), "trace('new');");
+
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        const summary = result.structuredContent as { applied: string[]; failed: unknown[]; warnings: string[] };
+        assert.deepEqual(summary.applied, [file]);
+        assert.deepEqual(summary.failed, []);
+        assert.ok(summary.warnings.some((warning) => warning.includes('Created layer "as"')));
+        assert.ok(summary.warnings.some((warning) => warning.includes("Inserted keyframe at frame 4")));
+        const manifest = JSON.parse(await readFile(join(exportDir, ".export.json"), "utf8"));
+        assert.deepEqual(manifest.files[file], { scene: 0, layer: 0, start: 3, script: "trace('new');" });
+        assert.deepEqual(
+            manifest.timelines[0].layers.map((entry: { index: number; name: string }) => [entry.index, entry.name]),
+            [
+                [0, "as"],
+                [1, "a/b"],
+            ],
+        );
+        const snapshot = (await layersLog(tempDir)).at(-1);
+        assert.equal(snapshot[0].name, "as", "new layer is on top");
+        assert.equal(snapshot[0].frames.find((frame: { start: number }) => frame.start === 3).script, "trace('new');");
+
+        const again = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        assert.deepEqual(again.structuredContent, { applied: [], failed: [], unchanged: 3, warnings: [] });
+    }),
+);
+
+test("apply_scripts reuses case-insensitive as layer and restores its lock", { timeout: 30_000 }, () =>
+    withServer({ FAKE_AS_LAYER: "AS", FAKE_LOCK_AS: "1" }, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const file = "scenes/Scene 1/as/1.as";
+        await mkdir(join(exportDir, "scenes/Scene 1/as"), { recursive: true });
+        await writeFile(join(exportDir, file), "trace('reuse');");
+
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        const summary = result.structuredContent as { applied: string[]; warnings: string[] };
+        assert.deepEqual(summary.applied, [file]);
+        assert.ok(!summary.warnings.some((warning) => warning.includes("Created layer")));
+        const snapshot = (await layersLog(tempDir)).at(-1);
+        assert.equal(snapshot[0].name, "AS");
+        assert.equal(snapshot[0].locked, true, "locked layer is restored");
+        assert.equal(snapshot[0].writeWasUnlocked, true, "the script is written while temporarily unlocked");
+        assert.equal(snapshot[0].frames[0].script, "trace('reuse');");
+    }),
+);
+
+test("apply_scripts inserts a keyframe in a non-tween span", { timeout: 30_000 }, () =>
+    withServer({}, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const file = "scenes/Scene 1/a_b/4.as";
+        await mkdir(join(exportDir, "scenes/Scene 1/a_b"), { recursive: true });
+        await writeFile(join(exportDir, file), "trace('insert');");
+
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        const summary = result.structuredContent as { applied: string[]; failed: unknown[]; warnings: string[] };
+        assert.deepEqual(summary.applied, [file]);
+        assert.deepEqual(summary.failed, []);
+        assert.ok(summary.warnings.some((warning) => warning.includes("Inserted keyframe at frame 4")));
+        const targetLayer = (await layersLog(tempDir)).at(-1).find((entry: { name: string }) => entry.name === "a/b");
+        assert.ok(
+            targetLayer.frames.some(
+                (frame: { start: number; script: string }) => frame.start === 3 && frame.script === "trace('insert');",
+            ),
+        );
+    }),
+);
+
+test("apply_scripts rejects new scripts inside tweens and beyond timeline length", { timeout: 30_000 }, () =>
+    withServer({ FAKE_TWEEN: "motion" }, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        for (const frame of [2, 4, 6]) {
+            await writeFile(join(exportDir, `scenes/Scene 1/a_b/${frame}.as`), `trace(${frame});`);
+        }
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        const summary = result.structuredContent as {
+            applied: string[];
+            failed: { file: string; error: string }[];
+        };
+        assert.deepEqual(summary.applied, ["scenes/Scene 1/a_b/2.as"], "one failure does not block other new scripts");
+        const failed = summary.failed;
+        assert.match(failed.find((entry) => entry.file.endsWith("/4.as"))?.error ?? "", /Frame is inside a tween/);
+        assert.match(failed.find((entry) => entry.file.endsWith("/6.as"))?.error ?? "", /Frame beyond timeline length/);
+    }),
+);
+
+test("apply_scripts rejects a new frame script written in Animate after Export", { timeout: 30_000 }, () =>
+    withServer({ FAKE_CONFLICT_NEW: "1" }, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const file = "scenes/Scene 1/a_b/4.as";
+        await writeFile(join(exportDir, file), "mine");
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        const summary = result.structuredContent as { applied: string[]; failed: { error: string }[] };
+        assert.deepEqual(summary.applied, []);
+        assert.match(summary.failed[0]?.error ?? "", /Changed in Animate since Export/);
+    }),
+);
+
+test("apply_scripts accepts hand-placed files in known layers and warns for unknown layers", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SECOND_LAYER: "Other" }, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const knownFile = "scenes/Scene 1/Other/2.as";
+        const unknownFile = "scenes/Scene 1/Ghost/2.as";
+        await mkdir(join(exportDir, "scenes/Scene 1/Other"), { recursive: true });
+        await mkdir(join(exportDir, "scenes/Scene 1/Ghost"), { recursive: true });
+        await writeFile(join(exportDir, knownFile), "trace('other');");
+        await writeFile(join(exportDir, unknownFile), "trace('ghost');");
+        await writeFile(join(exportDir, "scenes/Scene 1/Ghost/structure.md"), "ignored");
+        await writeFile(join(exportDir, "scenes/Scene 1/Ghost/not-a-frame.as"), "ignored");
+
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        const summary = result.structuredContent as { applied: string[]; warnings: string[] };
+        assert.deepEqual(summary.applied, [knownFile]);
+        assert.deepEqual(summary.warnings, [
+            `ignored: ${unknownFile}`,
+            "Inserted keyframe at frame 2 in Other of Scene 1",
+        ]);
+    }),
+);
+
+test("apply_scripts accepts .js new scripts for HTML5 Canvas", { timeout: 30_000 }, () =>
+    withServer({ FAKE_TYPE: "htmlcanvas" }, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const file = "scenes/Scene 1/as/1.js";
+        await mkdir(join(exportDir, "scenes/Scene 1/as"), { recursive: true });
+        await writeFile(join(exportDir, file), "trace('canvas');");
+
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        assert.deepEqual((result.structuredContent as { applied: string[] }).applied, [file]);
+    }),
+);
+
+test("apply_scripts preserves layer indices after creating as and remains idempotent", { timeout: 30_000 }, () =>
+    withServer({ FAKE_PERSIST_AS: "1" }, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const newFile = "scenes/Scene 1/as/4.as";
+        await mkdir(join(exportDir, "scenes/Scene 1/as"), { recursive: true });
+        await writeFile(join(exportDir, newFile), "new();");
+        await writeFile(join(exportDir, SCENE_FILE), "play();");
+        await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+
+        const manifestPath = join(exportDir, ".export.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        assert.equal(manifest.files[SCENE_FILE].layer, 1);
+        assert.equal(manifest.files[newFile].layer, 0);
+        assert.equal(manifest.timelines[0].layers.find((entry: { name: string }) => entry.name === "a/b").index, 1);
+
+        const again = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        assert.deepEqual(again.structuredContent, { applied: [], failed: [], unchanged: 3, warnings: [] });
+    }),
+);
+
+test("apply_scripts writes new scripts in library symbol timelines", { timeout: 30_000 }, () =>
+    withServer({}, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const file = "library/dir/Hero/as/1.as";
+        await mkdir(join(exportDir, "library/dir/Hero/as"), { recursive: true });
+        await writeFile(join(exportDir, file), "trace('symbol');");
+
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        const summary = result.structuredContent as { applied: string[]; failed: unknown[] };
+        assert.deepEqual(summary.applied, [file]);
+        assert.deepEqual(summary.failed, []);
+        const symbolLayers = (await symbolLayersLog(tempDir)).at(-1)["dir/Hero"];
+        assert.equal(symbolLayers[0].name, "as");
+        assert.equal(symbolLayers[0].script, "trace('symbol');");
+        const manifest = JSON.parse(await readFile(join(exportDir, ".export.json"), "utf8"));
+        assert.deepEqual(manifest.files[file], {
+            scene: 0,
+            layer: 0,
+            start: 0,
+            script: "trace('symbol');",
+            item: "dir/Hero",
+        });
+    }),
+);
+
+test("apply_scripts applies existing edits before new scripts across timelines", { timeout: 30_000 }, () =>
+    withServer({}, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        await writeFile(join(exportDir, "library/dir/Hero/L/1.as"), "play();");
+        const newFile = "scenes/Scene 1/as/1.as";
+        await mkdir(join(exportDir, "scenes/Scene 1/as"), { recursive: true });
+        await writeFile(join(exportDir, newFile), "trace('new');");
+
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        assert.equal(result.isError, undefined, text(result));
+        assert.deepEqual((await readFile(join(tempDir, "log.order"), "utf8")).trim().split("\n"), ["edits", "new"]);
+    }),
+);
+
+test("apply_scripts ignores untracked files when the legacy manifest has no timelines", { timeout: 30_000 }, () =>
+    withServer({}, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const manifestPath = join(exportDir, ".export.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        delete manifest.timelines;
+        await writeFile(manifestPath, JSON.stringify(manifest));
+        await mkdir(join(exportDir, "scenes/Scene 1/as"), { recursive: true });
+        await writeFile(join(exportDir, "scenes/Scene 1/as/1.as"), "ignored");
+
+        const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+        assert.deepEqual(result.structuredContent, { applied: [], failed: [], unchanged: 2, warnings: [] });
     }),
 );
 

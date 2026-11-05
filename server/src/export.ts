@@ -24,6 +24,12 @@ export type ExportData = {
     /** Library symbols (name is the path in the library). linked is the AS3 Linked class name */
     symbols?: (ExportScene & { linked?: string })[];
 };
+export type ManifestTimeline = {
+    dir: string;
+    scene: number;
+    item?: string;
+    layers: { index: number; dir: string; name: string }[];
+};
 
 type RenderedScript = { path: string; layerIndex: number; frameStart: number; script: string };
 
@@ -160,6 +166,7 @@ async function renderSceneMarkdown(
     scriptExtension: string,
     libraryItemPath: string | undefined,
     writeScriptFile: (scriptFile: RenderedScript) => Promise<void>,
+    layerMappings: ManifestTimeline["layers"],
 ): Promise<string> {
     const markdownLines = [`# ${libraryItemPath ? "Symbol" : "Scene"}: ${scene.name}`, ""];
     const layerDirectories = new Set<string>();
@@ -167,6 +174,7 @@ async function renderSceneMarkdown(
 
     for (const layer of scene.layers ?? []) {
         const layerDirectory = uniqueName(layerDirectories, safeName(layer.name));
+        layerMappings.push({ index: layer.index, dir: layerDirectory, name: layer.name });
         const layerMarkdownLines = await renderLayerMarkdown(
             layer,
             timelineDirectory,
@@ -195,6 +203,7 @@ async function renderSceneMarkdown(
 export async function writeExport(data: ExportData, dir: string) {
     const scriptExtension = data.type === "htmlcanvas" ? "js" : "as";
     const files: Record<string, ManifestFile> = {};
+    const manifestTimelines: ManifestTimeline[] = [];
     /** Writes an export artifact, creating its parent directories first. */
     const writeToExportDir = async (relativePath: string, content: string) => {
         const path = join(dir, relativePath);
@@ -237,6 +246,7 @@ export async function writeExport(data: ExportData, dir: string) {
                 path: `${linkedClassName.replaceAll(".", "/")}.as`,
             });
         }
+        const layerMappings: ManifestTimeline["layers"] = [];
         const structureMarkdown = await renderSceneMarkdown(
             scene,
             timelineDirectory,
@@ -252,7 +262,14 @@ export async function writeExport(data: ExportData, dir: string) {
                 };
                 await writeToExportDir(scriptFile.path, scriptFile.script);
             },
+            layerMappings,
         );
+        manifestTimelines.push({
+            dir: timelineDirectory,
+            scene: sceneIndex,
+            ...(libraryItemPath ? { item: libraryItemPath } : {}),
+            layers: layerMappings,
+        });
         await writeToExportDir(`${timelineDirectory}/structure.md`, structureMarkdown);
         indexMarkdownLines.push(
             `| ${scene.name} | [${timelineDirectory}/structure.md](${timelineDirectory}/structure.md) |`,
@@ -261,6 +278,9 @@ export async function writeExport(data: ExportData, dir: string) {
     }
     await writeToExportDir("index.md", `${indexMarkdownLines.join("\n")}\n`);
     // For Apply's conflict detection: record the content at Export
-    await writeAtomic(join(dir, ".export.json"), JSON.stringify({ document: data.document, type: data.type, files }));
+    await writeAtomic(
+        join(dir, ".export.json"),
+        JSON.stringify({ document: data.document, type: data.type, files, timelines: manifestTimelines }),
+    );
     return { dir, exported, failed, linkedClasses };
 }

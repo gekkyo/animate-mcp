@@ -1,10 +1,22 @@
-import { readFile, rm } from "node:fs/promises";
+import { readdir, readFile, rm } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
-import { type ManifestFile, writeAtomic } from "./export.js";
+import { type ManifestFile, type ManifestTimeline, writeAtomic } from "./export.js";
 
 export type Edit = ManifestFile & { file: string; expected: string };
+export type NewScript = ManifestFile & { file: string; layerDir: string; asLayer: boolean };
+export type AppliedNewScript = ManifestFile & {
+    file: string;
+    layerDir: string;
+    layerName: string;
+    asLayer: boolean;
+};
 
-type Manifest = { document: string; type: string; files: Record<string, ManifestFile> };
+type Manifest = {
+    document: string;
+    type: string;
+    files: Record<string, ManifestFile>;
+    timelines?: ManifestTimeline[];
+};
 
 const MANIFEST = ".export.json";
 
@@ -31,15 +43,17 @@ function insideDir(dir: string, file: string): string {
 }
 
 /**
- * Compares the manifest with the current file contents and collects the edits to apply to Animate.
- * Unchanged files are skipped; unreadable files are returned as failures.
+ * Compares the manifest with current file contents and collects existing edits and untracked new scripts.
+ * Unchanged files are skipped; unreadable files are returned as failures, and unsupported layer folders are warned.
  * @param dir Export directory
- * @returns The manifest's document name, the edits to apply (script is the new content, expected is the content at Export), the unchanged count, and the unreadable files
+ * @returns The manifest's document, existing edits, new scripts, unchanged count, failures, and warnings
  */
 export async function collectEdits(dir: string) {
     const manifest = await readManifest(dir);
     const edits: Edit[] = [];
     const failed: { file: string; error: string }[] = [];
+    const warnings: string[] = [];
+    const newScripts: NewScript[] = [];
     let unchanged = 0;
     for (const [file, manifestFile] of Object.entries(manifest.files)) {
         try {
@@ -53,21 +67,129 @@ export async function collectEdits(dir: string) {
             failed.push({ file, error: error instanceof Error ? error.message : String(error) });
         }
     }
-    return { document: manifest.document, edits, unchanged, failed };
+    for (const timeline of manifest.timelines ?? []) {
+        let layerEntries: import("node:fs").Dirent[];
+        try {
+            layerEntries = await readdir(insideDir(dir, timeline.dir), { withFileTypes: true });
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                continue;
+            }
+            failed.push({ file: timeline.dir, error: error instanceof Error ? error.message : String(error) });
+            continue;
+        }
+        const topAsLayer = timeline.layers
+            .filter((layer) => layer.name.toLowerCase() === "as")
+            .sort((left, right) => left.index - right.index)[0];
+        for (const layerEntry of layerEntries) {
+            if (!layerEntry.isDirectory()) {
+                continue;
+            }
+            const mappedLayer = timeline.layers.find((layer) => layer.dir === layerEntry.name);
+            const asLayer = mappedLayer?.name.toLowerCase() === "as" || layerEntry.name.toLowerCase() === "as";
+            const targetLayer = mappedLayer ?? (asLayer ? topAsLayer : undefined);
+            let scriptEntries: import("node:fs").Dirent[];
+            try {
+                scriptEntries = await readdir(insideDir(dir, `${timeline.dir}/${layerEntry.name}`), {
+                    withFileTypes: true,
+                });
+            } catch (error) {
+                failed.push({
+                    file: `${timeline.dir}/${layerEntry.name}`,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                continue;
+            }
+            for (const scriptEntry of scriptEntries) {
+                if (!scriptEntry.isFile()) {
+                    continue;
+                }
+                const match = /^(\d+)\.(as|js)$/i.exec(scriptEntry.name);
+                const extension = manifest.type === "htmlcanvas" ? "js" : "as";
+                if (!match || match[2].toLowerCase() !== extension) {
+                    continue;
+                }
+                const frameNumber = Number(match[1]);
+                if (!Number.isSafeInteger(frameNumber) || frameNumber < 1) {
+                    failed.push({
+                        file: `${timeline.dir}/${layerEntry.name}/${scriptEntry.name}`,
+                        error: "Frame beyond timeline length",
+                    });
+                    continue;
+                }
+                const file = `${timeline.dir}/${layerEntry.name}/${scriptEntry.name}`;
+                if (manifest.files[file]) {
+                    continue;
+                }
+                if (!asLayer && !targetLayer) {
+                    warnings.push(`ignored: ${file}`);
+                    continue;
+                }
+                try {
+                    const script = await readFile(insideDir(dir, file), "utf8");
+                    newScripts.push({
+                        file,
+                        scene: timeline.scene,
+                        layer: targetLayer?.index ?? -1,
+                        start: frameNumber - 1,
+                        script,
+                        ...(timeline.item ? { item: timeline.item } : {}),
+                        layerDir: layerEntry.name,
+                        asLayer,
+                    });
+                } catch (error) {
+                    failed.push({ file, error: error instanceof Error ? error.message : String(error) });
+                }
+            }
+        }
+    }
+    newScripts.sort((left, right) => left.file.localeCompare(right.file));
+    warnings.sort();
+    return { document: manifest.document, edits, newScripts, unchanged, failed, warnings };
 }
 
 /**
- * Records applied content in the manifest (so the next Apply does not mistake it for a change made in Animate).
+ * Records applied content in the manifest so the next Apply does not mistake it for a change made in Animate.
  * @param dir Export directory
  * @param edits Edits that were applied to Animate
+ * @param newScripts New scripts that were applied to Animate
  */
-export async function markApplied(dir: string, edits: Edit[]) {
-    if (edits.length === 0) {
+export async function markApplied(dir: string, edits: Edit[], newScripts: AppliedNewScript[] = []) {
+    if (edits.length === 0 && newScripts.length === 0) {
         return;
     }
     const manifest = await readManifest(dir);
     for (const edit of edits) {
-        manifest.files[edit.file].script = edit.script;
+        if (manifest.files[edit.file]) {
+            manifest.files[edit.file].script = edit.script;
+        }
+    }
+    for (const newScript of newScripts) {
+        const timeline = manifest.timelines?.find(
+            (entry) => entry.scene === newScript.scene && entry.item === newScript.item,
+        );
+        if (!timeline) {
+            continue;
+        }
+        if (newScript.asLayer && !timeline.layers.some((layer) => layer.name.toLowerCase() === "as")) {
+            for (const layer of timeline.layers) {
+                layer.index++;
+            }
+            for (const file of Object.values(manifest.files)) {
+                if (file.scene === newScript.scene && file.item === newScript.item) {
+                    file.layer++;
+                }
+            }
+            timeline.layers.push({ index: newScript.layer, dir: newScript.layerDir, name: newScript.layerName });
+            timeline.layers.sort((left, right) => left.index - right.index);
+        }
+        manifest.files[newScript.file] = {
+            scene: newScript.scene,
+            layer: newScript.layer,
+            start: newScript.start,
+            script: newScript.script,
+            ...(newScript.item ? { item: newScript.item } : {}),
+        };
     }
     await writeAtomic(join(dir, MANIFEST), JSON.stringify(manifest));
 }

@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { McpServer, type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { clearPreviousExport, collectEdits, markApplied } from "./apply.js";
+import { type AppliedNewScript, clearPreviousExport, collectEdits, markApplied } from "./apply.js";
 import { type ExportData, type ExportScene, safeName, writeExport } from "./export.js";
 import { createRunner, type Launcher } from "./runner.js";
 
@@ -19,6 +19,7 @@ Basic flow:
 1. Run export_scripts to export the active document. Read index.md, then each structure.md, then the scripts.
 2. Edit the exported .as / .js files (an empty file deletes that frame's script).
 3. Run apply_scripts to apply them. The .fla is not saved; the user saves it.
+- To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.
 - If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
 
 Notes:
@@ -249,54 +250,88 @@ async function main() {
     const handleApplyScripts: ToolCallback<typeof APPLY_SCRIPTS_INPUT> = async ({ dir, document }, extra) => {
         try {
             const exportDirectory = resolve(dir);
-            const { document: exportedDocument, edits, unchanged, failed } = await collectEdits(exportDirectory);
+            const {
+                document: exportedDocument,
+                edits,
+                newScripts,
+                unchanged,
+                failed,
+                warnings: collectWarnings,
+            } = await collectEdits(exportDirectory);
             if (document && document !== exportedDocument) {
                 throw new Error(`Export was made from ${exportedDocument}, not ${document}`);
             }
-            const applyChunk = async (chunk: typeof edits) => {
-                const code = `var __docName = ${JSON.stringify(exportedDocument)};\nvar __edits = ${JSON.stringify(chunk)};\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
+            const applyChunk = async (chunk: typeof edits, newChunk: typeof newScripts) => {
+                const code = `var __docName = ${JSON.stringify(exportedDocument)};\nvar __edits = ${JSON.stringify(chunk)};\nvar __newScripts = ${JSON.stringify(newChunk)};\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
                 return JSON.parse(String(await runner.execute(code))) as {
                     applied: string[];
                     failed: { file: string; error: string }[];
                     warning: string;
+                    warnings: string[];
+                    newApplied: AppliedNewScript[];
                 };
             };
             const applied: string[] = [];
-            const warnings: string[] = [];
+            const warnings: string[] = [...collectWarnings];
+            const newApplied: AppliedNewScript[] = [];
             // Scenes go in one Run; symbols go 10 timelines (items) per Run
-            const editChunks: (typeof edits)[] = [edits.filter((edit) => edit.item === undefined)];
-            const itemNames = edits.map((edit) => edit.item).filter((item): item is string => item !== undefined);
+            const editChunks: { edits: typeof edits; newScripts: typeof newScripts }[] = [
+                {
+                    edits: edits.filter((edit) => edit.item === undefined),
+                    newScripts: newScripts.filter((script) => script.item === undefined),
+                },
+            ];
+            const itemNames = [...edits, ...newScripts]
+                .map((edit) => edit.item)
+                .filter((item): item is string => item !== undefined);
             const timelineItems = [...new Set(itemNames)];
             for (let startIndex = 0; startIndex < timelineItems.length; startIndex += TIMELINES_PER_RUN) {
                 const selectedItems = new Set(timelineItems.slice(startIndex, startIndex + TIMELINES_PER_RUN));
-                editChunks.push(edits.filter((edit) => edit.item !== undefined && selectedItems.has(edit.item)));
+                editChunks.push({
+                    edits: edits.filter((edit) => edit.item !== undefined && selectedItems.has(edit.item)),
+                    newScripts: newScripts.filter(
+                        (script) => script.item !== undefined && selectedItems.has(script.item),
+                    ),
+                });
             }
             const progressToken = extra._meta?.progressToken;
-            for (const [chunkIndex, chunk] of editChunks.entries()) {
-                if (chunk.length > 0) {
-                    try {
-                        const applyResult = await applyChunk(chunk);
-                        applied.push(...applyResult.applied);
-                        failed.push(...applyResult.failed);
-                        if (applyResult.warning) {
-                            warnings.push(applyResult.warning);
+            for (let pass = 0; pass < 2; pass++) {
+                for (const [chunkIndex, chunk] of editChunks.entries()) {
+                    const chunkEdits = pass === 0 ? chunk.edits : [];
+                    const chunkNewScripts = pass === 1 ? chunk.newScripts : [];
+                    if (chunkEdits.length > 0 || chunkNewScripts.length > 0) {
+                        try {
+                            const applyResult = await applyChunk(chunkEdits, chunkNewScripts);
+                            applied.push(...applyResult.applied);
+                            failed.push(...applyResult.failed);
+                            newApplied.push(...applyResult.newApplied);
+                            if (applyResult.warning) {
+                                warnings.push(applyResult.warning);
+                            }
+                            warnings.push(...applyResult.warnings);
+                        } catch (error) {
+                            const message = error instanceof Error ? error.message : String(error);
+                            failed.push(
+                                ...[...chunkEdits, ...chunkNewScripts].map((edit) => ({
+                                    file: edit.file,
+                                    error: message,
+                                })),
+                            );
+                            warnings.push(`Edit state may not have been restored: ${message}`);
                         }
-                    } catch (error) {
-                        const message = error instanceof Error ? error.message : String(error);
-                        failed.push(...chunk.map((edit) => ({ file: edit.file, error: message })));
-                        warnings.push(`Edit state may not have been restored: ${message}`);
                     }
-                }
-                if (progressToken !== undefined) {
-                    await extra.sendNotification({
-                        method: "notifications/progress",
-                        params: { progressToken, progress: chunkIndex + 1, total: editChunks.length },
-                    });
+                    if (pass === 1 && progressToken !== undefined) {
+                        await extra.sendNotification({
+                            method: "notifications/progress",
+                            params: { progressToken, progress: chunkIndex + 1, total: editChunks.length },
+                        });
+                    }
                 }
             }
             await markApplied(
                 exportDirectory,
                 edits.filter((edit) => applied.includes(edit.file)),
+                newApplied,
             );
             const result = { applied, failed, unchanged, warnings };
             return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
