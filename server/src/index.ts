@@ -17,6 +17,10 @@ import { type ExportData, type ExportScene, safeName, writeExport } from "./expo
 import { createRunner, type Launcher } from "./runner.js";
 
 const IS_WINDOWS = process.platform === "win32";
+/** Version from package.json (the same relative path from src/ and dist/) */
+const PACKAGE_VERSION = (
+    JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
+).version;
 
 /** Usage guidance for MCP clients (operational notes that do not fit in tool descriptions) */
 const INSTRUCTIONS = `Read and write Adobe Animate timeline scripts as files.
@@ -133,11 +137,13 @@ const EDIT_TIMELINE_OP = z.discriminatedUnion("op", [
         op: z.literal("shiftLayerFrames"),
         layer: z.string(),
         index: z.number().int().nonnegative().optional(),
-        offset: z.number().int(),
+        offset: z.number().int().positive(),
     }),
 ]);
 const EDIT_TIMELINE_INPUT = {
-    timeline: z.union([z.number().int().nonnegative(), z.string().min(1)]),
+    timeline: z
+        .union([z.number().int().nonnegative(), z.string().min(1)])
+        .describe("Scene index (0-based number) or library item path (string)"),
     ops: z.array(EDIT_TIMELINE_OP).min(1),
     document: z.string().optional(),
 };
@@ -244,8 +250,9 @@ function isAnimateRunning(): Promise<boolean> {
                     },
                 );
                 child.once("error", reject);
+                // "close" (not "exit") fires after stdout is fully read
                 child.once(
-                    "exit",
+                    "close",
                     /** Resolves whether tasklist output contains the process image. */
                     () => resolve(output.toLowerCase().includes(image.toLowerCase())),
                 );
@@ -298,7 +305,7 @@ async function main() {
         isRunning: isAnimateRunning,
         timeoutMs: Number(process.env.ANIMATE_MCP_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
     });
-    const server = new McpServer({ name: "animate-mcp", version: "0.1.1" }, { instructions: INSTRUCTIONS });
+    const server = new McpServer({ name: "animate-mcp", version: PACKAGE_VERSION }, { instructions: INSTRUCTIONS });
 
     /** Executes arbitrary JSFL and returns its result.
      * @param code JSFL source to execute
@@ -610,7 +617,7 @@ async function main() {
     };
 
     /** Edits one timeline's layer and frame structure, then requires a fresh Export.
-     * @param timeline Timeline name or zero-based index
+     * @param timeline Scene index (zero-based number) or library item path (string)
      * @param ops Ordered layer and frame operations
      * @param document Optional document name to select
      * @returns Tool result containing applied, failed, skipped, warning, and layer details
@@ -664,7 +671,7 @@ async function main() {
         "edit_timeline",
         {
             description:
-                "Edit layers (addLayer, deleteLayer, moveLayer, renameLayer, setLayerType) and frames (insertFrames, removeFrames, insertKeyframe, clearKeyframe, setLabel, setSpanLength, shiftLayerFrames) in order. Layer references use a name and optional zero-based index; frame numbers are 1-based. shiftLayerFrames moves one layer's full content later without shifting other layers. Stops at the first failed op. deleteLayer and removeFrames require confirm: true. Tween interiors reject frame insertion/removal/keyframe changes. Always run export_scripts again before editing or applying scripts.",
+                "Edit layers (addLayer, deleteLayer, moveLayer, renameLayer, setLayerType) and frames (insertFrames, removeFrames, insertKeyframe, clearKeyframe, setLabel, setSpanLength, shiftLayerFrames) in order. Layer references use a name and optional zero-based index; frame numbers are 1-based. shiftLayerFrames moves one layer's full content later without shifting other layers; it uses cut/paste (overwrites the clipboard, and if it fails midway the layer may be left changed: undo in Animate). Stops at the first failed op. deleteLayer and removeFrames require confirm: true. Tween interiors reject frame insertion/removal/keyframe changes. Always run export_scripts again before editing or applying scripts.",
             inputSchema: EDIT_TIMELINE_INPUT,
         },
         handleEditTimeline,

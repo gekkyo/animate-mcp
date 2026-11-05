@@ -31,14 +31,6 @@
     return found;
   }
 
-  /** Finds a uniquely named layer used as a parent or placement reference.
-   * @param name The referenced layer name.
-   * @returns The matching zero-based layer index.
-   */
-  function findReference(name) {
-    return findLayerIndex(name, undefined);
-  }
-
   /** Finds a layer's current zero-based position by object identity.
    * @param targetLayer The layer object to locate.
    * @returns The layer's zero-based index, or -1 when it is not present.
@@ -77,7 +69,7 @@
    */
   function parentFor(name, layerType) {
     if (name === undefined) return null;
-    var parentIndex = findReference(name), parent = timeline.layers[parentIndex];
+    var parentIndex = findLayerIndex(name, undefined), parent = timeline.layers[parentIndex];
     var expectedType = layerType === 'masked' ? 'mask' : 'folder';
     if (parent.layerType !== expectedType) throw new Error('Parent must be a ' + expectedType + ' layer');
     return parent;
@@ -89,10 +81,7 @@
    */
   function validateParentPosition(layerIndex, parentLayer) {
     if (!parentLayer) return;
-    var parentIndex = -1;
-    for (var candidateIndex = 0; candidateIndex < timeline.layers.length; candidateIndex++) {
-      if (timeline.layers[candidateIndex] === parentLayer) parentIndex = candidateIndex;
-    }
+    var parentIndex = layerPosition(parentLayer);
     if (parentIndex < 0 || parentIndex >= layerIndex) throw new Error('Parent must appear above the layer');
   }
 
@@ -197,10 +186,10 @@
       if (op.above !== undefined && op.below !== undefined) throw new Error('Specify only one of above or below');
       parent = parentFor(op.parent, op.type || 'normal');
       if (op.above !== undefined) {
-        placementIndex = findReference(op.above);
+        placementIndex = findLayerIndex(op.above, undefined);
         addAbove = true;
       } else if (op.below !== undefined) {
-        placementIndex = findReference(op.below);
+        placementIndex = findLayerIndex(op.below, undefined);
         addAbove = false;
       } else if (parent) {
         placementIndex = findLayerIndex(parent.name, undefined);
@@ -212,7 +201,7 @@
       if ((op.type || 'normal') === 'masked' && !parent) throw new Error('Parent layer is required for a masked layer');
       desiredIndex = placementIndex < 0 ? 0 : placementIndex + (addAbove ? 0 : 1);
       if (parent) {
-        var parentIndexBefore = findReference(parent.name);
+        var parentIndexBefore = findLayerIndex(parent.name, undefined);
         var parentIndexAfter = parentIndexBefore + (desiredIndex <= parentIndexBefore ? 1 : 0);
         if (desiredIndex <= parentIndexAfter) throw new Error('Parent must appear above the layer');
       }
@@ -258,17 +247,17 @@
       currentParent = layer.parentLayer || null;
       parent = op.parent === undefined ? currentParent : parentFor(op.parent, layer.layerType);
       if (op.above !== undefined) {
-        placementIndex = findReference(op.above);
+        placementIndex = findLayerIndex(op.above, undefined);
         if (placementIndex === layerIndex) throw new Error('Cannot place a layer relative to itself');
         desiredIndex = placementIndex - (layerIndex < placementIndex ? 1 : 0);
         addAbove = true;
       } else if (op.below !== undefined) {
-        placementIndex = findReference(op.below);
+        placementIndex = findLayerIndex(op.below, undefined);
         if (placementIndex === layerIndex) throw new Error('Cannot place a layer relative to itself');
         desiredIndex = placementIndex - (layerIndex < placementIndex ? 1 : 0) + 1;
         addAbove = false;
       } else if (parent) {
-        placementIndex = findReference(parent.name);
+        placementIndex = findLayerIndex(parent.name, undefined);
         desiredIndex = placementIndex - (layerIndex < placementIndex ? 1 : 0) + 1;
         addAbove = false;
       } else {
@@ -277,7 +266,7 @@
         addAbove = true;
       }
       if (parent) {
-        var moveParentIndex = findReference(parent.name);
+        var moveParentIndex = findLayerIndex(parent.name, undefined);
         var moveParentAfter = moveParentIndex - (layerIndex < moveParentIndex ? 1 : 0);
         if (desiredIndex <= moveParentAfter) throw new Error('Parent must appear above the layer');
       }

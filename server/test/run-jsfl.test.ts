@@ -853,10 +853,8 @@ test("edit_timeline shiftLayerFrames offsets content without changing span lengt
 
     await withServer({ FAKE_SECOND_LAYER: "a/b" }, async (client) => {
         const invalidOffset = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "dir", offset: 0 }]);
-        assert.match(
-            (invalidOffset.structuredContent as { failed: { error: string } }).failed.error,
-            /offset must be at least 1/,
-        );
+        assert.equal(invalidOffset.isError, true);
+        assert.match(text(invalidOffset), /offset/);
         const ambiguous = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "a/b", offset: 1 }]);
         assert.match((ambiguous.structuredContent as { failed: { error: string } }).failed.error, /ambiguous/);
         const missing = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "missing", offset: 1 }]);
@@ -945,6 +943,19 @@ test("apply_scripts creates the as layer at the top and registers a new script",
 
         const again = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
         assert.deepEqual(again.structuredContent, { applied: [], failed: [], unchanged: 3, warnings: [] });
+    }),
+);
+
+test("export_scripts refuses to re-export over an unapplied new script", { timeout: 30_000 }, () =>
+    withServer({}, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        await mkdir(join(exportDir, "scenes/Scene 1/as"), { recursive: true });
+        await writeFile(join(exportDir, "scenes/Scene 1/as/4.as"), "trace('new');");
+
+        const result = await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        assert.equal(result.isError, true);
+        assert.match(text(result), /Unapplied edits.*as\/4\.as/);
     }),
 );
 

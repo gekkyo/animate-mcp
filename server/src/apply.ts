@@ -134,7 +134,7 @@ export async function collectEdits(dir: string) {
                 if (!Number.isSafeInteger(frameNumber) || frameNumber < 1) {
                     failed.push({
                         file: `${timeline.dir}/${layerEntry.name}/${scriptEntry.name}`,
-                        error: "Frame beyond timeline length",
+                        error: "Frame number must be 1 or more",
                     });
                     continue;
                 }
@@ -295,10 +295,11 @@ export async function clearPreviousExport(dir: string, force: boolean) {
         throw error;
     }
     if (!force) {
-        const { edits } = await collectEdits(dir);
-        if (edits.length > 0) {
+        const { edits, newScripts } = await collectEdits(dir);
+        const unapplied = [...edits, ...newScripts];
+        if (unapplied.length > 0) {
             throw new Error(
-                `Unapplied edits in ${dir}: ${edits
+                `Unapplied edits in ${dir}: ${unapplied
                     .map(
                         /** Gets the path of an unapplied edit for the error message.
                          * @param edit Unapplied script edit
