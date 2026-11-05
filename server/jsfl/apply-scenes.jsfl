@@ -4,29 +4,29 @@
 // An empty script deletes the frame script.
 // Symbols are edited in edit mode, so the original edit state is restored at the end (warning if it cannot be).
 (function () {
-  var d = selectDocument(), applied = [], failed = [], editing = "";
-  var restore = saveEditState(d);
-  for (var i = 0; i < __edits.length; i++) {
-    var ed = __edits[i];
+  var document = selectDocument(), applied = [], failed = [], editingItemName = "";
+  var restore = saveEditState(document);
+  for (var editIndex = 0; editIndex < __edits.length; editIndex++) {
+    var edit = __edits[editIndex];
     try {
-      var tl;
-      if (ed.item !== undefined) {
-        if (editing !== ed.item) {
-          d.library.editItem(ed.item);
-          editing = ed.item;
+      var timeline;
+      if (edit.item !== undefined) {
+        if (editingItemName !== edit.item) {
+          document.library.editItem(edit.item);
+          editingItemName = edit.item;
         }
-        tl = d.getTimeline();
-      } else tl = d.timelines[ed.scene];
-      var frame = tl && tl.layers[ed.layer] && tl.layers[ed.layer].frames[ed.start];
-      if (!frame || frame.startFrame !== ed.start) throw new Error("Frame no longer exists");
-      var current = frame.actionScript || "";
-      if (current !== ed.expected && current !== ed.script) throw new Error("Changed in Animate since Export");
-      frame.actionScript = ed.script;
-      applied.push(ed.file);
-    } catch (e) {
-      failed.push({ file: ed.file, error: String(e && e.message ? e.message : e) });
+        timeline = document.getTimeline();
+      } else timeline = document.timelines[edit.scene];
+      var frame = timeline && timeline.layers[edit.layer] && timeline.layers[edit.layer].frames[edit.start];
+      if (!frame || frame.startFrame !== edit.start) throw new Error("Frame no longer exists");
+      var currentScript = frame.actionScript || "";
+      if (currentScript !== edit.expected && currentScript !== edit.script) throw new Error("Changed in Animate since Export");
+      frame.actionScript = edit.script;
+      applied.push(edit.file);
+    } catch (error) {
+      failed.push({ file: edit.file, error: String(error && error.message ? error.message : error) });
     }
   }
-  var warning = editing ? restore() : "";
-  return ser({ applied: applied, failed: failed, warning: warning });
+  var warning = editingItemName ? restore() : "";
+  return serialize({ applied: applied, failed: failed, warning: warning });
 })()

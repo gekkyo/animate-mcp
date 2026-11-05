@@ -1,58 +1,62 @@
-// Shared part concatenated before other JSFL: ser (hand-built JSON) and exportTimeline (timeline -> layer/frame arrays).
-function ser(v) {
-  if (v === null || v === undefined) return "null";
-  if (typeof v === "number") return isFinite(v) ? String(v) : "null";
-  if (typeof v === "boolean") return String(v);
-  if (v instanceof Array) {
-    var a = [];
-    for (var i = 0; i < v.length; i++) a.push(ser(v[i]));
-    return "[" + a.join(",") + "]";
+// Shared before other JSFL files: JSON serialization and timeline-to-layer/frame conversion.
+/** Serializes a value as JSON without relying on a JSFL JSON implementation. */
+function serialize(value) {
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "number") return isFinite(value) ? String(value) : "null";
+  if (typeof value === "boolean") return String(value);
+  if (value instanceof Array) {
+    var serializedItems = [];
+    for (var itemIndex = 0; itemIndex < value.length; itemIndex++) serializedItems.push(serialize(value[itemIndex]));
+    return "[" + serializedItems.join(",") + "]";
   }
-  if (typeof v === "object") {
-    var o = [];
-    for (var k in v) o.push(ser(k) + ":" + ser(v[k]));
-    return "{" + o.join(",") + "}";
+  if (typeof value === "object") {
+    var serializedProperties = [];
+    for (var propertyName in value) {
+      serializedProperties.push(serialize(propertyName) + ":" + serialize(value[propertyName]));
+    }
+    return "{" + serializedProperties.join(",") + "}";
   }
-  var s = String(v), r = '"';
-  for (var j = 0; j < s.length; j++) {
-    var c = s.charAt(j), n = s.charCodeAt(j);
-    if (c === '"') r += '\\"';
-    else if (c === "\\") r += "\\\\";
-    else if (n < 32) r += "\\u" + ("0000" + n.toString(16)).slice(-4);
-    else r += c;
+  var stringValue = String(value), escapedValue = '"';
+  for (var characterIndex = 0; characterIndex < stringValue.length; characterIndex++) {
+    var character = stringValue.charAt(characterIndex), characterCode = stringValue.charCodeAt(characterIndex);
+    if (character === '"') escapedValue += '\\"';
+    else if (character === "\\") escapedValue += "\\\\";
+    else if (characterCode < 32) escapedValue += "\\u" + ("0000" + characterCode.toString(16)).slice(-4);
+    else escapedValue += character;
   }
-  return r + '"';
+  return escapedValue + '"';
 }
 
-function exportTimeline(tl) {
+/** Converts an Animate timeline into layer and keyframe data for export. */
+function exportTimeline(timeline) {
   var layers = [];
-  for (var li = 0; li < tl.layers.length; li++) {
-    var layer = tl.layers[li];
+  for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
+    var layer = timeline.layers[layerIndex];
     if (layer.layerType === "folder") continue;
     var frames = [];
-    for (var fi = 0; fi < layer.frames.length; fi++) {
-      var f = layer.frames[fi];
-      if (f.startFrame !== fi) continue;
-      var els = [];
-      for (var ei = 0; ei < f.elements.length; ei++) {
-        var e = f.elements[ei];
-        var item = e.libraryItem;
-        els.push({
-          name: e.name || "",
-          item: item ? item.name : "",
-          type: item ? item.itemType : e.elementType,
+    for (var frameIndex = 0; frameIndex < layer.frames.length; frameIndex++) {
+      var frame = layer.frames[frameIndex];
+      if (frame.startFrame !== frameIndex) continue;
+      var elements = [];
+      for (var elementIndex = 0; elementIndex < frame.elements.length; elementIndex++) {
+        var element = frame.elements[elementIndex];
+        var libraryItem = element.libraryItem;
+        elements.push({
+          name: element.name || "",
+          item: libraryItem ? libraryItem.name : "",
+          type: libraryItem ? libraryItem.itemType : element.elementType,
         });
       }
       frames.push({
-        start: f.startFrame,
-        duration: f.duration,
-        label: f.name || "",
-        tween: f.tweenType || "none",
-        script: f.actionScript || "",
-        elements: els,
+        start: frame.startFrame,
+        duration: frame.duration,
+        label: frame.name || "",
+        tween: frame.tweenType || "none",
+        script: frame.actionScript || "",
+        elements: elements,
       });
     }
-    layers.push({ index: li, name: layer.name, frames: frames });
+    layers.push({ index: layerIndex, name: layer.name, frames: frames });
   }
   return layers;
 }

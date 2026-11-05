@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { clearPreviousExport, collectEdits, markApplied } from "./apply.js";
@@ -31,6 +31,16 @@ Notes:
 
 /** Timelines handled per Run (to avoid timeouts) */
 const TIMELINES_PER_RUN = 10;
+/** Default timeout for one Run in milliseconds */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+const RUN_JSFL_INPUT = { code: z.string() };
+const EXPORT_SCRIPTS_INPUT = {
+    document: z.string().optional(),
+    dir: z.string().optional(),
+    force: z.boolean().optional(),
+};
+const APPLY_SCRIPTS_INPUT = { dir: z.string(), document: z.string().optional() };
 
 /**
  * Converts a tool exception into an MCP error result.
@@ -65,11 +75,15 @@ function launcher(): Launcher {
     // For tests: a fake Animate
     const custom = process.env.ANIMATE_MCP_LAUNCH_COMMAND;
     // Windows opens via the .jsfl association (Animate); macOS names the app explicitly
-    const [command, args] = custom
-        ? [custom, []]
-        : IS_WINDOWS
-          ? ["cmd", ["/c", "start", ""]]
-          : ["open", ["-a", installedMacApp()]];
+    let command: string;
+    let args: string[];
+    if (custom) {
+        [command, args] = [custom, []];
+    } else if (IS_WINDOWS) {
+        [command, args] = ["cmd", ["/c", "start", ""]];
+    } else {
+        [command, args] = ["open", ["-a", installedMacApp()]];
+    }
     return (runFile) =>
         new Promise((resolve, reject) => {
             const child = spawn(command, [...args, runFile], { stdio: "ignore" });
@@ -89,15 +103,15 @@ function isAnimateRunning(): Promise<boolean> {
         // tasklist exits 0 even with no match, so check whether the output contains the process name (the image name can be overridden by an env var)
         const image = process.env.ANIMATE_MCP_PROCESS_PATTERN ?? "Animate.exe";
         return new Promise((resolve, reject) => {
-            let out = "";
+            let output = "";
             const child = spawn("tasklist", ["/FI", `IMAGENAME eq ${image}`, "/NH"], {
                 stdio: ["ignore", "pipe", "ignore"],
             });
             child.stdout.on("data", (chunk) => {
-                out += chunk;
+                output += chunk;
             });
             child.once("error", reject);
-            child.once("exit", () => resolve(out.toLowerCase().includes(image.toLowerCase())));
+            child.once("exit", () => resolve(output.toLowerCase().includes(image.toLowerCase())));
         });
     }
     const pattern =
@@ -132,45 +146,179 @@ async function main() {
         dir: process.env.ANIMATE_MCP_RUNS_DIR ?? join(homedir(), ".animate-mcp", "runs"),
         launch: launcher(),
         isRunning: isAnimateRunning,
-        timeoutMs: Number(process.env.ANIMATE_MCP_TIMEOUT_MS ?? 30_000),
+        timeoutMs: Number(process.env.ANIMATE_MCP_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
     });
     const server = new McpServer({ name: "animate-mcp", version: "0.1.1" }, { instructions: INSTRUCTIONS });
+
+    /** Executes arbitrary JSFL and returns its result. */
+    const handleRunJsfl: ToolCallback<typeof RUN_JSFL_INPUT> = async ({ code }) => {
+        try {
+            const result = await runner.execute(code);
+            return {
+                content: [{ type: "text", text: JSON.stringify(result) ?? "null" }],
+                structuredContent: { result },
+            };
+        } catch (error) {
+            return failure(error);
+        }
+    };
+
+    /** Returns information about the active Animate document. */
+    const handleGetDocumentInfo: ToolCallback = async () => {
+        try {
+            const info = JSON.parse(
+                String(await runner.execute(bundle("export-common", "get-document-info"))),
+            ) as unknown;
+            return {
+                content: [{ type: "text", text: JSON.stringify(info) }],
+                structuredContent: info as Record<string, unknown>,
+            };
+        } catch (error) {
+            return failure(error);
+        }
+    };
+
+    /** Exports document timeline scripts and reports progress for library symbols. */
+    const handleExportScripts: ToolCallback<typeof EXPORT_SCRIPTS_INPUT> = async ({ document, dir, force }, extra) => {
+        try {
+            const runJsflOnce = async (jsfl: string, items?: string[] | null) => {
+                let prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
+                if (items !== undefined) {
+                    prelude += `var __items = ${JSON.stringify(items)};\n`;
+                }
+                const code = `${prelude}${bundle("select-document", "edit-state", "export-common", jsfl)}`;
+                return JSON.parse(String(await runner.execute(code)));
+            };
+            const exportData = (await runJsflOnce("export-scenes")) as ExportData;
+            const libraryList = (await runJsflOnce("export-library", null)) as {
+                symbols: { name: string; linked: string }[];
+            };
+            const linkedBySymbolName = new Map(libraryList.symbols.map((symbol) => [symbol.name, symbol.linked]));
+            exportData.symbols = [];
+            const warnings: string[] = [];
+            const progressToken = extra._meta?.progressToken;
+            const total = libraryList.symbols.length;
+            for (let fromIndex = 0; fromIndex < total; fromIndex += TIMELINES_PER_RUN) {
+                const names = libraryList.symbols
+                    .slice(fromIndex, fromIndex + TIMELINES_PER_RUN)
+                    .map((symbol) => symbol.name);
+                try {
+                    const chunk = (await runJsflOnce("export-library", names)) as {
+                        symbols: ExportScene[];
+                        warning: string;
+                    };
+                    exportData.symbols.push(...chunk.symbols);
+                    if (chunk.warning) {
+                        warnings.push(chunk.warning);
+                    }
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    exportData.symbols.push(...names.map((name) => ({ name, error: message })));
+                    warnings.push(`Edit state may not have been restored: ${message}`);
+                }
+                if (progressToken !== undefined) {
+                    await extra.sendNotification({
+                        method: "notifications/progress",
+                        params: {
+                            progressToken,
+                            progress: Math.min(fromIndex + TIMELINES_PER_RUN, total),
+                            total,
+                            message: names.at(-1),
+                        },
+                    });
+                }
+            }
+            for (const symbol of exportData.symbols) {
+                (symbol as { linked?: string }).linked = linkedBySymbolName.get(symbol.name);
+            }
+            const outputDirectory = resolve(
+                dir ?? join(homedir(), ".animate-mcp", "exports", safeName(exportData.document.replace(/\.fla$/i, ""))),
+            );
+            await clearPreviousExport(outputDirectory, force ?? false);
+            const exportResult = { ...(await writeExport(exportData, outputDirectory)), warnings };
+            return {
+                content: [{ type: "text", text: JSON.stringify(exportResult) }],
+                structuredContent: exportResult,
+            };
+        } catch (error) {
+            return failure(error);
+        }
+    };
+
+    /** Applies exported script edits to Animate and reports progress. */
+    const handleApplyScripts: ToolCallback<typeof APPLY_SCRIPTS_INPUT> = async ({ dir, document }, extra) => {
+        try {
+            const exportDirectory = resolve(dir);
+            const { document: exportedDocument, edits, unchanged, failed } = await collectEdits(exportDirectory);
+            if (document && document !== exportedDocument) {
+                throw new Error(`Export was made from ${exportedDocument}, not ${document}`);
+            }
+            const applyChunk = async (chunk: typeof edits) => {
+                const code = `var __docName = ${JSON.stringify(exportedDocument)};\nvar __edits = ${JSON.stringify(chunk)};\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
+                return JSON.parse(String(await runner.execute(code))) as {
+                    applied: string[];
+                    failed: { file: string; error: string }[];
+                    warning: string;
+                };
+            };
+            const applied: string[] = [];
+            const warnings: string[] = [];
+            // Scenes go in one Run; symbols go 10 timelines (items) per Run
+            const editChunks: (typeof edits)[] = [edits.filter((edit) => edit.item === undefined)];
+            const itemNames = edits.map((edit) => edit.item).filter((item): item is string => item !== undefined);
+            const timelineItems = [...new Set(itemNames)];
+            for (let startIndex = 0; startIndex < timelineItems.length; startIndex += TIMELINES_PER_RUN) {
+                const selectedItems = new Set(timelineItems.slice(startIndex, startIndex + TIMELINES_PER_RUN));
+                editChunks.push(edits.filter((edit) => edit.item !== undefined && selectedItems.has(edit.item)));
+            }
+            const progressToken = extra._meta?.progressToken;
+            for (const [chunkIndex, chunk] of editChunks.entries()) {
+                if (chunk.length > 0) {
+                    try {
+                        const applyResult = await applyChunk(chunk);
+                        applied.push(...applyResult.applied);
+                        failed.push(...applyResult.failed);
+                        if (applyResult.warning) {
+                            warnings.push(applyResult.warning);
+                        }
+                    } catch (error) {
+                        const message = error instanceof Error ? error.message : String(error);
+                        failed.push(...chunk.map((edit) => ({ file: edit.file, error: message })));
+                        warnings.push(`Edit state may not have been restored: ${message}`);
+                    }
+                }
+                if (progressToken !== undefined) {
+                    await extra.sendNotification({
+                        method: "notifications/progress",
+                        params: { progressToken, progress: chunkIndex + 1, total: editChunks.length },
+                    });
+                }
+            }
+            await markApplied(
+                exportDirectory,
+                edits.filter((edit) => applied.includes(edit.file)),
+            );
+            const result = { applied, failed, unchanged, warnings };
+            return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+        } catch (error) {
+            return failure(error);
+        }
+    };
+
     server.registerTool(
         "run_jsfl",
         {
             description:
                 "Execute arbitrary JSFL code inside Adobe Animate. This runs arbitrary code and may modify documents or files.",
-            inputSchema: { code: z.string() },
+            inputSchema: RUN_JSFL_INPUT,
         },
-        async ({ code }) => {
-            try {
-                const result = await runner.execute(code);
-                return {
-                    content: [{ type: "text", text: JSON.stringify(result) ?? "null" }],
-                    structuredContent: { result },
-                };
-            } catch (error) {
-                return failure(error);
-            }
-        },
+        handleRunJsfl,
     );
 
     server.registerTool(
         "get_document_info",
         { description: "Get the active Animate document's name, size, frame rate and timeline names." },
-        async () => {
-            try {
-                const info = JSON.parse(
-                    String(await runner.execute(bundle("export-common", "get-document-info"))),
-                ) as unknown;
-                return {
-                    content: [{ type: "text", text: JSON.stringify(info) }],
-                    structuredContent: info as Record<string, unknown>,
-                };
-            } catch (error) {
-                return failure(error);
-            }
-        },
+        handleGetDocumentInfo,
     );
 
     server.registerTool(
@@ -178,63 +326,9 @@ async function main() {
         {
             description:
                 "Export the active Animate document's scene and library-symbol Timeline scripts (AS3 / HTML5 Canvas) to files, with index.md and per-timeline structure.md. Default dir: ~/.animate-mcp/exports/<document>/. Refuses to overwrite edits not yet applied unless force is true; files of the previous Export are replaced.",
-            inputSchema: { document: z.string().optional(), dir: z.string().optional(), force: z.boolean().optional() },
+            inputSchema: EXPORT_SCRIPTS_INPUT,
         },
-        async ({ document, dir, force }, extra) => {
-            try {
-                const run = async (jsfl: string, items?: string[] | null) => {
-                    const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n${items === undefined ? "" : `var __items = ${JSON.stringify(items)};\n`}`;
-                    const code = `${prelude}${bundle("select-document", "edit-state", "export-common", jsfl)}`;
-                    return JSON.parse(String(await runner.execute(code)));
-                };
-                const data = (await run("export-scenes")) as ExportData;
-                const list = (await run("export-library", null)) as {
-                    symbols: { name: string; linked: string }[];
-                };
-                const linkedOf = new Map(list.symbols.map((symbol) => [symbol.name, symbol.linked]));
-                data.symbols = [];
-                const warnings: string[] = [];
-                const progressToken = extra._meta?.progressToken;
-                const total = list.symbols.length;
-                for (let from = 0; from < total; from += TIMELINES_PER_RUN) {
-                    const names = list.symbols.slice(from, from + TIMELINES_PER_RUN).map((symbol) => symbol.name);
-                    try {
-                        const chunk = (await run("export-library", names)) as {
-                            symbols: ExportScene[];
-                            warning: string;
-                        };
-                        data.symbols.push(...chunk.symbols);
-                        if (chunk.warning) warnings.push(chunk.warning);
-                    } catch (error) {
-                        const message = error instanceof Error ? error.message : String(error);
-                        data.symbols.push(...names.map((name) => ({ name, error: message })));
-                        warnings.push(`Edit state may not have been restored: ${message}`);
-                    }
-                    if (progressToken !== undefined)
-                        await extra.sendNotification({
-                            method: "notifications/progress",
-                            params: {
-                                progressToken,
-                                progress: Math.min(from + TIMELINES_PER_RUN, total),
-                                total,
-                                message: names.at(-1),
-                            },
-                        });
-                }
-                for (const symbol of data.symbols) (symbol as { linked?: string }).linked = linkedOf.get(symbol.name);
-                const outDir = resolve(
-                    dir ?? join(homedir(), ".animate-mcp", "exports", safeName(data.document.replace(/\.fla$/i, ""))),
-                );
-                await clearPreviousExport(outDir, force ?? false);
-                const result = { ...(await writeExport(data, outDir)), warnings };
-                return {
-                    content: [{ type: "text", text: JSON.stringify(result) }],
-                    structuredContent: result,
-                };
-            } catch (error) {
-                return failure(error);
-            }
-        },
+        handleExportScripts,
     );
 
     server.registerTool(
@@ -242,61 +336,9 @@ async function main() {
         {
             description:
                 "Apply edited Timeline scripts from an export_scripts directory back to the Animate document (scenes and library symbols). Empty file deletes the frame script. Frames changed in Animate since Export are not overwritten. Does not save the .fla.",
-            inputSchema: { dir: z.string(), document: z.string().optional() },
+            inputSchema: APPLY_SCRIPTS_INPUT,
         },
-        async ({ dir, document }, extra) => {
-            try {
-                const root = resolve(dir);
-                const { document: exported, edits, unchanged, failed } = await collectEdits(root);
-                if (document && document !== exported)
-                    throw new Error(`Export was made from ${exported}, not ${document}`);
-                const run = async (chunk: typeof edits) => {
-                    const code = `var __docName = ${JSON.stringify(exported)};\nvar __edits = ${JSON.stringify(chunk)};\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
-                    return JSON.parse(String(await runner.execute(code))) as {
-                        applied: string[];
-                        failed: { file: string; error: string }[];
-                        warning: string;
-                    };
-                };
-                const applied: string[] = [];
-                const warnings: string[] = [];
-                // Scenes go in one Run; symbols go 10 timelines (items) per Run
-                const chunks: (typeof edits)[] = [edits.filter((edit) => edit.item === undefined)];
-                const items = [...new Set(edits.flatMap((edit) => (edit.item === undefined ? [] : [edit.item])))];
-                for (let from = 0; from < items.length; from += TIMELINES_PER_RUN) {
-                    const group = new Set(items.slice(from, from + TIMELINES_PER_RUN));
-                    chunks.push(edits.filter((edit) => edit.item !== undefined && group.has(edit.item)));
-                }
-                const progressToken = extra._meta?.progressToken;
-                for (const [index, chunk] of chunks.entries()) {
-                    if (chunk.length > 0) {
-                        try {
-                            const result = await run(chunk);
-                            applied.push(...result.applied);
-                            failed.push(...result.failed);
-                            if (result.warning) warnings.push(result.warning);
-                        } catch (error) {
-                            const message = error instanceof Error ? error.message : String(error);
-                            failed.push(...chunk.map((edit) => ({ file: edit.file, error: message })));
-                            warnings.push(`Edit state may not have been restored: ${message}`);
-                        }
-                    }
-                    if (progressToken !== undefined)
-                        await extra.sendNotification({
-                            method: "notifications/progress",
-                            params: { progressToken, progress: index + 1, total: chunks.length },
-                        });
-                }
-                await markApplied(
-                    root,
-                    edits.filter((edit) => applied.includes(edit.file)),
-                );
-                const result = { applied, failed, unchanged, warnings };
-                return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
-            } catch (error) {
-                return failure(error);
-            }
-        },
+        handleApplyScripts,
     );
 
     const transport = new StdioServerTransport();

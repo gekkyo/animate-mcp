@@ -23,9 +23,11 @@ const readManifest = async (dir: string) => JSON.parse(await readFile(join(dir, 
  */
 function insideDir(dir: string, file: string): string {
     const root = resolve(dir);
-    const path = resolve(root, file);
-    if (!path.startsWith(root + sep)) throw new Error(`Path outside the export directory: ${file}`);
-    return path;
+    const absolutePath = resolve(root, file);
+    if (!absolutePath.startsWith(root + sep)) {
+        throw new Error(`Path outside the export directory: ${file}`);
+    }
+    return absolutePath;
 }
 
 /**
@@ -39,11 +41,14 @@ export async function collectEdits(dir: string) {
     const edits: Edit[] = [];
     const failed: { file: string; error: string }[] = [];
     let unchanged = 0;
-    for (const [file, entry] of Object.entries(manifest.files)) {
+    for (const [file, manifestFile] of Object.entries(manifest.files)) {
         try {
             const script = await readFile(insideDir(dir, file), "utf8");
-            if (script === entry.script) unchanged++;
-            else edits.push({ ...entry, file, script, expected: entry.script });
+            if (script === manifestFile.script) {
+                unchanged++;
+            } else {
+                edits.push({ ...manifestFile, file, script, expected: manifestFile.script });
+            }
         } catch (error) {
             failed.push({ file, error: error instanceof Error ? error.message : String(error) });
         }
@@ -57,9 +62,13 @@ export async function collectEdits(dir: string) {
  * @param edits Edits that were applied to Animate
  */
 export async function markApplied(dir: string, edits: Edit[]) {
-    if (edits.length === 0) return;
+    if (edits.length === 0) {
+        return;
+    }
     const manifest = await readManifest(dir);
-    for (const edit of edits) manifest.files[edit.file].script = edit.script;
+    for (const edit of edits) {
+        manifest.files[edit.file].script = edit.script;
+    }
     await writeAtomic(join(dir, MANIFEST), JSON.stringify(manifest));
 }
 
@@ -73,15 +82,20 @@ export async function clearPreviousExport(dir: string, force: boolean) {
     try {
         manifest = await readManifest(dir);
     } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            return;
+        }
         throw error;
     }
     if (!force) {
         const { edits } = await collectEdits(dir);
-        if (edits.length > 0)
+        if (edits.length > 0) {
             throw new Error(
                 `Unapplied edits in ${dir}: ${edits.map((edit) => edit.file).join(", ")}. Run apply_scripts first, or pass force: true to overwrite.`,
             );
+        }
     }
-    for (const file of Object.keys(manifest.files)) await rm(insideDir(dir, file), { force: true });
+    for (const file of Object.keys(manifest.files)) {
+        await rm(insideDir(dir, file), { force: true });
+    }
 }

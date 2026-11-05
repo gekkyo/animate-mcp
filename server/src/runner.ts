@@ -12,37 +12,48 @@ export type Launcher = (runFile: string) => Promise<void>;
  */
 // shortcut: JSFL has no JSON, so only primitives are serialized (objects become strings); extend when needed.
 function runFileSource(code: string, resultPath: string): string {
-    return String.raw`var __path = FLfile.platformPathToURI(${JSON.stringify(resultPath)});
-function __q(s) {
-  s = String(s);
-  var o = '"';
-  for (var i = 0; i < s.length; i++) {
-    var c = s.charAt(i), n = s.charCodeAt(i);
-    if (c === '"') o += '\\"';
-    else if (c === '\\') o += '\\\\';
-    else if (n < 32) o += '\\u' + ('0000' + n.toString(16)).slice(-4);
-    else o += c;
+    return String.raw`// Resolve the Result file path.
+var __path = FLfile.platformPathToURI(${JSON.stringify(resultPath)});
+
+// Quote strings for the JSON result file.
+function __quote(text) {
+  text = String(text);
+  var output = '"';
+  for (var index = 0; index < text.length; index++) {
+    var character = text.charAt(index), charCode = text.charCodeAt(index);
+    if (character === '"') output += '\\"';
+    else if (character === '\\') output += '\\\\';
+    else if (charCode < 32) output += '\\u' + ('0000' + charCode.toString(16)).slice(-4);
+    else output += character;
   }
-  return o + '"';
+  return output + '"';
 }
-function __ser(v) {
-  if (typeof JSON !== 'undefined') return JSON.stringify(v);
-  if (typeof v === 'number') return isFinite(v) ? String(v) : 'null';
-  return (v === null || typeof v === 'boolean') ? String(v) : __q(v);
+
+// Serialize the evaluated value, including a fallback for older Animate versions.
+function __serialize(value) {
+  if (typeof JSON !== 'undefined') return JSON.stringify(value);
+  if (typeof value === 'number') return isFinite(value) ? String(value) : 'null';
+  return (value === null || typeof value === 'boolean') ? String(value) : __quote(value);
 }
+
+// Evaluate the requested JSFL and capture either its result or its error.
 var __out;
 try {
   var __r = eval(${JSON.stringify(code)});
-  __out = '{"result":' + (__r === undefined ? 'null' : __ser(__r)) + '}';
+  __out = '{"result":' + (__r === undefined ? 'null' : __serialize(__r)) + '}';
 } catch (e) {
-  __out = '{"error":' + __q(e && e.message ? e.message : e) + '}';
+  __out = '{"error":' + __quote(e && e.message ? e.message : e) + '}';
 }
+
+// Write the captured result for the Runner to read.
 FLfile.write(__path, __out);
 `;
 }
 
 /** Only files older than this count as leftovers, so files of a running Run are kept */
 const STALE_MS = 60 * 60 * 1000;
+/** Default delay between Result file polls */
+const DEFAULT_POLL_MS = 100;
 
 /**
  * Removes Run leftovers, such as a Result file Animate wrote after a timeout.
@@ -52,10 +63,14 @@ async function removeStaleFiles(dir: string) {
     for (const name of await readdir(dir)) {
         const path = join(dir, name);
         try {
-            if (Date.now() - (await stat(path)).mtimeMs > STALE_MS) await rm(path, { force: true });
+            if (Date.now() - (await stat(path)).mtimeMs > STALE_MS) {
+                await rm(path, { force: true });
+            }
         } catch (error) {
             // Ignore files another process's Run removed at the same time
-            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+                throw error;
+            }
         }
     }
 }
@@ -84,14 +99,16 @@ export function createRunner(options: {
      * @returns Promise<unknown> with the evaluation result of code; rejects when Animate is not running, JSFL throws, or the Run times out
      */
     async function run(code: string): Promise<unknown> {
-        if (!(await options.isRunning())) throw new Error("Animate not running: start Adobe Animate and try again");
+        if (!(await options.isRunning())) {
+            throw new Error("Animate not running: start Adobe Animate and try again");
+        }
         await mkdir(options.dir, { recursive: true, mode: 0o700 });
         // mkdir's mode has no effect on an existing directory
         await chmod(options.dir, 0o700);
         await removeStaleFiles(options.dir);
-        const id = randomUUID();
-        const runFile = join(options.dir, `${id}.jsfl`);
-        const resultFile = join(options.dir, `${id}.result.json`);
+        const runId = randomUUID();
+        const runFile = join(options.dir, `${runId}.jsfl`);
+        const resultFile = join(options.dir, `${runId}.result.json`);
         const deadline = Date.now() + options.timeoutMs;
         const timedOut = () =>
             new Error(
@@ -116,14 +133,17 @@ export function createRunner(options: {
                         result?: unknown;
                         error?: string;
                     };
-                    if (typeof parsed.error === "string") throw new Error(parsed.error);
+                    if (typeof parsed.error === "string") {
+                        throw new Error(parsed.error);
+                    }
                     return parsed.result;
                 } catch (error) {
                     // Keep polling while the Result file is missing or still being written
-                    if ((error as NodeJS.ErrnoException).code !== "ENOENT" && !(error instanceof SyntaxError))
+                    if ((error as NodeJS.ErrnoException).code !== "ENOENT" && !(error instanceof SyntaxError)) {
                         throw error;
+                    }
                 }
-                await new Promise((r) => setTimeout(r, options.pollMs ?? 100));
+                await new Promise((resolve) => setTimeout(resolve, options.pollMs ?? DEFAULT_POLL_MS));
             }
             throw timedOut();
         } finally {
