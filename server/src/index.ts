@@ -26,7 +26,7 @@ Basic flow:
 2. Edit the exported .as / .js files (an empty file deletes that frame's script).
 3. Run apply_scripts to apply them. The .fla is not saved; the user saves it.
 - To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.
-- Use edit_timeline for layer or frame structure changes. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
+- Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
 - If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
 
 Notes:
@@ -128,6 +128,12 @@ const EDIT_TIMELINE_OP = z.discriminatedUnion("op", [
         frame: z.number().int().positive(),
         length: z.number().int().min(2),
         ripple: z.boolean().optional(),
+    }),
+    z.object({
+        op: z.literal("shiftLayerFrames"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        offset: z.number().int(),
     }),
 ]);
 const EDIT_TIMELINE_INPUT = {
@@ -500,7 +506,7 @@ async function main() {
         "edit_timeline",
         {
             description:
-                "Edit layers (addLayer, deleteLayer, moveLayer, renameLayer, setLayerType) and frames (insertFrames, removeFrames, insertKeyframe, clearKeyframe, setLabel, setSpanLength) in order. Layer references use a name and optional zero-based index; frame numbers are 1-based. Stops at the first failed op. deleteLayer and removeFrames require confirm: true. Tween interiors reject frame insertion/removal/keyframe changes. Always run export_scripts again before editing or applying scripts.",
+                "Edit layers (addLayer, deleteLayer, moveLayer, renameLayer, setLayerType) and frames (insertFrames, removeFrames, insertKeyframe, clearKeyframe, setLabel, setSpanLength, shiftLayerFrames) in order. Layer references use a name and optional zero-based index; frame numbers are 1-based. shiftLayerFrames moves one layer's full content later without shifting other layers. Stops at the first failed op. deleteLayer and removeFrames require confirm: true. Tween interiors reject frame insertion/removal/keyframe changes. Always run export_scripts again before editing or applying scripts.",
             inputSchema: EDIT_TIMELINE_INPUT,
         },
         handleEditTimeline,

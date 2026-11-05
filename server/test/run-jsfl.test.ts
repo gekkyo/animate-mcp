@@ -38,7 +38,7 @@ const layer = (name, frames, layerType = "normal", locked = false, parentLayer =
   return result;
 };
 const makeTimeline = (name, frames, layers, libraryItem) => {
-  const timeline = { name, frameCount: frames, currentLayer: 0, currentFrame: 0, layers, libraryItem,
+  const timeline = { name, frameCount: frames, currentLayer: 0, currentFrame: 0, selectedFrames: null, clipboard: null, layers, libraryItem,
     recalculateFrameCount() { this.frameCount = Math.max(0, ...this.layers.map((candidate) => candidate.frames.length)); },
     recalculateLayer(targetLayer) {
       let start = 0;
@@ -111,6 +111,37 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
       const end = endFrameIndex === undefined ? startFrameIndex + 1 : endFrameIndex;
       for (let index = startFrameIndex; index < end; index++) target.frames[index][property] = value;
     },
+    setSelectedLayers(layerIndex) {
+      this.currentLayer = layerIndex;
+    },
+    setSelectedFrames(startFrameIndex, endFrameIndex) {
+      this.selectedFrames = [this.currentLayer, startFrameIndex, endFrameIndex];
+    },
+    cutFrames() {
+      const [layerIndex, startFrameIndex, endFrameIndex] = this.selectedFrames;
+      const target = this.layers[layerIndex];
+      if (target.locked) throw new Error("Layer is locked");
+      this.clipboard = target.frames.slice(startFrameIndex, endFrameIndex).map((frame) => Object.assign({}, frame));
+      target.frames.splice(startFrameIndex, endFrameIndex - startFrameIndex);
+      this.recalculateLayer(target);
+    },
+    pasteFrames(startFrameIndex) {
+      const target = this.layers[this.currentLayer];
+      if (target.locked) throw new Error("Layer is locked");
+      const keyframes = this.clipboard.filter((frame, index) => frame.startFrame === index).map((frame) =>
+        Object.assign({}, frame, { startFrame: frame.startFrame + startFrameIndex }),
+      );
+      const lastKeyframe = keyframes.at(-1);
+      if (lastKeyframe) lastKeyframe.duration = Math.max(lastKeyframe.duration, this.frameCount - lastKeyframe.startFrame);
+      const frames = [];
+      if (startFrameIndex > 0) {
+        const blank = makeKeyframe(0, startFrameIndex);
+        frames.push(...Array(startFrameIndex).fill(blank));
+      }
+      for (const frame of keyframes) frames.push(...Array(frame.duration).fill(frame));
+      target.frames.splice(0, target.frames.length, ...frames);
+      this.recalculateLayer(target);
+    },
     deleteLayer(layerIndex) {
       const removed = this.layers.splice(layerIndex, 1)[0];
       for (const candidate of this.layers) if (candidate.parentLayer === removed) delete candidate.parentLayer;
@@ -144,13 +175,13 @@ const doc = (documentName, documentType) => {
   ];
   if (process.env.FAKE_INNER_KEYFRAME) sceneFrames[1].duration = 3;
   const sceneLayers = [layer("a/b", expand(sceneFrames)),
-    ...(process.env.FAKE_SECOND_LAYER ? [layer(process.env.FAKE_SECOND_LAYER, expand([makeKeyframe(0, 5)]))] : []),
+    ...(process.env.FAKE_SECOND_LAYER ? [layer(process.env.FAKE_SECOND_LAYER, expand([makeKeyframe(0, Number(process.env.FAKE_SECOND_LENGTH ?? 5))]))] : []),
     layer("dir", [], "folder")];
   if (process.env.FAKE_INNER_KEYFRAME) sceneLayers[0].frames[3] = makeKeyframe(3, 1);
   if (process.env.FAKE_AS_LAYER) {
     sceneLayers.unshift(layer(process.env.FAKE_AS_LAYER, expand([makeKeyframe(0, 5)]), "normal", Boolean(process.env.FAKE_LOCK_AS)));
   }
-  const sceneTimeline = makeTimeline("Scene 1", 5, sceneLayers);
+  const sceneTimeline = makeTimeline("Scene 1", Math.max(5, ...sceneLayers.map((candidate) => candidate.frames.length)), sceneLayers);
   const document = { name: documentName, type: documentType, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
   let editing = null;
   document.syms = {};
@@ -599,6 +630,64 @@ test("edit_timeline setSpanLength grows, shrinks, enforces minimum, rejects inne
         );
         const tooShort = await editTimeline(client, 0, [{ op: "setSpanLength", layer: "a/b", frame: 3, length: 1 }]);
         assert.equal(tooShort.isError, true, "length below 2 is rejected by the input schema");
+    });
+});
+
+test("edit_timeline shiftLayerFrames offsets content without changing span lengths", { timeout: 30_000 }, async () => {
+    await withServer(
+        { FAKE_TWEEN: "motion", FAKE_SECOND_LAYER: "Other", FAKE_SECOND_LENGTH: "10" },
+        async (client, tempDir) => {
+            const result = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "a/b", offset: 2 }]);
+            assert.equal(result.isError, undefined, text(result));
+            const summary = result.structuredContent as {
+                applied: unknown[];
+                failed: unknown;
+                warnings: string[];
+            };
+            assert.equal(summary.applied.length, 1);
+            assert.equal(summary.failed, null);
+            assert.match(summary.warnings[0], /other layers were not shifted/);
+
+            const layers = (await layersLog(tempDir)).at(-1);
+            const shifted = layers.find((entry: { name: string }) => entry.name === "a/b");
+            assert.deepEqual(
+                shifted.frames.map((frame: { start: number; duration: number }) => [frame.start, frame.duration]),
+                [
+                    [0, 2],
+                    [2, 2],
+                    [4, 3],
+                ],
+            );
+            assert.equal(shifted.frames[0].script, "", "the leading offset is empty");
+            assert.equal(shifted.frames[1].script, "stop();\n// 日本語");
+            assert.equal(shifted.frames[1].tween, "none");
+            assert.equal(shifted.frames[2].tween, "motion", "the tween type is preserved");
+            assert.equal(
+                shifted.frames.reduce((length: number, frame: { duration: number }) => length + frame.duration, 0),
+                7,
+            );
+            assert.equal(layers.find((entry: { name: string }) => entry.name === "Other").frames[0].duration, 10);
+        },
+    );
+
+    await withServer({ FAKE_AS_LAYER: "AS", FAKE_LOCK_AS: "1" }, async (client) => {
+        const result = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "AS", offset: 1 }]);
+        assert.equal((result.structuredContent as { failed: unknown }).failed, null, text(result));
+        assert.equal((result.structuredContent as { layers: { locked: boolean }[] }).layers[0].locked, true);
+    });
+
+    await withServer({ FAKE_SECOND_LAYER: "a/b" }, async (client) => {
+        const invalidOffset = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "dir", offset: 0 }]);
+        assert.match(
+            (invalidOffset.structuredContent as { failed: { error: string } }).failed.error,
+            /offset must be at least 1/,
+        );
+        const ambiguous = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "a/b", offset: 1 }]);
+        assert.match((ambiguous.structuredContent as { failed: { error: string } }).failed.error, /ambiguous/);
+        const missing = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "missing", offset: 1 }]);
+        assert.match((missing.structuredContent as { failed: { error: string } }).failed.error, /Layer not found/);
+        const empty = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "dir", offset: 1 }]);
+        assert.match((empty.structuredContent as { failed: { error: string } }).failed.error, /no frames/);
     });
 });
 

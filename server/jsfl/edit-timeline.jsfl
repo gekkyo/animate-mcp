@@ -102,6 +102,52 @@
     }
   }
 
+  /** Moves a layer's full frame sequence while preserving its original keyframe spans. */
+  function shiftLayerFrames(layerIndex, layer, offset) {
+    if (offset < 1) throw new Error('offset must be at least 1');
+    if (!layer.frames || layer.frames.length === 0) throw new Error('Layer has no frames');
+    var originalLength = layer.frames.length, keyframes = [], frame, keyframeIndex;
+    for (var frameIndex = 0; frameIndex < originalLength; frameIndex++) {
+      frame = layer.frames[frameIndex];
+      if (frame && frame.startFrame === frameIndex) {
+        keyframes.push({ startFrame: frameIndex, duration: frame.duration });
+      }
+    }
+    if (keyframes.length === 0) throw new Error('Layer has no frames');
+    withUnlockedLayers([layer], function () {
+      timeline.setSelectedLayers(layerIndex);
+      timeline.setSelectedFrames(0, originalLength, true);
+      timeline.cutFrames();
+      timeline.setSelectedLayers(layerIndex);
+      timeline.setSelectedFrames(offset, offset, true);
+      timeline.pasteFrames(offset);
+      // pasteFrames may extend the last span to the timeline-wide length.
+      for (keyframeIndex = keyframes.length - 1; keyframeIndex >= 0; keyframeIndex--) {
+        var keyframe = keyframes[keyframeIndex], shiftedStart = keyframe.startFrame + offset;
+        frame = layer.frames[shiftedStart];
+        if (!frame || frame.startFrame !== shiftedStart) throw new Error('Shifted keyframe no longer exists');
+        if (frame.duration > keyframe.duration) {
+          timeline.currentLayer = layerIndex;
+          timeline.removeFrames(shiftedStart + keyframe.duration, shiftedStart + frame.duration);
+        }
+      }
+    });
+    var contentKeyframeCount = 0;
+    for (frameIndex = offset; frameIndex < layer.frames.length; frameIndex++) {
+      if (layer.frames[frameIndex].startFrame === frameIndex) contentKeyframeCount++;
+    }
+    if (contentKeyframeCount !== keyframes.length) throw new Error('Shifted keyframe count does not match its original');
+    if (layer.frames.length !== originalLength + offset) throw new Error('Shifted layer has an unexpected length');
+    for (keyframeIndex = 0; keyframeIndex < keyframes.length; keyframeIndex++) {
+      var expected = keyframes[keyframeIndex], expectedStart = expected.startFrame + offset;
+      frame = layer.frames[expectedStart];
+      if (!frame || frame.startFrame !== expectedStart || frame.duration !== expected.duration) {
+        throw new Error('Shifted keyframe span does not match its original duration');
+      }
+    }
+    warnings.push('Only layer ' + layer.name + ' shifted; other layers were not shifted.');
+  }
+
   /** Applies a layer operation. */
   function applyLayerOp(op) {
     var layerIndex, layer, parent, placementIndex, addAbove, returnedIndex, desiredIndex, currentParent;
@@ -202,6 +248,10 @@
   function applyFrameOp(op) {
     var layerIndex = findLayerIndex(op.layer, op.index), layer = timeline.layers[layerIndex];
     var frameIndex = op.frame - 1, count, layers, layerIndexToEdit, spanStart, spanLength, spanEnd, delta;
+    if (op.op === 'shiftLayerFrames') {
+      shiftLayerFrames(layerIndex, layer, op.offset);
+      return;
+    }
     if (op.op === 'insertFrames' || op.op === 'removeFrames') {
       if (op.op === 'removeFrames' && op.confirm !== true) throw new Error('confirm required');
       count = op.count;
