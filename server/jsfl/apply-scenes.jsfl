@@ -144,7 +144,7 @@
         script: newScript.script,
         layerDir: newScript.layerDir,
         layerName: targetLayer.name,
-        asLayer: newScript.asLayer,
+        asLayer: newScript.asLayer
       };
       if (newScript.item !== undefined) {
         appliedNewScript.item = newScript.item;
@@ -157,7 +157,7 @@
             " in " +
             targetLayer.name +
             " of " +
-            (newTimeline.name || newScript.item || "timeline"),
+            (newTimeline.name || newScript.item || "timeline")
         );
       }
     } catch (error) {
