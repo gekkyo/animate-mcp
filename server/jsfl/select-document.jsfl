@@ -1,18 +1,27 @@
 // Shared part concatenated before other JSFL. `var __docName = "..."` (empty string = unspecified) is injected before it.
 // Returns the target document. If several are open and none is specified, throws an error listing the document names.
+/** Selects the requested open document, or the only open document.
+ * @returns The selected document.
+ */
 function selectDocument() {
-  var docs = fl.documents, d = null, i;
-  if (!docs || docs.length === 0) throw new Error("No document open");
+  var documents = fl.documents, document = null, documentIndex;
+  if (!documents || documents.length === 0) throw new Error("No document open");
   if (__docName) {
-    for (i = 0; i < docs.length; i++) if (docs[i].name === __docName) d = docs[i];
-    if (!d) throw new Error("Document not open: " + __docName);
-  } else if (docs.length > 1) {
-    var names = [];
-    for (i = 0; i < docs.length; i++) names.push(docs[i].name);
-    throw new Error("Multiple documents open; specify `document`: " + names.join(", "));
+    for (documentIndex = 0; documentIndex < documents.length; documentIndex++) {
+      if (documents[documentIndex].name === __docName) document = documents[documentIndex];
+    }
+    if (!document) throw new Error("Document not open: " + __docName);
+  } else if (documents.length > 1) {
+    var documentNames = [];
+    for (documentIndex = 0; documentIndex < documents.length; documentIndex++) {
+      documentNames.push(documents[documentIndex].name);
+    }
+    throw new Error("Multiple documents open; specify `document`: " + documentNames.join(", "));
   } else {
-    d = docs[0];
+    document = documents[0];
   }
-  if (d.type !== "Flash" && d.type !== "htmlcanvas") throw new Error("Unsupported document type: " + d.type);
-  return d;
+  if (document.type !== "Flash" && document.type !== "htmlcanvas") {
+    throw new Error("Unsupported document type: " + document.type);
+  }
+  return document;
 }

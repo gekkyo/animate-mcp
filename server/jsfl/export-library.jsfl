@@ -1,40 +1,52 @@
 // Concatenated and evaluated after export-common. `var __docName` and `var __items` are injected before it.
 // If __items is null, only the symbol list (and AS3 Linked classes) is returned. If it is an array, each symbol's timeline is read.
 // Reading enters edit mode, so the original edit state is restored at the end; a failure goes to warning.
+/** Exports library symbols and their timelines as JSON text.
+ * @returns The serialized library export.
+ */
 (function () {
-  var d = selectDocument(), i;
+  var document = selectDocument(), itemIndex;
 
-  function symbolItem(name) {
-    var items = d.library.items;
-    for (var k = 0; k < items.length; k++) if (items[k].name === name) return items[k];
+  /** Finds a library item by its full name.
+   * @param symbolName The full library item name.
+   * @returns The matching library item, or null when it is not found.
+   */
+  function findSymbolItem(symbolName) {
+    var libraryItems = document.library.items;
+    for (var libraryIndex = 0; libraryIndex < libraryItems.length; libraryIndex++) {
+      if (libraryItems[libraryIndex].name === symbolName) return libraryItems[libraryIndex];
+    }
     return null;
   }
 
   if (__items === null) {
     var symbols = [];
-    var all = d.library.items;
-    for (i = 0; i < all.length; i++) {
-      var t = all[i].itemType;
-      if (t !== "movie clip" && t !== "graphic" && t !== "button") continue;
-      var linked = d.type === "Flash" && all[i].linkageExportForAS ? all[i].linkageClassName || "" : "";
-      symbols.push({ name: all[i].name, linked: linked });
+    var libraryItems = document.library.items;
+    for (itemIndex = 0; itemIndex < libraryItems.length; itemIndex++) {
+      var itemType = libraryItems[itemIndex].itemType;
+      if (itemType !== "movie clip" && itemType !== "graphic" && itemType !== "button") continue;
+      var linkedClass = document.type === "Flash" && libraryItems[itemIndex].linkageExportForAS
+        ? libraryItems[itemIndex].linkageClassName || ""
+        : "";
+      symbols.push({ name: libraryItems[itemIndex].name, linked: linkedClass });
     }
-    return ser({ document: d.name, type: d.type, symbols: symbols });
+    return serialize({ document: document.name, type: document.type, symbols: symbols });
   }
 
-  var restore = saveEditState(d);
-  var out = [];
-  for (i = 0; i < __items.length; i++) {
+  var restore = saveEditState(document);
+  var exportedSymbols = [];
+  for (itemIndex = 0; itemIndex < __items.length; itemIndex++) {
     try {
-      var item = symbolItem(__items[i]);
-      if (!item) throw new Error("Library item not found");
-      d.library.editItem(__items[i]);
-      out.push({ name: __items[i], layers: exportTimeline(d.getTimeline()) });
-    } catch (e) {
-      out.push({ name: __items[i], error: String(e && e.message ? e.message : e) });
+      var symbol = findSymbolItem(__items[itemIndex]);
+      if (!symbol) throw new Error("Library item not found");
+      document.library.editItem(__items[itemIndex]);
+      var timeline = document.getTimeline();
+      exportedSymbols.push({ name: __items[itemIndex], layers: exportTimeline(timeline), structureFingerprint: structureFingerprint(timeline) });
+    } catch (error) {
+      exportedSymbols.push({ name: __items[itemIndex], error: String(error && error.message ? error.message : error) });
     }
   }
 
   var warning = restore();
-  return ser({ document: d.name, type: d.type, symbols: out, warning: warning });
+  return serialize({ document: document.name, type: document.type, symbols: exportedSymbols, warning: warning });
 })()

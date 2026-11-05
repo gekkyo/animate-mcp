@@ -6,7 +6,12 @@ import { test } from "node:test";
 import { writeExport } from "../src/export.js";
 
 test("layer names differing only in case get separate folders", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "export-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "export-"));
+    /**
+     * Creates a one-frame script-bearing layer frame.
+     * @param script Script text for the frame
+     * @returns A single-frame timeline
+     */
     const frame = (script: string) => [{ start: 0, duration: 1, label: "", tween: "none", script, elements: [] }];
     await writeExport(
         {
@@ -22,9 +27,9 @@ test("layer names differing only in case get separate folders", async () => {
                 },
             ],
         },
-        dir,
+        tempDir,
     );
-    const files = Object.keys(JSON.parse(await readFile(join(dir, ".export.json"), "utf8")).files);
+    const files = Object.keys(JSON.parse(await readFile(join(tempDir, ".export.json"), "utf8")).files);
     assert.equal(new Set(files.map((file) => file.toLowerCase())).size, 2);
-    assert.equal(await readFile(join(dir, "scenes/s/Layer/1.as"), "utf8"), "one();");
+    assert.equal(await readFile(join(tempDir, "scenes/s/Layer/1.as"), "utf8"), "one();");
 });

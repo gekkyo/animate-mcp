@@ -1,21 +1,28 @@
 // Shared part concatenated before other JSFL.
 // Records the current edit state and returns a restore function. It returns a warning string on failure (empty string on success).
-function saveEditState(d) {
-  var before = d.getTimeline().libraryItem;
-  var beforeName = before ? before.name : "";
-  var beforeScene = d.currentTimeline;
+/** Captures a document's edit state and returns a function that restores it.
+ * @param doc The document whose edit state to capture.
+ * @returns A function that restores the saved edit state.
+ */
+function saveEditState(doc) {
+  var priorLibraryItem = doc.getTimeline().libraryItem;
+  var priorItemName = priorLibraryItem ? priorLibraryItem.name : "";
+  var priorTimeline = doc.currentTimeline;
+  /** Restores the saved edit state and returns an empty string or warning.
+   * @returns An empty string on success, or a warning when restoration fails.
+   */
   return function () {
     try {
-      if (beforeName) d.library.editItem(beforeName);
+      if (priorItemName) doc.library.editItem(priorItemName);
       else {
-        d.exitEditMode();
+        doc.exitEditMode();
         // editScene is unavailable on Canvas, so call it only when the scene changed
-        if (d.currentTimeline !== beforeScene) d.editScene(beforeScene);
+        if (doc.currentTimeline !== priorTimeline) doc.editScene(priorTimeline);
       }
-      var now = d.getTimeline().libraryItem;
-      return (now ? now.name : "") !== beforeName ? "Edit state was not restored" : "";
-    } catch (e) {
-      return "Edit state was not restored: " + String(e && e.message ? e.message : e);
+      var currentLibraryItem = doc.getTimeline().libraryItem;
+      return (currentLibraryItem ? currentLibraryItem.name : "") !== priorItemName ? "Edit state was not restored" : "";
+    } catch (error) {
+      return "Edit state was not restored: " + String(error && error.message ? error.message : error);
     }
   };
 }

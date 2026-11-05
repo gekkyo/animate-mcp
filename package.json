@@ -1,6 +1,6 @@
 {
   "name": "animate-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -20,6 +20,7 @@
     "prepare": "npm run build",
     "build": "tsc --project server/tsconfig.json",
     "test": "tsx --test server/test/*.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage server/test/*.test.ts",
     "start": "node server/dist/index.js",
     "lint": "biome check",
     "format": "biome check --write"
