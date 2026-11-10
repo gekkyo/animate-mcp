@@ -1,26 +1,35 @@
 import { readFileSync } from "node:fs";
 
-const JSFL_ORDER: Record<string, number> = {
-    "select-document": 0,
-    "edit-state": 1,
-    "export-common": 2,
-    "get-document-info": 3,
-    "export-scenes": 4,
-    "export-library": 5,
-    "apply-scenes": 6,
-    "edit-timeline": 7,
+const JSFL_FILES: Record<string, { path: string; order: number }> = {
+    "select-document": { path: "shared/select-document.jsfl", order: 0 },
+    "edit-state": { path: "shared/edit-state.jsfl", order: 1 },
+    "export-common": { path: "shared/export-common.jsfl", order: 2 },
+    "get-document-info": { path: "tools/get-document-info.jsfl", order: 3 },
+    "export-scenes": { path: "tools/export-scenes.jsfl", order: 4 },
+    "export-library": { path: "tools/export-library.jsfl", order: 5 },
+    "apply-scenes": { path: "tools/apply-scenes.jsfl", order: 6 },
+    "timeline-helpers": { path: "timeline/helpers.jsfl", order: 7 },
+    "timeline-layers": { path: "timeline/layers.jsfl", order: 8 },
+    "timeline-frames": { path: "timeline/frames.jsfl", order: 9 },
+    "timeline-index": { path: "timeline/index.jsfl", order: 10 },
 };
 
 /**
- * Loads tool JSFL from server/jsfl/<name>.jsfl (the same place from src/ and dist/).
- * @param name File name without extension (e.g. "get-document-info")
+ * Loads JSFL from its mapped path under server/jsfl (the same place from src/ and dist/).
+ * @param name JSFL bundle name (e.g. "get-document-info")
  * @returns The JSFL source string
  */
-export const loadJsfl = (name: string) => readFileSync(new URL(`../jsfl/${name}.jsfl`, import.meta.url), "utf8");
+export const loadJsfl = (name: string) => {
+    const file = JSFL_FILES[name];
+    if (!file) {
+        throw new Error(`Unknown JSFL bundle: ${name}`);
+    }
+    return readFileSync(new URL(`../jsfl/${file.path}`, import.meta.url), "utf8");
+};
 
 /**
- * Concatenates shared parts and the main JSFL in order.
- * @param names File names without extension (shared parts first, the main script last)
+ * Concatenates named JSFL parts in their explicit bundle order.
+ * @param names JSFL bundle names (shared parts first, then tool-specific parts)
  * @returns The concatenated JSFL source
  */
 export const bundle = (...names: string[]) =>
@@ -28,7 +37,7 @@ export const bundle = (...names: string[]) =>
         .map(
             /** Adds each JSFL file's explicit bundle order.
              * @param name JSFL file name without extension
-             * @param index Original position for unlisted names
+             * @param index Original position used as a fallback order
              * @returns JSFL file name and sort order
              */
             (name, index) => ({ name, index }),
@@ -39,7 +48,8 @@ export const bundle = (...names: string[]) =>
              * @param right Second JSFL file and its input index
              * @returns Relative sort order
              */
-            (left, right) => (JSFL_ORDER[left.name] ?? left.index) - (JSFL_ORDER[right.name] ?? right.index),
+            (left, right) =>
+                (JSFL_FILES[left.name]?.order ?? left.index) - (JSFL_FILES[right.name]?.order ?? right.index),
         )
         .map(
             /** Loads the source for a sorted JSFL file.

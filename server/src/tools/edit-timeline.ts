@@ -118,7 +118,7 @@ export function registerEditTimeline(
      */
     const handleEditTimeline: ToolCallback<typeof EDIT_TIMELINE_INPUT> = async ({ timeline, ops, document }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "edit-timeline")}`;
+            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "timeline-helpers", "timeline-layers", "timeline-frames", "timeline-index")}`;
             const result = JSON.parse(String(await runner.execute(code))) as {
                 applied: typeof ops;
                 failed: { op: (typeof ops)[number]; error: string } | null;
