@@ -26,7 +26,7 @@ It exports frame scripts as plain files, lets the agent edit them, and applies t
 - Apply edited files back to Animate. Changes made in Animate after Export are detected as conflicts and never overwritten.
 - Add a new script to a frame that has none, just by creating a file.
 - Add, delete, move, rename, and retype layers (mask, folder, and more).
-- Organize library folders and items; create folders, move, rename, delete, or list unused items. Deletion requires confirmation and refuses items in use.
+- Organize library folders and items (symbols, bitmaps, sounds, and more): create folders, move, rename, delete, or list unused items. Deletion requires confirmation and refuses items in use.
 - Insert or remove frames, work with keyframes, set labels, adjust tween length, and shift a layer's start.
 - Run arbitrary JSFL and return the result.
 - Supports ActionScript 3 and HTML5 Canvas documents.
@@ -73,7 +73,7 @@ Notes:
 - Export is refused while unapplied edits exist. Use `force: true` only when it is fine to discard them.
 - To add a script to a frame with none, create `as/<frame>.as` in the timeline directory (use `.js` for HTML5 Canvas), then run `apply_scripts`; scripts inside tween spans are refused.
 - Use `edit_timeline` for layer and frame structure changes; `shiftLayerFrames` moves one layer's content later without shifting other layers. Always run `export_scripts` again before editing or applying scripts; layer and frame deletions require `confirm: true`.
-- Use `edit_library` to organize folders and library items (`createFolder`, `moveItem`, `renameItem`, `deleteItem`, `listUnused`). Re-export with `export_scripts` before `apply_scripts`; `deleteItem` requires `confirm: true` and refuses items in use.
+- Use `edit_library` to organize folders and library items (`createFolder`, `moveItem`, `renameItem`, `deleteItem`, `listUnused`). Re-export with `export_scripts` before `apply_scripts`; `deleteItem` requires `confirm: true` and refuses items in use. Apply is refused if the library changed after Export. Linkage names are not changed, and code-string references such as `attachMovie` are not updated.
 - To save, save manually in Animate.
 - Both ActionScript 3 and HTML5 Canvas documents are supported.
 
@@ -82,8 +82,8 @@ Notes:
 | Tool                | Description                                                                                  |
 |---------------------|----------------------------------------------------------------------------------------------|
 | `export_scripts`    | Writes the timeline structure and all frame scripts (scenes and library symbols)             |
-| `edit_timeline`    | Adds, removes, moves and edits layers and frames in a scene or library symbol                |
-| `edit_library`     | Organizes library folders and items, and lists unused items                                 |
+| `edit_timeline`     | Adds, removes, moves and edits layers and frames in a scene or library symbol                |
+| `edit_library`      | Organizes library folders and items, and lists unused items                                  |
 | `apply_scripts`     | Writes edited scripts back into the open document                                            |
 | `get_document_info` | Returns name, size, frame rate and timeline names of the open documents                      |
 | `run_jsfl`          | Runs arbitrary JSFL and returns the result (primitive values only; objects become strings)   |
