@@ -16,6 +16,7 @@ export type ApplyPayload = {
     edits: Edit[];
     newScripts: NewScript[];
     fingerprints: TimelineFingerprint[];
+    libraryFingerprint?: string;
 };
 
 export type ApplyFailure = { file: string; error: string };
@@ -28,6 +29,7 @@ export type ApplyResult = {
     warnings: string[];
     newApplied: AppliedNewScript[];
     fingerprints: TimelineFingerprint[];
+    libraryMismatch?: boolean;
 };
 
 /** Builds the JSFL variable declarations for an apply payload.
@@ -35,5 +37,5 @@ export type ApplyResult = {
  * @returns JSFL declarations for the payload fields
  */
 export function serializeApplyPayload(payload: ApplyPayload): string {
-    return `var __edits = ${JSON.stringify(payload.edits)};\nvar __newScripts = ${JSON.stringify(payload.newScripts)};\nvar __fingerprints = ${JSON.stringify(payload.fingerprints)};`;
+    return `var __edits = ${JSON.stringify(payload.edits)};\nvar __newScripts = ${JSON.stringify(payload.newScripts)};\nvar __fingerprints = ${JSON.stringify(payload.fingerprints)};\nvar __libraryFingerprint = ${JSON.stringify(payload.libraryFingerprint ?? null)};`;
 }

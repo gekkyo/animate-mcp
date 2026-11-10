@@ -8,6 +8,7 @@ type Manifest = {
     type: string;
     files: Record<string, ManifestFile>;
     timelines?: ManifestTimeline[];
+    libraryFingerprint?: string;
 };
 
 const MANIFEST = ".export.json";
@@ -190,7 +191,16 @@ export async function collectEdits(dir: string) {
                 structureFingerprint: timeline.structureFingerprint as string,
             }),
         );
-    return { document: manifest.document, edits, newScripts, unchanged, failed, warnings, fingerprints };
+    return {
+        document: manifest.document,
+        libraryFingerprint: manifest.libraryFingerprint,
+        edits,
+        newScripts,
+        unchanged,
+        failed,
+        warnings,
+        fingerprints,
+    };
 }
 
 /**

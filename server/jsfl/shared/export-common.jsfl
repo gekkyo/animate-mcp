@@ -98,3 +98,23 @@ function structureFingerprint(timeline) {
   while (hex.length < 8) hex = "0" + hex;
   return "fnv1a32:" + hex;
 }
+
+/** Hashes sorted library item types and paths so library edits invalidate old exports.
+ * @param library Animate document library.
+ * @returns The library fingerprint.
+ */
+function libraryFingerprint(library) {
+  var items = [], libraryItems = library.items;
+  for (var itemIndex = 0; itemIndex < libraryItems.length; itemIndex++) {
+    items.push(String(libraryItems[itemIndex].itemType || "") + "|" + String(libraryItems[itemIndex].name || ""));
+  }
+  items.sort();
+  var text = serialize(items), hash = 2166136261;
+  for (var characterIndex = 0; characterIndex < text.length; characterIndex++) {
+    hash ^= text.charCodeAt(characterIndex);
+    hash = (hash + (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)) >>> 0;
+  }
+  var hex = hash.toString(16);
+  while (hex.length < 8) hex = "0" + hex;
+  return "fnv1a32:" + hex;
+}

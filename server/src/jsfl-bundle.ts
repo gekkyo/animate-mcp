@@ -12,6 +12,9 @@ const JSFL_FILES: Record<string, { path: string; order: number }> = {
     "timeline-layers": { path: "timeline/layers.jsfl", order: 8 },
     "timeline-frames": { path: "timeline/frames.jsfl", order: 9 },
     "timeline-index": { path: "timeline/index.jsfl", order: 10 },
+    "library-helpers": { path: "library/helpers.jsfl", order: 11 },
+    "library-ops": { path: "library/ops.jsfl", order: 12 },
+    "library-index": { path: "library/index.jsfl", order: 13 },
 };
 
 /**

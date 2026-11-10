@@ -49,6 +49,7 @@ test("export_scripts writes scripts, structure.md and manifest; Canvas uses .js"
         const manifest = JSON.parse(await readFile(join(exportDir, ".export.json"), "utf8"));
         assert.ok(manifest.files["scenes/Scene 1/a_b/1.as"]);
         assert.match(manifest.timelines[0].structureFingerprint, /^fnv1a32:/);
+        assert.match(manifest.libraryFingerprint, /^fnv1a32:/);
     });
     await withServer({ FAKE_TYPE: "htmlcanvas" }, async (client, tempDir) => {
         const exportDir = join(tempDir, "out");

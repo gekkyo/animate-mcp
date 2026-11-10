@@ -13,6 +13,16 @@
   var document = selectDocument(), applied = [], failed = [], warnings = [], newApplied = [], editingItemName = "";
   var createdAsTimelines = {}, fingerprintMismatch = {}, restore = saveEditState(document);
 
+  if (__libraryFingerprint && libraryFingerprint(document.library) !== __libraryFingerprint) {
+    for (var libraryEditIndex = 0; libraryEditIndex < __edits.length; libraryEditIndex++) {
+      failed.push({ file: __edits[libraryEditIndex].file, error: "Library changed since Export; export again" });
+    }
+    for (var libraryNewIndex = 0; libraryNewIndex < __newScripts.length; libraryNewIndex++) {
+      failed.push({ file: __newScripts[libraryNewIndex].file, error: "Library changed since Export; export again" });
+    }
+    return serialize({ applied: applied, failed: failed, warning: "", warnings: warnings, newApplied: newApplied, fingerprints: [], libraryMismatch: true });
+  }
+
   /** Returns the requested scene or library-item timeline.
    * @param edit The edit identifying the target timeline.
    * @returns The target timeline.
@@ -227,5 +237,5 @@
     fingerprintedTimelines[appliedKey] = true;
   }
   var warning = editingItemName ? restore() : "";
-  return serialize({ applied: applied, failed: failed, warning: warning, warnings: warnings, newApplied: newApplied, fingerprints: updatedFingerprints });
+  return serialize({ applied: applied, failed: failed, warning: warning, warnings: warnings, newApplied: newApplied, fingerprints: updatedFingerprints, libraryMismatch: false });
 })();

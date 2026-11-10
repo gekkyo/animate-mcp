@@ -8,6 +8,7 @@ import { isAnimateRunning, launcher } from "./animate-launcher.js";
 import { bundle } from "./jsfl-bundle.js";
 import { createRunner } from "./runner.js";
 import { registerApplyScripts } from "./tools/apply-scripts.js";
+import { registerEditLibrary } from "./tools/edit-library.js";
 import { registerEditTimeline } from "./tools/edit-timeline.js";
 import { registerExportScripts } from "./tools/export-scripts.js";
 import { registerGetDocumentInfo } from "./tools/get-document-info.js";
@@ -27,6 +28,7 @@ Basic flow:
 3. Run apply_scripts to apply them. The .fla is not saved; the user saves it.
 - To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.
 - Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
+- Use edit_library to organize library folders and items. Re-export with export_scripts before apply_scripts; deleteItem requires confirm: true and refuses items in use.
 - If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
 
 Notes:
@@ -56,6 +58,7 @@ async function main() {
     registerGetDocumentInfo(server, { runner, bundle });
     registerExportScripts(server, { runner, bundle });
     registerEditTimeline(server, { runner, bundle });
+    registerEditLibrary(server, { runner, bundle });
     registerApplyScripts(server, { runner, bundle });
 
     const transport = new StdioServerTransport();

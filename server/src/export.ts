@@ -22,6 +22,7 @@ export type ExportData = {
     document: string;
     type: string;
     scenes: ExportScene[];
+    libraryFingerprint?: string;
     /** Library symbols (name is the path in the library). linked is the AS3 Linked class name */
     symbols?: (ExportScene & { linked?: string })[];
 };
@@ -353,7 +354,13 @@ export async function writeExport(data: ExportData, dir: string) {
     // For Apply's conflict detection: record the content at Export
     await writeAtomic(
         join(dir, ".export.json"),
-        JSON.stringify({ document: data.document, type: data.type, files, timelines: manifestTimelines }),
+        JSON.stringify({
+            document: data.document,
+            type: data.type,
+            files,
+            timelines: manifestTimelines,
+            ...(data.libraryFingerprint ? { libraryFingerprint: data.libraryFingerprint } : {}),
+        }),
     );
     return { dir, exported, failed, linkedClasses };
 }

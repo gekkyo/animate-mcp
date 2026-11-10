@@ -102,6 +102,7 @@ export function registerApplyScripts(
             const exportDirectory = resolve(dir);
             const {
                 document: exportedDocument,
+                libraryFingerprint: expectedLibraryFingerprint,
                 edits,
                 newScripts,
                 fingerprints,
@@ -116,14 +117,21 @@ export function registerApplyScripts(
              * @param chunk Existing script edits in this batch
              * @param newChunk New frame scripts in this batch
              * @param chunkFingerprints Timeline fingerprints used to detect stale exports
+             * @param libraryFingerprint Expected library fingerprint, when recorded by Export
              * @returns Parsed Apply result from Animate
              */
             const applyChunk = async (
                 chunk: typeof edits,
                 newChunk: typeof newScripts,
                 chunkFingerprints: typeof fingerprints,
+                libraryFingerprint?: string,
             ) => {
-                const payload: ApplyPayload = { edits: chunk, newScripts: newChunk, fingerprints: chunkFingerprints };
+                const payload: ApplyPayload = {
+                    edits: chunk,
+                    newScripts: newChunk,
+                    fingerprints: chunkFingerprints,
+                    ...(libraryFingerprint ? { libraryFingerprint } : {}),
+                };
                 const code = `var __docName = ${JSON.stringify(exportedDocument)};\n${serializeApplyPayload(payload)}\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
                 return JSON.parse(String(await runner.execute(code))) as ApplyResult;
             };
@@ -131,6 +139,18 @@ export function registerApplyScripts(
             const warnings: string[] = [...collectWarnings];
             const newApplied: AppliedNewScript[] = [];
             const fingerprintUpdates: TimelineFingerprint[] = [];
+            if (expectedLibraryFingerprint && (edits.length > 0 || newScripts.length > 0)) {
+                const preflight = await applyChunk([], [], [], expectedLibraryFingerprint);
+                if (preflight.libraryMismatch) {
+                    const message = "Library changed since Export; export again";
+                    const mismatchFailures = [...edits, ...newScripts].map((edit) => ({
+                        file: edit.file,
+                        error: message,
+                    }));
+                    const result = { applied, failed: [...failed, ...mismatchFailures], unchanged, warnings };
+                    return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+                }
+            }
             // Scenes go in one Run; symbols go 10 timelines (items) per Run.
             const editChunks = buildEditChunks(edits, newScripts, fingerprints);
             const progressToken = extra._meta?.progressToken;
@@ -140,7 +160,12 @@ export function registerApplyScripts(
                     const chunkNewScripts = pass === 1 ? chunk.newScripts : [];
                     if (chunkEdits.length > 0 || chunkNewScripts.length > 0) {
                         try {
-                            const applyResult = await applyChunk(chunkEdits, chunkNewScripts, chunk.fingerprints);
+                            const applyResult = await applyChunk(
+                                chunkEdits,
+                                chunkNewScripts,
+                                chunk.fingerprints,
+                                expectedLibraryFingerprint,
+                            );
                             applied.push(...applyResult.applied);
                             failed.push(...applyResult.failed);
                             newApplied.push(...applyResult.newApplied);

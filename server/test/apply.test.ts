@@ -254,12 +254,41 @@ test("apply_scripts rejects a stale fingerprint and keeps backward compatibility
         const manifestPath = join(exportDir, ".export.json");
         const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
         delete manifest.timelines[0].structureFingerprint;
+        delete manifest.libraryFingerprint;
         await writeFile(manifestPath, JSON.stringify(manifest));
         await writeFile(join(exportDir, SCENE_FILE), "legacy edit");
         const accepted = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
         assert.deepEqual((accepted.structuredContent as { applied: string[] }).applied, [SCENE_FILE]);
     });
 });
+
+test(
+    "apply_scripts refuses all changed files when the exported library fingerprint is stale",
+    { timeout: 30_000 },
+    () =>
+        withServer({}, async (client, tempDir) => {
+            const exportDir = join(tempDir, "out");
+            await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+            const manifestPath = join(exportDir, ".export.json");
+            const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+            manifest.libraryFingerprint = "stale";
+            await writeFile(manifestPath, JSON.stringify(manifest));
+            const libraryFile = "library/dir/Hero/L/1.as";
+            await writeFile(join(exportDir, SCENE_FILE), "scene change");
+            await writeFile(join(exportDir, libraryFile), "symbol change");
+
+            const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+            const summary = result.structuredContent as {
+                applied: string[];
+                failed: { file: string; error: string }[];
+            };
+            assert.deepEqual(summary.applied, []);
+            assert.deepEqual(summary.failed.map((failure) => failure.file).sort(), [SCENE_FILE, libraryFile].sort());
+            assert.ok(
+                summary.failed.every((failure) => failure.error === "Library changed since Export; export again"),
+            );
+        }),
+);
 
 test("apply_scripts accepts hand-placed files in known layers and warns for unknown layers", { timeout: 30_000 }, () =>
     withServer({ FAKE_SECOND_LAYER: "Other" }, async (client, tempDir) => {

@@ -308,16 +308,121 @@ const doc = (documentName, documentType) => {
   document.exitEditMode = () => { editing = null; };
   /** Provides the scene-editing stub required by the fake Animate API. */
   document.editScene = () => {};
-  document.library = { items: [
+  const libraryItems = [
     { name: "F", itemType: "folder" },
+    { name: "dir", itemType: "folder" },
     { name: "dir/Hero", itemType: "movie clip", linkageExportForAS: true, linkageClassName: "com.Hero" },
+    { name: "dir/Bitmap", itemType: "bitmap" },
+    { name: "Bitmap", itemType: "bitmap" },
+    { name: "Sound", itemType: "sound" },
     ...Array.from({ length: Number(process.env.FAKE_EXTRA ?? 0) }, (_, index) => ({ name: "S" + index, itemType: "graphic" })),
-    { name: "Broken", itemType: "button" }],
+    { name: "Broken", itemType: "button" },
+  ];
+  let selectedLibraryItem = null;
+  const library = {
+    items: libraryItems,
+    /** Returns library items that are not marked as used by the test environment.
+     * @returns Unused library items.
+     */
+    get unusedItems() {
+      const used = (process.env.FAKE_USED ?? "").split(",");
+      return libraryItems.filter((item) => !used.includes(item.name));
+    },
+    /** Tests whether a library path exists.
+     * @param path Library path.
+     * @returns Whether the path exists.
+     */
+    itemExists: (path) => libraryItems.some((item) => item.name === path),
+    /** Creates a library folder and any missing intermediate folders.
+     * @param path Folder path.
+     * @returns Nothing.
+     */
+    newFolder(path) {
+      let current = "";
+      for (const part of path.split("/")) {
+        current = current ? current + "/" + part : part;
+        if (!libraryItems.some((item) => item.name === current)) {
+          libraryItems.push({ name: current, itemType: "folder" });
+        }
+      }
+    },
+    /** Moves a library item into a folder.
+     * @param folder Destination folder.
+     * @param itemPath Source path.
+     * @param overwrite Whether the move may replace an existing item.
+     * @returns Nothing.
+     */
+    moveToFolder(folder, itemPath, overwrite) {
+      const source = libraryItems.find((item) => item.name === itemPath);
+      const basename = itemPath.split("/").at(-1);
+      const destination = folder ? folder + "/" + basename : basename;
+      if (!source) {
+        throw new Error("missing source");
+      }
+      if (overwrite) {
+        throw new Error("overwrite is unsupported in the fake runtime");
+      }
+      const prefix = itemPath + "/";
+      for (const item of libraryItems) {
+        if (item.name === itemPath || item.name.startsWith(prefix)) {
+          item.name = destination + item.name.slice(itemPath.length);
+        }
+      }
+    },
+    /** Clears library selection.
+     * @returns Nothing.
+     */
+    selectNone() {
+      selectedLibraryItem = null;
+    },
+    /** Selects the library item at a path.
+     * @param path Library item path.
+     * @returns Nothing.
+     */
+    selectItem(path) {
+      selectedLibraryItem = libraryItems.find((item) => item.name === path) ?? null;
+    },
+    /** Renames the selected library item.
+     * @param name New basename.
+     * @returns Nothing.
+     */
+    renameItem(name) {
+      if (!selectedLibraryItem) {
+        throw new Error("nothing selected");
+      }
+      const oldPath = selectedLibraryItem.name;
+      const parent = oldPath.includes("/") ? oldPath.slice(0, oldPath.lastIndexOf("/")) + "/" : "";
+      const nextPath = parent + name;
+      for (const item of libraryItems) {
+        if (item.name === oldPath || item.name.startsWith(oldPath + "/")) {
+          item.name = nextPath + item.name.slice(oldPath.length);
+        }
+      }
+    },
+    /** Deletes a library item and its descendants.
+     * @param path Library item path.
+     * @returns Nothing.
+     */
+    deleteItem(path) {
+      for (let index = libraryItems.length - 1; index >= 0; index--) {
+        if (libraryItems[index].name === path || libraryItems[index].name.startsWith(path + "/")) {
+          libraryItems.splice(index, 1);
+        }
+      }
+    },
     /**
      * Opens a library item for timeline editing.
      * @param itemName Library item name to open
+     * @returns Nothing.
      */
-    editItem: (itemName) => { if (itemName === "Broken" && !process.env.FAKE_NO_BROKEN) throw new Error("cannot edit"); editing = itemName; } };
+    editItem: (itemName) => {
+      if (itemName === "Broken" && !process.env.FAKE_NO_BROKEN) {
+        throw new Error("cannot edit");
+      }
+      editing = itemName;
+    },
+  };
+  document.library = library;
   return document; };
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
 if (process.env.FAKE_PERSIST_AS && docs[0] && existsSync(process.env.FAKE_LOG + ".scene-script")) {
@@ -376,6 +481,7 @@ if (process.env.FAKE_PERSIST_AS && src.includes("play();")) {
 process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".scripts", JSON.stringify(docs.map((document) => document.timelines[0].layers[0]?.frames[0]?.actionScript)) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers[0].frames[0].actionScript]))) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym-layers", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers.map((candidate) => ({ name: candidate.name, script: candidate.frames[0]?.actionScript }))]))) + "\\n");
+process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".library", JSON.stringify(docs[0].library.items.map((item) => ({ name: item.name, itemType: item.itemType }))) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".layers", JSON.stringify(docs[0].timelines[0].layers.map((candidate) => ({ name: candidate.name, type: candidate.layerType, parent: candidate.parentLayer?.name, locked: candidate.locked, writeWasUnlocked: candidate.writeWasUnlocked, frames: candidate.frames.map((frame, index) => frame.startFrame === index ? { start: frame.startFrame, duration: frame.duration, script: frame.actionScript, tween: frame.tweenType, label: frame.name } : null).filter(Boolean) }))) + "\\n");
 log("end");
 `;
