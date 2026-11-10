@@ -126,6 +126,55 @@ test("apply_scripts inserts a keyframe in a non-tween span", { timeout: 30_000 }
     }),
 );
 
+test(
+    "apply_scripts inserts a keyframe when the target layer ends before the timeline",
+    { timeout: 30_000 },
+    /** Runs the apply operation against a shorter layer.
+     * @returns The asynchronous test result
+     */
+    () =>
+        withServer(
+            { FAKE_SECOND_LAYER: "Other", FAKE_SECOND_LENGTH: "2" },
+            /** Verifies a missing frame within the timeline receives the script.
+             * @param client MCP client connected to the fake Animate server
+             * @param tempDir Temporary directory for the test fixture
+             * @returns The asynchronous assertion result
+             */
+            async (client, tempDir) => {
+                const exportDir = join(tempDir, "out");
+                await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+                const file = "scenes/Scene 1/Other/4.as";
+                await mkdir(join(exportDir, "scenes/Scene 1/Other"), { recursive: true });
+                await writeFile(join(exportDir, file), "trace('insert absent');");
+
+                const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+                const summary = result.structuredContent as {
+                    applied: string[];
+                    failed: unknown[];
+                    warnings: string[];
+                };
+                assert.deepEqual(summary.applied, [file]);
+                assert.deepEqual(summary.failed, []);
+                assert.ok(summary.warnings.join("\n").includes("Inserted keyframe at frame 4"));
+                const snapshot = (await layersLog(tempDir)).at(-1);
+                const targetLayer = snapshot.find(
+                    /** Finds the target layer in the timeline snapshot.
+                     * @param entry Layer snapshot to inspect
+                     * @returns Whether this is the target layer
+                     */
+                    (entry: { name: string }) => entry.name === "Other",
+                );
+                const insertedFrame = targetLayer.frames.at(-1);
+                assert.equal(insertedFrame.start, 3, "the missing frame becomes a keyframe");
+                assert.equal(
+                    insertedFrame.script,
+                    "trace('insert absent');",
+                    "a missing frame on a shorter layer receives the script",
+                );
+            },
+        ),
+);
+
 test("apply_scripts rejects new scripts inside tweens and beyond timeline length", { timeout: 30_000 }, () =>
     withServer({ FAKE_TWEEN: "motion" }, async (client, tempDir) => {
         const exportDir = join(tempDir, "out");

@@ -1,13 +1,40 @@
 import { resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { type AppliedNewScript, collectEdits, markApplied, type TimelineFingerprint } from "../apply.js";
+import { collectEdits, markApplied } from "../apply.js";
+import {
+    type AppliedNewScript,
+    type ApplyPayload,
+    type ApplyResult,
+    serializeApplyPayload,
+    type TimelineFingerprint,
+} from "../apply-contract.js";
 import type { createRunner } from "../runner.js";
 import { failure, TIMELINES_PER_RUN } from "./shared.js";
 
 type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
 
 const APPLY_SCRIPTS_INPUT = { dir: z.string(), document: z.string().optional() };
+
+/** Selects scene entries or entries belonging to a selected library-item batch.
+ * @param entries Edits, new scripts, or fingerprints to select
+ * @param selectedItems Selected library items, or undefined for scene entries
+ * @returns Entries assigned to the scene or selected library items
+ */
+function selectChunkEntries<T extends { item?: string }>(entries: T[], selectedItems?: Set<string>): T[] {
+    const selected: T[] = [];
+    for (const entry of entries) {
+        if (
+            selectedItems === undefined
+                ? entry.item === undefined
+                : entry.item !== undefined && selectedItems.has(entry.item)
+        ) {
+            selected.push(entry);
+        }
+    }
+    return selected;
+}
+
 /**
  * Registers the apply_scripts tool.
  * @param server MCP server to register the tool with
@@ -51,15 +78,9 @@ export function registerApplyScripts(
                 newChunk: typeof newScripts,
                 chunkFingerprints: typeof fingerprints,
             ) => {
-                const code = `var __docName = ${JSON.stringify(exportedDocument)};\nvar __edits = ${JSON.stringify(chunk)};\nvar __newScripts = ${JSON.stringify(newChunk)};\nvar __fingerprints = ${JSON.stringify(chunkFingerprints)};\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
-                return JSON.parse(String(await runner.execute(code))) as {
-                    applied: string[];
-                    failed: { file: string; error: string }[];
-                    warning: string;
-                    warnings: string[];
-                    newApplied: AppliedNewScript[];
-                    fingerprints: TimelineFingerprint[];
-                };
+                const payload: ApplyPayload = { edits: chunk, newScripts: newChunk, fingerprints: chunkFingerprints };
+                const code = `var __docName = ${JSON.stringify(exportedDocument)};\n${serializeApplyPayload(payload)}\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
+                return JSON.parse(String(await runner.execute(code))) as ApplyResult;
             };
             const applied: string[] = [];
             const warnings: string[] = [...collectWarnings];
@@ -72,27 +93,9 @@ export function registerApplyScripts(
                 fingerprints: typeof fingerprints;
             }[] = [
                 {
-                    edits: edits.filter(
-                        /** Selects scene edits for the initial batch.
-                         * @param edit Script edit to check
-                         * @returns Whether the edit belongs to a scene
-                         */
-                        (edit) => edit.item === undefined,
-                    ),
-                    newScripts: newScripts.filter(
-                        /** Selects new scene scripts for the initial batch.
-                         * @param script New script to check
-                         * @returns Whether the script belongs to a scene
-                         */
-                        (script) => script.item === undefined,
-                    ),
-                    fingerprints: fingerprints.filter(
-                        /** Selects scene fingerprints for the initial batch.
-                         * @param fingerprint Timeline fingerprint to check
-                         * @returns Whether the fingerprint belongs to a scene
-                         */
-                        (fingerprint) => fingerprint.item === undefined,
-                    ),
+                    edits: selectChunkEntries(edits),
+                    newScripts: selectChunkEntries(newScripts),
+                    fingerprints: selectChunkEntries(fingerprints),
                 },
             ];
             const itemNames = [...edits, ...newScripts]
@@ -114,27 +117,9 @@ export function registerApplyScripts(
             for (let startIndex = 0; startIndex < timelineItems.length; startIndex += TIMELINES_PER_RUN) {
                 const selectedItems = new Set(timelineItems.slice(startIndex, startIndex + TIMELINES_PER_RUN));
                 editChunks.push({
-                    edits: edits.filter(
-                        /** Selects edits belonging to the current symbol batch.
-                         * @param edit Script edit to check
-                         * @returns Whether its library item is selected
-                         */
-                        (edit) => edit.item !== undefined && selectedItems.has(edit.item),
-                    ),
-                    newScripts: newScripts.filter(
-                        /** Selects new scripts belonging to the current symbol batch.
-                         * @param script New script to check
-                         * @returns Whether its library item is selected
-                         */
-                        (script) => script.item !== undefined && selectedItems.has(script.item),
-                    ),
-                    fingerprints: fingerprints.filter(
-                        /** Selects fingerprints belonging to the current symbol batch.
-                         * @param fingerprint Timeline fingerprint to check
-                         * @returns Whether its library item is selected
-                         */
-                        (fingerprint) => fingerprint.item !== undefined && selectedItems.has(fingerprint.item),
-                    ),
+                    edits: selectChunkEntries(edits, selectedItems),
+                    newScripts: selectChunkEntries(newScripts, selectedItems),
+                    fingerprints: selectChunkEntries(fingerprints, selectedItems),
                 });
             }
             const progressToken = extra._meta?.progressToken;

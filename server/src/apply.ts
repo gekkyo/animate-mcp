@@ -1,15 +1,9 @@
 import { readdir, readFile, rm } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
+import type { AppliedNewScript, Edit, NewScript, TimelineFingerprint } from "./apply-contract.js";
 import { type ManifestFile, type ManifestTimeline, writeAtomic } from "./export.js";
 
-export type Edit = ManifestFile & { file: string; expected: string };
-export type NewScript = ManifestFile & { file: string; layerDir: string; asLayer: boolean };
-export type AppliedNewScript = ManifestFile & {
-    file: string;
-    layerDir: string;
-    layerName: string;
-    asLayer: boolean;
-};
+export type { AppliedNewScript, Edit, NewScript, TimelineFingerprint } from "./apply-contract.js";
 
 type Manifest = {
     document: string;
@@ -17,8 +11,6 @@ type Manifest = {
     files: Record<string, ManifestFile>;
     timelines?: ManifestTimeline[];
 };
-
-export type TimelineFingerprint = { scene: number; item?: string; structureFingerprint: string };
 
 const MANIFEST = ".export.json";
 
