@@ -3,8 +3,6 @@ import { join, resolve, sep } from "node:path";
 import type { AppliedNewScript, Edit, NewScript, TimelineFingerprint } from "./apply-contract.js";
 import { type ManifestFile, type ManifestTimeline, writeAtomic } from "./export.js";
 
-export type { AppliedNewScript, Edit, NewScript, TimelineFingerprint } from "./apply-contract.js";
-
 type Manifest = {
     document: string;
     type: string;

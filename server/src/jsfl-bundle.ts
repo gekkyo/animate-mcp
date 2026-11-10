@@ -15,17 +15,25 @@ const JSFL_FILES: Record<string, { path: string; order: number }> = {
 };
 
 /**
- * Loads JSFL from its mapped path under server/jsfl (the same place from src/ and dist/).
+ * Looks up a bundle name in the mapping.
  * @param name JSFL bundle name (e.g. "get-document-info")
- * @returns The JSFL source string
+ * @returns The mapped path and bundle order
  */
-export const loadJsfl = (name: string) => {
+function jsflFile(name: string) {
     const file = JSFL_FILES[name];
     if (!file) {
         throw new Error(`Unknown JSFL bundle: ${name}`);
     }
-    return readFileSync(new URL(`../jsfl/${file.path}`, import.meta.url), "utf8");
-};
+    return file;
+}
+
+/**
+ * Loads JSFL from its mapped path under server/jsfl (the same place from src/ and dist/).
+ * @param name JSFL bundle name (e.g. "get-document-info")
+ * @returns The JSFL source string
+ */
+export const loadJsfl = (name: string) =>
+    readFileSync(new URL(`../jsfl/${jsflFile(name).path}`, import.meta.url), "utf8");
 
 /**
  * Concatenates named JSFL parts in their explicit bundle order.
@@ -33,29 +41,14 @@ export const loadJsfl = (name: string) => {
  * @returns The concatenated JSFL source
  */
 export const bundle = (...names: string[]) =>
-    names
-        .map(
-            /** Adds each JSFL file's explicit bundle order.
-             * @param name JSFL file name without extension
-             * @param index Original position used as a fallback order
-             * @returns JSFL file name and sort order
-             */
-            (name, index) => ({ name, index }),
-        )
+    [...names]
         .sort(
-            /** Sorts JSFL files by shared dependencies, preserving ties.
-             * @param left First JSFL file and its input index
-             * @param right Second JSFL file and its input index
+            /** Sorts bundle names by their explicit order.
+             * @param left First bundle name
+             * @param right Second bundle name
              * @returns Relative sort order
              */
-            (left, right) =>
-                (JSFL_FILES[left.name]?.order ?? left.index) - (JSFL_FILES[right.name]?.order ?? right.index),
+            (left, right) => jsflFile(left).order - jsflFile(right).order,
         )
-        .map(
-            /** Loads the source for a sorted JSFL file.
-             * @param entry Sorted JSFL file name and input index
-             * @returns JSFL source string
-             */
-            ({ name }) => loadJsfl(name),
-        )
+        .map(loadJsfl)
         .join("\n");
