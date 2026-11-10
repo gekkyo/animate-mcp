@@ -24,7 +24,6 @@ It exports frame scripts as plain files, lets the agent edit them, and applies t
 
 - Export every frame script of scenes and library symbols to files, with a description of the structure.
 - Apply edited files back to Animate. Changes made in Animate after Export are detected as conflicts and never overwritten.
-- Add a new script to a frame that has none, just by creating a file.
 - Add, delete, move, rename, and retype layers (mask, folder, and more).
 - Organize library folders and items (symbols, bitmaps, sounds, and more): create folders, move, rename, delete, or list unused items. Deletion requires confirmation and refuses items in use.
 - Insert or remove frames, work with keyframes, set labels, adjust tween length, and shift a layer's start.
