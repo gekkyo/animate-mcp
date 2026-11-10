@@ -70,7 +70,6 @@ MCP 対応の AI エージェントから、Adobe Animate のスクリプトと�
 - 複数のドキュメントを開いているときは、`document` でどれかを指定してください。
 - Export 後に Animate 側で変更した箇所は、Apply で競合として検出され、上書きされません。
 - 未反映の編集があると Export は拒否されます。破棄してよい場合のみ `force: true` を使ってください。
-- スクリプトのないフレームに追加するには、タイムラインのディレクトリに `as/<フレーム番号>.as`（HTML5 Canvas は `.js`）を作成して `apply_scripts` を実行します。トゥイーン内への追加は拒否されます。
 - レイヤーやフレームの構造変更には `edit_timeline` を使います。`shiftLayerFrames` は他のレイヤーをずらさず、1つのレイヤーの内容を後ろへ移動します。構造を変更した後は、スクリプトの編集や適用の前に必ず `export_scripts` を再実行してください。レイヤーやフレームの削除には `confirm: true` が必要です。
 - ライブラリの整理には `edit_library` を使います（`createFolder`、`moveItem`、`renameItem`、`deleteItem`、`listUnused`）。`apply_scripts` の前に `export_scripts` を再実行してください。`deleteItem` には `confirm: true` が必要で、使用中のアイテムは削除できません。ライブラリが Export 後に変わると Apply は拒否されます。リンケージ名は変更されず、`attachMovie` などコード内の文字列参照も自動では更新されません。
 - 保存したい場合は、Animate 側で手動で保存してください。

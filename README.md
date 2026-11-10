@@ -70,7 +70,6 @@ Notes:
 - When several documents are open, specify which one with `document`.
 - Changes made in Animate after an Export are detected as conflicts on Apply and are not overwritten.
 - Export is refused while unapplied edits exist. Use `force: true` only when it is fine to discard them.
-- To add a script to a frame with none, create `as/<frame>.as` in the timeline directory (use `.js` for HTML5 Canvas), then run `apply_scripts`; scripts inside tween spans are refused.
 - Use `edit_timeline` for layer and frame structure changes; `shiftLayerFrames` moves one layer's content later without shifting other layers. Always run `export_scripts` again before editing or applying scripts; layer and frame deletions require `confirm: true`.
 - Use `edit_library` to organize folders and library items (`createFolder`, `moveItem`, `renameItem`, `deleteItem`, `listUnused`). Re-export with `export_scripts` before `apply_scripts`; `deleteItem` requires `confirm: true` and refuses items in use. Apply is refused if the library changed after Export. Linkage names are not changed, and code-string references such as `attachMovie` are not updated.
 - To save, save manually in Animate.
