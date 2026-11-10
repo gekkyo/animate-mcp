@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
+import { clearPreviousExport, collectEdits, markApplied } from "../src/apply.js";
 import { layersLog, SCENE_FILE, scriptsLog, symbolLayersLog, text, withServer } from "./helpers/fake-animate.js";
 
 test("apply_scripts writes edits, deletes on empty file, skips unchanged", { timeout: 30_000 }, async () => {
@@ -38,6 +39,33 @@ test("apply_scripts writes edits, deletes on empty file, skips unchanged", { tim
         assert.deepEqual((await scriptsLog(tempDir)).at(-1), [""], "empty file deletes the script");
     });
 });
+
+test("apply manifest lifecycle is idempotent and clears only exported files", { timeout: 30_000 }, () =>
+    withServer({}, async (client, tempDir) => {
+        const exportDir = join(tempDir, "out");
+        await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const scriptPath = join(exportDir, SCENE_FILE);
+        await writeFile(scriptPath, "play();");
+
+        const pending = await collectEdits(exportDir);
+        assert.deepEqual(
+            pending.edits.map(({ file }) => file),
+            [SCENE_FILE],
+        );
+        await markApplied(exportDir, pending.edits);
+
+        const collectedAgain = await collectEdits(exportDir);
+        assert.deepEqual(collectedAgain.edits, []);
+        assert.equal(collectedAgain.unchanged, 2);
+
+        const untrackedPath = join(exportDir, "keep.txt");
+        await writeFile(untrackedPath, "keep");
+        await clearPreviousExport(exportDir, false);
+        await assert.rejects(readFile(scriptPath), { code: "ENOENT" });
+        assert.equal(await readFile(untrackedPath, "utf8"), "keep");
+        assert.ok((await readdir(exportDir)).includes(".export.json"));
+    }),
+);
 
 test("apply_scripts counts a frame already holding the new script as applied", { timeout: 30_000 }, () =>
     withServer({ FAKE_SCRIPT: "play();" }, async (client, tempDir) => {
@@ -331,9 +359,14 @@ test("apply_scripts writes new scripts in library symbol timelines", { timeout: 
 );
 
 test("apply_scripts applies existing edits before new scripts across timelines", { timeout: 30_000 }, () =>
-    withServer({}, async (client, tempDir) => {
+    withServer({ FAKE_SCRIPT: "changed" }, async (client, tempDir) => {
         const exportDir = join(tempDir, "out");
         await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+        const manifestPath = join(exportDir, ".export.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        manifest.files[SCENE_FILE].script = "old";
+        await writeFile(manifestPath, JSON.stringify(manifest));
+        await writeFile(join(exportDir, SCENE_FILE), "mine");
         await writeFile(join(exportDir, "library/dir/Hero/L/1.as"), "play();");
         const newFile = "scenes/Scene 1/as/1.as";
         await mkdir(join(exportDir, "scenes/Scene 1/as"), { recursive: true });
@@ -341,7 +374,21 @@ test("apply_scripts applies existing edits before new scripts across timelines",
 
         const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
         assert.equal(result.isError, undefined, text(result));
-        assert.deepEqual((await readFile(join(tempDir, "log.order"), "utf8")).trim().split("\n"), ["edits", "new"]);
+        const summary = result.structuredContent as { applied: string[]; failed: { file: string }[] };
+        assert.deepEqual(summary.applied, ["library/dir/Hero/L/1.as", newFile]);
+        assert.deepEqual(
+            summary.failed.map(({ file }) => file),
+            [SCENE_FILE],
+        );
+        assert.deepEqual((await readFile(join(tempDir, "log.order"), "utf8")).trim().split("\n"), [
+            "edits",
+            "edits",
+            "new",
+        ]);
+        const appliedManifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        assert.equal(appliedManifest.files[SCENE_FILE].script, "old", "failed edit stays pending");
+        assert.equal(appliedManifest.files["library/dir/Hero/L/1.as"].script, "play();");
+        assert.equal(appliedManifest.files[newFile].script, "trace('new');");
     }),
 );
 

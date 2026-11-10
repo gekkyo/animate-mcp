@@ -35,6 +35,51 @@ function selectChunkEntries<T extends { item?: string }>(entries: T[], selectedI
     return selected;
 }
 
+/** Builds scene and bounded library-item batches for an Apply run.
+ * @param edits Existing script edits to batch
+ * @param newScripts New frame scripts to batch
+ * @param fingerprints Timeline fingerprints to include with each batch
+ * @returns Scene batch followed by library-item batches
+ */
+function buildEditChunks(
+    edits: ApplyPayload["edits"],
+    newScripts: ApplyPayload["newScripts"],
+    fingerprints: ApplyPayload["fingerprints"],
+): Pick<ApplyPayload, "edits" | "newScripts" | "fingerprints">[] {
+    const chunks: Pick<ApplyPayload, "edits" | "newScripts" | "fingerprints">[] = [
+        {
+            edits: selectChunkEntries(edits),
+            newScripts: selectChunkEntries(newScripts),
+            fingerprints: selectChunkEntries(fingerprints),
+        },
+    ];
+    const itemNames = [...edits, ...newScripts]
+        .map(
+            /** Gets the library item associated with an edit.
+             * @param edit Script edit to inspect
+             * @returns Its library item, if any
+             */
+            (edit) => edit.item,
+        )
+        .filter(
+            /** Keeps only defined library item names.
+             * @param item Optional library item name
+             * @returns Whether the name is defined
+             */
+            (item): item is string => item !== undefined,
+        );
+    const timelineItems = [...new Set(itemNames)];
+    for (let startIndex = 0; startIndex < timelineItems.length; startIndex += TIMELINES_PER_RUN) {
+        const selectedItems = new Set(timelineItems.slice(startIndex, startIndex + TIMELINES_PER_RUN));
+        chunks.push({
+            edits: selectChunkEntries(edits, selectedItems),
+            newScripts: selectChunkEntries(newScripts, selectedItems),
+            fingerprints: selectChunkEntries(fingerprints, selectedItems),
+        });
+    }
+    return chunks;
+}
+
 /**
  * Registers the apply_scripts tool.
  * @param server MCP server to register the tool with
@@ -86,42 +131,8 @@ export function registerApplyScripts(
             const warnings: string[] = [...collectWarnings];
             const newApplied: AppliedNewScript[] = [];
             const fingerprintUpdates: TimelineFingerprint[] = [];
-            // Scenes go in one Run; symbols go 10 timelines (items) per Run
-            const editChunks: {
-                edits: typeof edits;
-                newScripts: typeof newScripts;
-                fingerprints: typeof fingerprints;
-            }[] = [
-                {
-                    edits: selectChunkEntries(edits),
-                    newScripts: selectChunkEntries(newScripts),
-                    fingerprints: selectChunkEntries(fingerprints),
-                },
-            ];
-            const itemNames = [...edits, ...newScripts]
-                .map(
-                    /** Gets the library item associated with an edit.
-                     * @param edit Script edit to inspect
-                     * @returns Its library item, if any
-                     */
-                    (edit) => edit.item,
-                )
-                .filter(
-                    /** Keeps only defined library item names.
-                     * @param item Optional library item name
-                     * @returns Whether the name is defined
-                     */
-                    (item): item is string => item !== undefined,
-                );
-            const timelineItems = [...new Set(itemNames)];
-            for (let startIndex = 0; startIndex < timelineItems.length; startIndex += TIMELINES_PER_RUN) {
-                const selectedItems = new Set(timelineItems.slice(startIndex, startIndex + TIMELINES_PER_RUN));
-                editChunks.push({
-                    edits: selectChunkEntries(edits, selectedItems),
-                    newScripts: selectChunkEntries(newScripts, selectedItems),
-                    fingerprints: selectChunkEntries(fingerprints, selectedItems),
-                });
-            }
+            // Scenes go in one Run; symbols go 10 timelines (items) per Run.
+            const editChunks = buildEditChunks(edits, newScripts, fingerprints);
             const progressToken = extra._meta?.progressToken;
             for (let pass = 0; pass < 2; pass++) {
                 for (const [chunkIndex, chunk] of editChunks.entries()) {

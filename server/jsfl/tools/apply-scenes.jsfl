@@ -9,6 +9,7 @@
  * @returns The serialized edit results.
  */
 (function () {
+  // Phase 1: Select the document, preserve edit state, and prepare fingerprint checks.
   var document = selectDocument(), applied = [], failed = [], warnings = [], newApplied = [], editingItemName = "";
   var createdAsTimelines = {}, fingerprintMismatch = {}, restore = saveEditState(document);
 
@@ -107,6 +108,7 @@
     return fingerprintMismatch[key];
   }
 
+  // Phase 2: Apply existing-file edits after validating timeline fingerprints.
   for (var editIndex = 0; editIndex < __edits.length; editIndex++) {
     var edit = __edits[editIndex];
     try {
@@ -127,6 +129,7 @@
     }
   }
 
+  // Phase 3: Apply new scripts, creating or reusing the AS layer and keyframes as needed.
   for (var newIndex = 0; newIndex < __newScripts.length; newIndex++) {
     var newScript = __newScripts[newIndex];
     var originalLayerLock = false, targetLayer = null;
@@ -210,6 +213,7 @@
     }
   }
 
+  // Phase 4: Refresh fingerprints, restore edit state, and serialize the result.
   var updatedFingerprints = [], fingerprintedTimelines = {};
   for (var appliedIndex = 0; appliedIndex < newApplied.length; appliedIndex++) {
     var appliedScript = newApplied[appliedIndex], appliedKey = timelineKey(appliedScript);
