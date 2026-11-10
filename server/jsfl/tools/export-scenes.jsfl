@@ -16,5 +16,5 @@
       scenes.push({ name: timelineName, error: String(error && error.message ? error.message : error) });
     }
   }
-  return serialize({ document: document.name, type: document.type, scenes: scenes });
+  return serialize({ document: document.name, type: document.type, scenes: scenes, libraryFingerprint: libraryFingerprint(document.library) });
 })()

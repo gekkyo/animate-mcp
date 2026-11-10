@@ -1,24 +1,15 @@
 import { readdir, readFile, rm } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
+import type { AppliedNewScript, Edit, NewScript, TimelineFingerprint } from "./apply-contract.js";
 import { type ManifestFile, type ManifestTimeline, writeAtomic } from "./export.js";
-
-export type Edit = ManifestFile & { file: string; expected: string };
-export type NewScript = ManifestFile & { file: string; layerDir: string; asLayer: boolean };
-export type AppliedNewScript = ManifestFile & {
-    file: string;
-    layerDir: string;
-    layerName: string;
-    asLayer: boolean;
-};
 
 type Manifest = {
     document: string;
     type: string;
     files: Record<string, ManifestFile>;
     timelines?: ManifestTimeline[];
+    libraryFingerprint?: string;
 };
-
-export type TimelineFingerprint = { scene: number; item?: string; structureFingerprint: string };
 
 const MANIFEST = ".export.json";
 
@@ -28,6 +19,14 @@ const MANIFEST = ".export.json";
  * @returns The manifest (rejects when missing)
  */
 const readManifest = async (dir: string) => JSON.parse(await readFile(join(dir, MANIFEST), "utf8")) as Manifest;
+
+/** Converts a thrown value into the message returned to callers.
+ * @param error Thrown value
+ * @returns Error message or string representation
+ */
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
 
 /**
  * Turns a manifest file name into an absolute path inside the export directory (rejects a manifest that points outside via `../`).
@@ -66,7 +65,7 @@ export async function collectEdits(dir: string) {
                 edits.push({ ...manifestFile, file, script, expected: manifestFile.script });
             }
         } catch (error) {
-            failed.push({ file, error: error instanceof Error ? error.message : String(error) });
+            failed.push({ file, error: errorMessage(error) });
         }
     }
     for (const timeline of manifest.timelines ?? []) {
@@ -77,7 +76,7 @@ export async function collectEdits(dir: string) {
             if ((error as NodeJS.ErrnoException).code === "ENOENT") {
                 continue;
             }
-            failed.push({ file: timeline.dir, error: error instanceof Error ? error.message : String(error) });
+            failed.push({ file: timeline.dir, error: errorMessage(error) });
             continue;
         }
         const topAsLayer = timeline.layers
@@ -117,7 +116,7 @@ export async function collectEdits(dir: string) {
             } catch (error) {
                 failed.push({
                     file: `${timeline.dir}/${layerEntry.name}`,
-                    error: error instanceof Error ? error.message : String(error),
+                    error: errorMessage(error),
                 });
                 continue;
             }
@@ -159,7 +158,7 @@ export async function collectEdits(dir: string) {
                         asLayer,
                     });
                 } catch (error) {
-                    failed.push({ file, error: error instanceof Error ? error.message : String(error) });
+                    failed.push({ file, error: errorMessage(error) });
                 }
             }
         }
@@ -192,7 +191,16 @@ export async function collectEdits(dir: string) {
                 structureFingerprint: timeline.structureFingerprint as string,
             }),
         );
-    return { document: manifest.document, edits, newScripts, unchanged, failed, warnings, fingerprints };
+    return {
+        document: manifest.document,
+        libraryFingerprint: manifest.libraryFingerprint,
+        edits,
+        newScripts,
+        unchanged,
+        failed,
+        warnings,
+        fingerprints,
+    };
 }
 
 /**
@@ -212,19 +220,21 @@ export async function markApplied(
         return;
     }
     const manifest = await readManifest(dir);
+    /** Finds the manifest timeline identified by scene and library item.
+     * @param scene Scene index
+     * @param item Optional library item name
+     * @returns Matching timeline, if present
+     */
+    function findTimeline(scene: number, item: string | undefined): ManifestTimeline | undefined {
+        return manifest.timelines?.find((entry) => entry.scene === scene && entry.item === item);
+    }
     for (const edit of edits) {
         if (manifest.files[edit.file]) {
             manifest.files[edit.file].script = edit.script;
         }
     }
     for (const newScript of newScripts) {
-        const timeline = manifest.timelines?.find(
-            /** Finds the manifest timeline corresponding to a new script.
-             * @param entry Timeline manifest entry to check
-             * @returns The matching timeline, if present
-             */
-            (entry) => entry.scene === newScript.scene && entry.item === newScript.item,
-        );
+        const timeline = findTimeline(newScript.scene, newScript.item);
         if (!timeline) {
             continue;
         }
@@ -265,13 +275,7 @@ export async function markApplied(
         };
     }
     for (const fingerprint of fingerprints) {
-        const timeline = manifest.timelines?.find(
-            /** Finds the manifest timeline corresponding to a fingerprint.
-             * @param entry Timeline manifest entry to check
-             * @returns The matching timeline, if present
-             */
-            (entry) => entry.scene === fingerprint.scene && entry.item === fingerprint.item,
-        );
+        const timeline = findTimeline(fingerprint.scene, fingerprint.item);
         if (timeline) {
             timeline.structureFingerprint = fingerprint.structureFingerprint;
         }

@@ -67,6 +67,21 @@ function exportTimeline(timeline) {
   return layers;
 }
 
+/** Hashes text with 32-bit FNV-1a.
+ * @param text Text to hash.
+ * @returns The hash as "fnv1a32:" plus 8 hex digits.
+ */
+function fnv1a32(text) {
+  var hash = 2166136261;
+  for (var characterIndex = 0; characterIndex < text.length; characterIndex++) {
+    hash ^= text.charCodeAt(characterIndex);
+    hash = (hash + (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)) >>> 0;
+  }
+  var hex = hash.toString(16);
+  while (hex.length < 8) hex = "0" + hex;
+  return "fnv1a32:" + hex;
+}
+
 /** Hashes timeline structure without script contents so edits can detect stale exports.
  * @param timeline The timeline whose structure to hash.
  * @returns The structure fingerprint.
@@ -89,12 +104,18 @@ function structureFingerprint(timeline) {
     }
     structure.push([layer.name || "", layer.layerType || "normal", parentIndex, keyframes]);
   }
-  var text = serialize(structure), hash = 2166136261;
-  for (var characterIndex = 0; characterIndex < text.length; characterIndex++) {
-    hash ^= text.charCodeAt(characterIndex);
-    hash = (hash + (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)) >>> 0;
+  return fnv1a32(serialize(structure));
+}
+
+/** Hashes sorted library item types and paths so library edits invalidate old exports.
+ * @param library Animate document library.
+ * @returns The library fingerprint.
+ */
+function libraryFingerprint(library) {
+  var items = [], libraryItems = library.items;
+  for (var itemIndex = 0; itemIndex < libraryItems.length; itemIndex++) {
+    items.push(String(libraryItems[itemIndex].itemType || "") + "|" + String(libraryItems[itemIndex].name || ""));
   }
-  var hex = hash.toString(16);
-  while (hex.length < 8) hex = "0" + hex;
-  return "fnv1a32:" + hex;
+  items.sort();
+  return fnv1a32(serialize(items));
 }

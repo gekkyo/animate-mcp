@@ -1,7 +1,7 @@
 // Concatenated and evaluated after export-common and edit-state. `var __docName`, `var __edits`
 // ([{file, scene, layer, start, expected, script, item?}]) and `var __newScripts`
 // ([{file, scene, layer, start, script, item?, layerDir, asLayer}]) and `var __fingerprints`
-// ([{scene, item?, structureFingerprint}]) are injected before it.
+// ([{scene, item?, structureFingerprint}]) are injected before it; their contract is in server/src/apply-contract.ts.
 // A frame changed in Animate since Export is not written and goes to failed (if it already equals script it counts as applied).
 // An empty script deletes the frame script. New scripts are applied after existing-file edits.
 // Symbols are edited in edit mode, so the original edit state is restored at the end (warning if it cannot be).
@@ -9,8 +9,19 @@
  * @returns The serialized edit results.
  */
 (function () {
+  // Phase 1: Select the document, preserve edit state, and prepare fingerprint checks.
   var document = selectDocument(), applied = [], failed = [], warnings = [], newApplied = [], editingItemName = "";
   var createdAsTimelines = {}, fingerprintMismatch = {}, restore = saveEditState(document);
+
+  if (__libraryFingerprint && libraryFingerprint(document.library) !== __libraryFingerprint) {
+    for (var libraryEditIndex = 0; libraryEditIndex < __edits.length; libraryEditIndex++) {
+      failed.push({ file: __edits[libraryEditIndex].file, error: "Library changed since Export; export again" });
+    }
+    for (var libraryNewIndex = 0; libraryNewIndex < __newScripts.length; libraryNewIndex++) {
+      failed.push({ file: __newScripts[libraryNewIndex].file, error: "Library changed since Export; export again" });
+    }
+    return serialize({ applied: applied, failed: failed, warning: "", warnings: warnings, newApplied: newApplied, fingerprints: [] });
+  }
 
   /** Returns the requested scene or library-item timeline.
    * @param edit The edit identifying the target timeline.
@@ -52,6 +63,37 @@
     return length;
   }
 
+  /** Ensures a new script has an editable keyframe at the requested frame.
+   * @param timeline Timeline receiving the keyframe.
+   * @param layer Target layer receiving the keyframe.
+   * @param layerIndex Target layer index.
+   * @param frameIndex Zero-based frame index.
+   * @returns The target frame and whether a keyframe was inserted.
+   */
+  function ensureKeyframe(timeline, layer, layerIndex, frameIndex) {
+    var frame = layer.frames[frameIndex];
+    if (frame && frame.startFrame === frameIndex) {
+      if ((frame.actionScript || "") !== "") {
+        throw new Error("Changed in Animate since Export");
+      }
+      return { frame: frame, inserted: false };
+    }
+    if (frame) {
+      var spanStart = frame.startFrame, span = layer.frames[spanStart];
+      if (!span || (span.tweenType || "none") !== "none") {
+        throw new Error("Frame is inside a tween");
+      }
+    }
+    timeline.currentLayer = layerIndex;
+    timeline.currentFrame = frameIndex;
+    timeline.insertKeyframe(frameIndex);
+    frame = layer.frames[frameIndex];
+    if (!frame || frame.startFrame !== frameIndex) {
+      throw new Error("Frame no longer exists");
+    }
+    return { frame: frame, inserted: true };
+  }
+
   /** Finds the exported fingerprint for a scene or library timeline.
    * @param edit The edit identifying the target timeline.
    * @returns The exported structure fingerprint, or an empty string when none exists.
@@ -76,6 +118,7 @@
     return fingerprintMismatch[key];
   }
 
+  // Phase 2: Apply existing-file edits after validating timeline fingerprints.
   for (var editIndex = 0; editIndex < __edits.length; editIndex++) {
     var edit = __edits[editIndex];
     try {
@@ -96,6 +139,7 @@
     }
   }
 
+  // Phase 3: Apply new scripts, creating or reusing the AS layer and keyframes as needed.
   for (var newIndex = 0; newIndex < __newScripts.length; newIndex++) {
     var newScript = __newScripts[newIndex];
     var originalLayerLock = false, targetLayer = null;
@@ -140,34 +184,9 @@
       }
       var insertedKeyframe = false, targetFrame;
       try {
-        targetFrame = targetLayer.frames[newScript.start];
-        if (!targetFrame) {
-          newTimeline.currentLayer = targetLayerIndex;
-          newTimeline.currentFrame = newScript.start;
-          newTimeline.insertKeyframe(newScript.start);
-          targetFrame = targetLayer.frames[newScript.start];
-          if (!targetFrame || targetFrame.startFrame !== newScript.start) {
-            throw new Error("Frame no longer exists");
-          }
-          insertedKeyframe = true;
-        } else if (targetFrame.startFrame === newScript.start) {
-          if ((targetFrame.actionScript || "") !== "") {
-            throw new Error("Changed in Animate since Export");
-          }
-        } else {
-          var spanStart = targetFrame.startFrame, span = targetLayer.frames[spanStart];
-          if (!span || (span.tweenType || "none") !== "none") {
-            throw new Error("Frame is inside a tween");
-          }
-          newTimeline.currentLayer = targetLayerIndex;
-          newTimeline.currentFrame = newScript.start;
-          newTimeline.insertKeyframe(newScript.start);
-          targetFrame = targetLayer.frames[newScript.start];
-          if (!targetFrame || targetFrame.startFrame !== newScript.start) {
-            throw new Error("Frame no longer exists");
-          }
-          insertedKeyframe = true;
-        }
+        var keyframe = ensureKeyframe(newTimeline, targetLayer, targetLayerIndex, newScript.start);
+        targetFrame = keyframe.frame;
+        insertedKeyframe = keyframe.inserted;
         targetFrame.actionScript = newScript.script;
       } finally {
         if (originalLayerLock) {
@@ -204,6 +223,7 @@
     }
   }
 
+  // Phase 4: Refresh fingerprints, restore edit state, and serialize the result.
   var updatedFingerprints = [], fingerprintedTimelines = {};
   for (var appliedIndex = 0; appliedIndex < newApplied.length; appliedIndex++) {
     var appliedScript = newApplied[appliedIndex], appliedKey = timelineKey(appliedScript);
