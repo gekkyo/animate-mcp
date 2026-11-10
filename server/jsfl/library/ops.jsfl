@@ -49,6 +49,9 @@
       }
       libraryChanged = true;
       document.library.newFolder(op.path);
+      if (!document.library.itemExists(op.path)) {
+        throw new Error("Library folder creation failed: " + op.path);
+      }
       return { path: op.path };
     }
     if (op.op === "moveItem") {
@@ -72,6 +75,9 @@
       if (targetPath !== op.item) {
         libraryChanged = true;
         document.library.moveToFolder(op.toFolder, op.item, false);
+        if (!document.library.itemExists(targetPath)) {
+          throw new Error("Library item move failed: " + op.item);
+        }
       }
       return { name: targetPath, itemType: item.itemType };
     }
@@ -113,6 +119,9 @@
       linked = containsLibraryLinkage(op.item, item);
       libraryChanged = true;
       document.library.deleteItem(op.item);
+      if (document.library.itemExists(op.item)) {
+        throw new Error("Library item delete failed: " + op.item);
+      }
       if (linked) {
         warnings.push(libraryLinkageWarning());
       }

@@ -20,7 +20,7 @@
     for (var libraryNewIndex = 0; libraryNewIndex < __newScripts.length; libraryNewIndex++) {
       failed.push({ file: __newScripts[libraryNewIndex].file, error: "Library changed since Export; export again" });
     }
-    return serialize({ applied: applied, failed: failed, warning: "", warnings: warnings, newApplied: newApplied, fingerprints: [], libraryMismatch: true });
+    return serialize({ applied: applied, failed: failed, warning: "", warnings: warnings, newApplied: newApplied, fingerprints: [] });
   }
 
   /** Returns the requested scene or library-item timeline.
@@ -237,5 +237,5 @@
     fingerprintedTimelines[appliedKey] = true;
   }
   var warning = editingItemName ? restore() : "";
-  return serialize({ applied: applied, failed: failed, warning: warning, warnings: warnings, newApplied: newApplied, fingerprints: updatedFingerprints, libraryMismatch: false });
+  return serialize({ applied: applied, failed: failed, warning: warning, warnings: warnings, newApplied: newApplied, fingerprints: updatedFingerprints });
 })();

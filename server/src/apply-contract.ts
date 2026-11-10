@@ -29,7 +29,6 @@ export type ApplyResult = {
     warnings: string[];
     newApplied: AppliedNewScript[];
     fingerprints: TimelineFingerprint[];
-    libraryMismatch?: boolean;
 };
 
 /** Builds the JSFL variable declarations for an apply payload.

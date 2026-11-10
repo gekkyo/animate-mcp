@@ -139,18 +139,6 @@ export function registerApplyScripts(
             const warnings: string[] = [...collectWarnings];
             const newApplied: AppliedNewScript[] = [];
             const fingerprintUpdates: TimelineFingerprint[] = [];
-            if (expectedLibraryFingerprint && (edits.length > 0 || newScripts.length > 0)) {
-                const preflight = await applyChunk([], [], [], expectedLibraryFingerprint);
-                if (preflight.libraryMismatch) {
-                    const message = "Library changed since Export; export again";
-                    const mismatchFailures = [...edits, ...newScripts].map((edit) => ({
-                        file: edit.file,
-                        error: message,
-                    }));
-                    const result = { applied, failed: [...failed, ...mismatchFailures], unchanged, warnings };
-                    return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
-                }
-            }
             // Scenes go in one Run; symbols go 10 timelines (items) per Run.
             const editChunks = buildEditChunks(edits, newScripts, fingerprints);
             const progressToken = extra._meta?.progressToken;
