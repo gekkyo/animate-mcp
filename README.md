@@ -70,7 +70,8 @@ Notes:
 - When several documents are open, specify which one with `document`.
 - Changes made in Animate after an Export are detected as conflicts on Apply and are not overwritten.
 - Export is refused while unapplied edits exist. Use `force: true` only when it is fine to discard them.
-- Use `edit_timeline` for layer and frame structure changes; `shiftLayerFrames` moves one layer's content later without shifting other layers. Always run `export_scripts` again before editing or applying scripts; layer and frame deletions require `confirm: true`.
+- Use `inspect_timeline` to check instances and tweens instead of `run_jsfl`; use `edit_timeline`'s `distributeToLayers` operation to split a layer. `shiftLayerFrames` moves one layer's content later without shifting other layers. Always run `export_scripts` again before editing or applying scripts; layer and frame deletions require `confirm: true`.
+- Use `edit_tween` to animate instances; motion is the default and ease presets include quad, cubic, quart, quint, sine, expo, circ and back. Re-export with `export_scripts` before editing or applying scripts.
 - Use `edit_library` to organize folders and library items (`createFolder`, `moveItem`, `renameItem`, `deleteItem`, `listUnused`). Re-export with `export_scripts` before `apply_scripts`; `deleteItem` requires `confirm: true` and refuses items in use. Apply is refused if the library changed after Export. Linkage names are not changed, and code-string references such as `attachMovie` are not updated.
 - To save, save manually in Animate.
 - Both ActionScript 3 and HTML5 Canvas documents are supported.
@@ -80,7 +81,9 @@ Notes:
 | Tool                | Description                                                                                  |
 |---------------------|----------------------------------------------------------------------------------------------|
 | `export_scripts`    | Writes the timeline structure and all frame scripts (scenes and library symbols)             |
-| `edit_timeline`     | Adds, removes, moves and edits layers and frames in a scene or library symbol                |
+| `inspect_timeline`  | Reads layer spans and element properties at a frame in a scene or library symbol             |
+| `edit_timeline`     | Adds, removes, moves, edits, and distributes layers and frames in a scene or library symbol  |
+| `edit_tween`        | Creates motion or classic tweens for instances and changes easing                           |
 | `edit_library`      | Organizes library folders and items, and lists unused items                                  |
 | `apply_scripts`     | Writes edited scripts back into the open document                                            |
 | `get_document_info` | Returns name, size, frame rate and timeline names of the open documents                      |

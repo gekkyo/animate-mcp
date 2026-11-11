@@ -20,6 +20,32 @@ const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
 const lib = { name: "Hero", itemType: "movie clip" };
+/** Simulates Animate's read-only color-effect properties. */
+const lockColorEffectProperties = (element) => {
+  Object.defineProperties(element, {
+    __fakeBrightness: { value: element.brightness, writable: true, configurable: true },
+    __fakeTintColor: { value: element.tintColor, writable: true, configurable: true },
+    __fakeTintPercent: { value: element.tintPercent, writable: true, configurable: true },
+    brightness: { enumerable: true, configurable: true, get() { return this.__fakeBrightness; } },
+    tintColor: { enumerable: true, configurable: true, get() { return this.__fakeTintColor; } },
+    tintPercent: { enumerable: true, configurable: true, get() { return this.__fakeTintPercent; } },
+  });
+};
+/** Creates a fake Animate symbol instance with a writable transformation point.
+ * @param name Instance name
+ * @param x Horizontal position
+ * @param libraryItem Referenced library symbol
+ * @returns The fake symbol instance
+ */
+const makeInstance = (name, x, libraryItem = lib) => ({ elementType: "instance", name, libraryItem, x, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0, matrix: { a: 1, b: 0, c: 0, d: 1, tx: x, ty: 0 }, transformationPoint: { x: 2, y: 3 }, colorMode: "alpha", colorAlphaPercent: 75, colorAlphaAmount: 75, brightness: 0, colorBrightnessPercent: 0, tintColor: "#FFFFFF", tintPercent: 0, color: "#ffffff", colorTintPercent: 0, colorRedPercent: 100, colorGreenPercent: 100, colorBluePercent: 100, colorRedAmount: 0, colorGreenAmount: 0, colorBlueAmount: 0, filters: [], blendMode: "normal", visible: true, cacheAsBitmap: false, loop: "loop", firstFrame: 1, lastFrame: 5, trackAsMenu: false,
+  /** Reads the fake transformation point. @returns The transformation point */
+  getTransformationPoint() { return this.transformationPoint; },
+  /** Writes the fake transformation point.
+   * @param point New transformation point
+   * @returns Nothing
+   */
+  setTransformationPoint(point) { this.transformationPoint = { x: point.x, y: point.y }; }
+});
 /**
  * Creates a fake Animate keyframe with default properties and any supplied overrides.
  * @param startFrame Starting frame index
@@ -27,7 +53,24 @@ const lib = { name: "Hero", itemType: "movie clip" };
  * @param extra Additional keyframe properties to apply
  * @returns The constructed keyframe
  */
-const makeKeyframe = (startFrame, duration, extra) => Object.assign({ startFrame, duration, name: "", tweenType: "none", actionScript: "", elements: [] }, extra);
+const makeKeyframe = (startFrame, duration, extra) => Object.assign({ startFrame, duration, name: "", tweenType: "none", actionScript: "", elements: [],
+  /** Stores fake classic custom-ease points. @param group Tween property group @param points Ease control points @returns Nothing */
+  setCustomEase(group, points) { this.customEases = this.customEases || {}; this.customEases[group] = points; },
+  /** Returns a minimal fake motion-object XML graph for tween tests. */
+  getMotionObjectXML() {
+    const timeline = this.__fakeTimeline;
+    if (timeline) {
+      const layerIndex = timeline.layers.findIndex((candidate) => candidate.frames.includes(this));
+      const selected = timeline.selectedFrames;
+      if (timeline.currentLayer !== layerIndex || !selected || selected[0] !== layerIndex || selected[1] !== this.startFrame || selected[2] !== this.startFrame + 1) {
+        throw new Error("motion XML requested without selecting its layer and frame");
+      }
+    }
+    return this.motionXML || '<AnimationCore TimeScale="24000" Version="1" duration="5000"><PropertyContainer id="Basic_Motion"><Property id="Motion_X"><Keyframe anchor="0,0" next="0,0" previous="0,0" roving="0" timevalue="0"/></Property><Property id="Motion_Y"><Keyframe anchor="0,0" next="0,0" previous="0,0" roving="0" timevalue="0"/></Property><Property id="Rotation_Z"><Keyframe anchor="0,0" next="0,0" previous="0,0" roving="0" timevalue="0"/></Property></PropertyContainer><PropertyContainer id="Transformation"><Property id="Scale_X"><Keyframe anchor="0,100" next="0,100" previous="0,100" roving="0" timevalue="0"/></Property><Property id="Scale_Y"><Keyframe anchor="0,100" next="0,100" previous="0,100" roving="0" timevalue="0"/></Property></PropertyContainer><PropertyContainer id="Colors"><Property id="Alpha_Amount"><Keyframe anchor="0,100" next="0,100" previous="0,100" roving="0" timevalue="0"/></Property><Property id="Brightness_Amount"><Keyframe anchor="0,0" next="0,0" previous="0,0" roving="0" timevalue="0"/></Property></PropertyContainer></AnimationCore>';
+  },
+  /** Stores a fake motion-object XML graph. @param xml XML graph to store */
+  setMotionObjectXML(xml) { this.motionXML = xml; }
+}, extra);
 // Like real Animate, layer.frames has one element per frame (the keyframe's frame repeated duration times)
 /**
  * Expands keyframes into one entry per timeline frame.
@@ -139,7 +182,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
       if (oldFrame.startFrame === frameNumber) return;
       const oldEnd = oldFrame.startFrame + oldFrame.duration;
       oldFrame.duration = frameNumber - oldFrame.startFrame;
-      const insertedFrame = Object.assign({}, oldFrame, { startFrame: frameNumber, duration: oldEnd - frameNumber, actionScript: "" });
+      const insertedFrame = Object.assign({}, oldFrame, { startFrame: frameNumber, duration: oldEnd - frameNumber, actionScript: "", elements: oldFrame.elements.map((element) => Object.assign({}, element, { filters: (element.filters || []).map((filter) => Object.assign({}, filter)) })) });
       for (let index = frameNumber; index < oldEnd; index++) { currentLayer.frames[index] = insertedFrame; }
       if (process.env.FAKE_PERSIST_AS && currentLayer.name.toLowerCase() === "as") {
         writeFileSync(process.env.FAKE_LOG + ".as-keyframe-created", "yes");
@@ -196,8 +239,39 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
      * @param startFrameIndex Zero-based start frame index
      * @param endFrameIndex Exclusive end frame index
      */
+    getSelectedFrames() { return this.selectedFrames ? this.selectedFrames.slice() : []; },
     setSelectedFrames(startFrameIndex, endFrameIndex) {
-      this.selectedFrames = [this.currentLayer, startFrameIndex, endFrameIndex];
+      if (Array.isArray(startFrameIndex)) {
+        this.selectedFrames = startFrameIndex.slice();
+        if (this.selectedFrames.length) this.currentLayer = this.selectedFrames[0];
+      } else {
+        this.selectedFrames = [this.currentLayer, startFrameIndex, endFrameIndex];
+      }
+    },
+    /** Creates a fake motion-object span from a zero-based start to an exclusive end.
+     * @param startFrameIndex Zero-based start frame
+     * @param endFrameIndex Exclusive end frame
+     * @returns Nothing
+     */
+    createMotionObject(startFrameIndex, endFrameIndex) {
+      const target = this.layers[this.currentLayer];
+      this.insertKeyframe(startFrameIndex);
+      const frame = target.frames[startFrameIndex];
+      frame.tweenType = "motion object";
+      for (let index = startFrameIndex; index < endFrameIndex; index++) target.frames[index] = frame;
+      this.recalculateLayer(target);
+    },
+    /** Creates a fake classic tween between adjacent keyframes.
+     * @param startFrameIndex Zero-based start frame
+     * @param endFrameIndex Exclusive end frame
+     * @returns Nothing
+     */
+    createMotionTween(startFrameIndex, endFrameIndex) {
+      const target = this.layers[this.currentLayer];
+      const frame = target.frames[startFrameIndex];
+      frame.tweenType = "motion";
+      frame.duration = endFrameIndex - startFrameIndex;
+      this.recalculateLayer(target);
     },
     /** Cuts the selected range from its layer into the timeline clipboard. */
     cutFrames() {
@@ -260,15 +334,18 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
      */
     addNewLayer(layerName, layerType, addAbove) {
       const newLayer = layer(layerName, expand([makeKeyframe(0, this.frameCount)]), layerType);
-      const index = this.layers.length ? this.currentLayer + (addAbove ? 0 : 1) : 0;
-      this.layers.splice(index, 0, newLayer);
-      this.currentLayer = index;
+      const insertIndex = this.layers.length ? this.currentLayer + (addAbove ? 0 : 1) : 0;
+      this.layers.splice(insertIndex, 0, newLayer);
+      this.currentLayer = insertIndex;
       if (process.env.FAKE_PERSIST_AS && layerName.toLowerCase() === "as") {
         writeFileSync(process.env.FAKE_LOG + ".as-created", "yes");
       }
-      return index;
+      return insertIndex;
     },
   };
+  for (const candidate of layers) for (const frame of new Set(candidate.frames)) {
+    Object.defineProperty(frame, "__fakeTimeline", { value: timeline, configurable: true });
+  }
   return timeline;
 };
 /**
@@ -285,19 +362,59 @@ const symTimeline = (symbolName, script) => makeTimeline(symbolName, 1, [layer("
  * @returns The constructed fake document
  */
 const doc = (documentName, documentType) => {
-  const sceneFrames = [
-    makeKeyframe(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [{ name: "hero", elementType: "instance", libraryItem: lib }] }),
-    makeKeyframe(2, 3, { name: "end", ...(process.env.FAKE_TWEEN ? { tweenType: process.env.FAKE_TWEEN } : {}), elements: [{ name: "", elementType: "instance", libraryItem: lib }] }),
+  const distributeLib = { name: "dir/Hero", itemType: "movie clip" };
+  const distributeElements = [makeInstance("hero", 10, distributeLib), makeInstance("", 20, distributeLib), makeInstance("hero", 30, distributeLib)];
+  distributeElements[1].colorMode = "tint";
+  distributeElements[1].tintColor = "#336699";
+  distributeElements[1].tintPercent = 35;
+  distributeElements[1].color = "#336699";
+  distributeElements[1].colorTintPercent = 35;
+  if (process.env.FAKE_DISTRIBUTE_BRIGHTNESS) {
+    distributeElements[2].colorMode = "brightness";
+    distributeElements[2].brightness = 42;
+    distributeElements[2].colorBrightnessPercent = 42;
+  }
+  distributeElements[2].filters = [{ name: "blurFilter", blurX: 8, blurY: 6, quality: "high", enabled: false, color: "#123456", distance: 9, angle: 30, inner: true, knockout: true, hideObject: true }];
+  if (process.env.FAKE_DISTRIBUTE_BAD_ELEMENT) distributeElements[0].elementType = "shape";
+  if (process.env.FAKE_READONLY_COLOR_PROPERTIES) distributeElements.forEach(lockColorEffectProperties);
+  const sceneFrames = process.env.FAKE_DISTRIBUTE ? [makeKeyframe(0, 5, {
+    ...(process.env.FAKE_DISTRIBUTE_TWEEN ? { tweenType: process.env.FAKE_DISTRIBUTE_TWEEN } : {}),
+    ...(process.env.FAKE_DISTRIBUTE_ACTIONSCRIPT ? { actionScript: "stop();" } : {}),
+    ...(process.env.FAKE_DISTRIBUTE_LABEL ? { name: "label" } : {}),
+    elements: distributeElements,
+  })] : [
+    makeKeyframe(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [makeInstance("hero", Number(process.env.FAKE_INITIAL_X ?? 0))] }),
+    makeKeyframe(2, 3, { name: "end", ...(process.env.FAKE_TWEEN ? { tweenType: process.env.FAKE_TWEEN } : {}), elements: [makeInstance(process.env.FAKE_INSTANCE_CONTINUES ? "hero" : "", Number(process.env.FAKE_INITIAL_X ?? 0))] }),
   ];
+  if (process.env.FAKE_INITIAL_BRIGHTNESS !== undefined) {
+    for (const frame of sceneFrames) for (const element of frame.elements || []) {
+      element.colorMode = "brightness";
+      element.brightness = Number(process.env.FAKE_INITIAL_BRIGHTNESS);
+      element.colorBrightnessPercent = 0;
+    }
+  }
+  if (process.env.FAKE_INSPECT_TINT) {
+    sceneFrames[1].elements[0].colorMode = "tint";
+    sceneFrames[1].elements[0].tintColor = "#336699";
+    sceneFrames[1].elements[0].tintPercent = 35;
+  }
+  if (process.env.FAKE_INSPECT_FILTERS) sceneFrames[1].elements[0].filters = [{ name: "blurFilter", blurX: 8, blurY: 4, quality: "high", enabled: false, color: "#123456", distance: 9, angle: 30, inner: true, knockout: true, hideObject: true }];
   if (process.env.FAKE_INNER_KEYFRAME) sceneFrames[1].duration = 3;
-  const sceneLayers = [layer("a/b", expand(sceneFrames)),
-    ...(process.env.FAKE_SECOND_LAYER ? [layer(process.env.FAKE_SECOND_LAYER, expand([makeKeyframe(0, Number(process.env.FAKE_SECOND_LENGTH ?? 5))]))] : []),
+  const secondFrame = makeKeyframe(0, Number(process.env.FAKE_SECOND_LENGTH ?? 5), {
+    ...(process.env.FAKE_SECOND_TWEEN ? { tweenType: process.env.FAKE_SECOND_TWEEN } : {}),
+    ...(process.env.FAKE_SECOND_MOTION_XML ? { motionXML: process.env.FAKE_SECOND_MOTION_XML } : {}),
+  });
+  const sceneLayers = [layer("a/b", expand(sceneFrames), "normal", Boolean(process.env.FAKE_LOCK_DISTRIBUTE)),
+    ...(process.env.FAKE_SECOND_LAYER ? [layer(process.env.FAKE_SECOND_LAYER, expand([secondFrame]))] : []),
     layer("dir", [], "folder")];
   if (process.env.FAKE_INNER_KEYFRAME) sceneLayers[0].frames[3] = makeKeyframe(3, 1);
   if (process.env.FAKE_AS_LAYER) {
     sceneLayers.unshift(layer(process.env.FAKE_AS_LAYER, expand([makeKeyframe(0, 5)]), "normal", Boolean(process.env.FAKE_LOCK_AS)));
   }
   const sceneTimeline = makeTimeline("Scene 1", Math.max(5, ...sceneLayers.map((candidate) => candidate.frames.length)), sceneLayers);
+  if (process.env.FAKE_INITIAL_CURRENT_LAYER !== undefined) sceneTimeline.currentLayer = Number(process.env.FAKE_INITIAL_CURRENT_LAYER);
+  if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
+  if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
   const document = { name: documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? "" : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
   let editing = null;
   document.syms = {};
@@ -306,6 +423,110 @@ const doc = (documentName, documentType) => {
    * @returns The currently active timeline
    */
   document.getTimeline = () => editing ? (document.syms[editing] ||= symTimeline(editing, process.env.FAKE_SYM_SCRIPT ?? "// " + editing)) : document.timelines[0];
+  /** Returns elements selected on the current frame.
+   * @returns Currently selected fake instances
+   */
+  Object.defineProperty(document, "selection", { get() {
+    const timeline = document.getTimeline();
+    return timeline.layers.flatMap((candidate) => candidate.frames[timeline.currentFrame]?.elements || []).filter((element) => element.selected);
+  } });
+  /** Clears selection on every instance in the active timeline.
+   * @returns Nothing
+   */
+  document.selectNone = () => {
+    for (const candidate of document.getTimeline().layers) for (const frame of new Set(candidate.frames)) for (const element of frame.elements || []) element.selected = false;
+  };
+  /** Simulates native distribution or Animate's unavailable call.
+   * @returns Nothing
+   */
+  document.distributeToLayers = () => {
+    if (!process.env.FAKE_NATIVE_DISTRIBUTE) throw new Error("currently unavailable");
+    const timeline = document.getTimeline();
+    const sourceLayer = timeline.layers[timeline.currentLayer];
+    const frame = sourceLayer.frames[timeline.currentFrame];
+    const elements = frame.elements.slice();
+    if (process.env.FAKE_NATIVE_DISTRIBUTE_PARTIAL_FAILURE) {
+      frame.elements.shift();
+      const index = timeline.addNewLayer("Native partial", "normal", true);
+      timeline.layers[index].frames[frame.startFrame].elements.push(elements[0]);
+      throw new Error("fake native distribution failure after partial mutation");
+    }
+    if (process.env.FAKE_NATIVE_DISTRIBUTE_BAD_COUNT) {
+      frame.elements = [];
+      const index = timeline.addNewLayer("Native validation", "normal", true);
+      timeline.layers[index].frames[frame.startFrame].elements.push(...elements);
+      return;
+    }
+    frame.elements = [];
+    for (const element of elements) {
+      const index = timeline.addNewLayer("Native", "normal", true);
+      timeline.layers[index].frames[frame.startFrame].elements.push(element);
+    }
+  };
+  /** Selects all instances on the current frame.
+   * @returns Nothing
+   */
+  document.selectAll = () => {
+    for (const candidate of document.getTimeline().layers) for (const element of candidate.frames[document.getTimeline().currentFrame]?.elements || []) element.selected = true;
+  };
+  /** Moves selected instances by a delta.
+   * @param delta Position offset
+   * @returns Nothing
+   */
+  document.moveSelectionBy = (delta) => { for (const element of document.selection) { element.x += delta.x; element.y += delta.y; } };
+  /** Scales selected instances by factors.
+   * @param scaleX Horizontal scale factor
+   * @param scaleY Vertical scale factor
+   * @returns Nothing
+   */
+  document.scaleSelection = (scaleX, scaleY, whichCorner) => {
+    if (whichCorner !== undefined && typeof whichCorner !== "string") throw new Error("invalid scaleSelection reference point");
+    for (const element of document.selection) { element.scaleX *= scaleX; element.scaleY *= scaleY; }
+  };
+  /** Rotates selected instances by degrees.
+   * @param angle Rotation delta
+   * @returns Nothing
+   */
+  document.rotateSelection = (angle, rotationPoint) => {
+    if (rotationPoint !== undefined && typeof rotationPoint !== "string") throw new Error("invalid rotateSelection reference point");
+    for (const element of document.selection) element.rotation += angle;
+  };
+  /** Sets alpha on selected instances.
+   * @param alpha Alpha percentage
+   * @returns Nothing
+   */
+  document.setInstanceAlpha = (alpha) => { for (const element of document.selection) { element.colorMode = "alpha"; element.colorAlphaPercent = alpha; } };
+  /** Sets brightness on selected instances.
+   * @param brightness Brightness percentage
+   * @returns Nothing
+   */
+  document.setInstanceBrightness = (brightness) => { for (const element of document.selection) {
+    element.colorMode = "brightness";
+    element.colorBrightnessPercent = brightness;
+    if (Object.prototype.hasOwnProperty.call(element, "__fakeBrightness")) element.__fakeBrightness = brightness;
+    else element.brightness = brightness;
+  } };
+  /** Sets tint on selected instances.
+   * @param color Hex color
+   * @param amount Tint percentage
+   * @returns Nothing
+   */
+  document.setInstanceTint = (color, amount) => { for (const element of document.selection) {
+    element.colorMode = "tint";
+    element.color = color;
+    element.colorTintPercent = amount;
+    if (Object.prototype.hasOwnProperty.call(element, "__fakeTintColor")) element.__fakeTintColor = color;
+    if (Object.prototype.hasOwnProperty.call(element, "__fakeTintPercent")) element.__fakeTintPercent = amount;
+  } };
+  /** Adds a fake filter to selected instances.
+   * @param name Animate filter name
+   * @returns Nothing
+   */
+  document.addFilter = (name) => {
+    for (const element of document.selection) {
+      if (!element.filters.some((filter) => filter.name === name)) element.filters.push({ name, blurX: 4, blurY: 4, color: name === "glowFilter" ? "#FF0000" : "#000000", quality: "low", inner: false, knockout: false, hideObject: false, strength: 100, distance: 4, angle: 45 });
+    }
+  };
   /** Exits library-item editing mode. */
   document.exitEditMode = () => { editing = null; };
   /** Provides the scene-editing stub required by the fake Animate API. */
@@ -321,6 +542,7 @@ const doc = (documentName, documentType) => {
     { name: "Broken", itemType: "button" },
   ];
   let selectedLibraryItem = null;
+  let addedItemCount = 0;
   const library = {
     items: libraryItems,
     /** Returns library items that are not marked as used by the test environment.
@@ -335,6 +557,29 @@ const doc = (documentName, documentType) => {
      * @returns Whether the path exists.
      */
     itemExists: (path) => libraryItems.some((item) => item.name === path),
+    /** Adds a library item to the current timeline frame.
+     * @param path Library item path
+     * @param position Initial stage position
+     * @returns Nothing
+     */
+    addItemToDocument(position, path) {
+      addedItemCount++;
+      if (process.env.FAKE_FAIL_ADD_ITEM_AFTER && addedItemCount > Number(process.env.FAKE_FAIL_ADD_ITEM_AFTER)) {
+        throw new Error("fake addItemToDocument failure");
+      }
+      const item = libraryItems.find((candidate) => candidate.name === path);
+      if (!item) throw new Error("library item not found");
+      const timeline = document.getTimeline();
+      const currentLayer = timeline.layers[timeline.currentLayer];
+      const frame = currentLayer.frames[timeline.currentFrame];
+      if (!frame || currentLayer.locked) throw new Error("cannot add to layer");
+      const instance = makeInstance("", position.x, item);
+      instance.y = position.y;
+      instance.matrix.tx = position.x;
+      instance.matrix.ty = position.y;
+      if (process.env.FAKE_READONLY_COLOR_PROPERTIES) lockColorEffectProperties(instance);
+      frame.elements.push(instance);
+    },
     /** Creates a library folder and any missing intermediate folders.
      * @param path Folder path.
      * @returns Nothing.
@@ -489,7 +734,8 @@ process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".scripts", JSON.s
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers[0].frames[0].actionScript]))) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym-layers", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers.map((candidate) => ({ name: candidate.name, script: candidate.frames[0]?.actionScript }))]))) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".library", JSON.stringify(docs[0].library.items.map((item) => ({ name: item.name, itemType: item.itemType }))) + "\\n");
-process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".layers", JSON.stringify(docs[0].timelines[0].layers.map((candidate) => ({ name: candidate.name, type: candidate.layerType, parent: candidate.parentLayer?.name, locked: candidate.locked, writeWasUnlocked: candidate.writeWasUnlocked, frames: candidate.frames.map((frame, index) => frame.startFrame === index ? { start: frame.startFrame, duration: frame.duration, script: frame.actionScript, tween: frame.tweenType, label: frame.name } : null).filter(Boolean) }))) + "\\n");
+process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".layers", JSON.stringify(docs[0].timelines[0].layers.map((candidate) => ({ name: candidate.name, type: candidate.layerType, parent: candidate.parentLayer?.name, locked: candidate.locked, writeWasUnlocked: candidate.writeWasUnlocked, frames: candidate.frames.map((frame, index) => frame.startFrame === index ? { start: frame.startFrame, duration: frame.duration, script: frame.actionScript, tween: frame.tweenType, tweenEasing: frame.tweenEasing, hasCustomEase: frame.hasCustomEase, useSingleEaseCurve: frame.useSingleEaseCurve, customEases: frame.customEases, label: frame.name, motionXML: frame.motionXML, elements: frame.elements.map((element) => ({ name: element.name, x: element.x, y: element.y, matrix: element.matrix, transformationPoint: element.getTransformationPoint(), scaleX: element.scaleX, scaleY: element.scaleY, rotation: element.rotation, colorMode: element.colorMode, colorAlphaPercent: element.colorAlphaPercent, colorAlphaAmount: element.colorAlphaAmount, brightness: element.brightness, tintColor: element.tintColor, tintPercent: element.tintPercent, colorBrightnessPercent: element.colorBrightnessPercent, color: element.color, colorTintPercent: element.colorTintPercent, colorRedPercent: element.colorRedPercent, colorGreenPercent: element.colorGreenPercent, colorBluePercent: element.colorBluePercent, colorRedAmount: element.colorRedAmount, colorGreenAmount: element.colorGreenAmount, colorBlueAmount: element.colorBlueAmount, blendMode: element.blendMode, visible: element.visible, cacheAsBitmap: element.cacheAsBitmap, loop: element.loop, firstFrame: element.firstFrame, lastFrame: element.lastFrame, trackAsMenu: element.trackAsMenu, filters: element.filters })) } : null).filter(Boolean) }))) + "\\n");
+process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".state", JSON.stringify({ currentLayer: docs[0].timelines[0].currentLayer, currentFrame: docs[0].timelines[0].currentFrame, selectedFrames: docs[0].timelines[0].selectedFrames }) + "\\n");
 log("end");
 `;
 
@@ -559,6 +805,12 @@ export const layersLog = async (tempDir: string) =>
         .trim()
         .split("\n")
         .map((logLine) => JSON.parse(logLine));
+/** Reads the fake runtime's final timeline selection state. */
+export const stateLog = async (tempDir: string) =>
+    (await readFile(join(tempDir, "log.state"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((logLine) => JSON.parse(logLine));
 /**
  * Reads and parses the fake runtime's symbol-layer log.
  * @param tempDir Directory containing the fake-runtime logs
@@ -579,5 +831,15 @@ export const symbolLayersLog = async (tempDir: string) =>
  */
 export const editTimeline = (client: Client, timeline: number | string, ops: unknown[]) =>
     client.callTool({ name: "edit_timeline", arguments: { timeline, ops } });
+
+/**
+ * Calls the edit_tween MCP tool with the supplied operations.
+ * @param client Connected MCP client
+ * @param timeline Timeline index or library item name
+ * @param ops Tween operations to apply
+ * @returns The MCP tool call promise
+ */
+export const editTween = (client: Client, timeline: number | string, ops: unknown[]) =>
+    client.callTool({ name: "edit_tween", arguments: { timeline, ops } });
 
 export const SCENE_FILE = "scenes/Scene 1/a_b/1.as";

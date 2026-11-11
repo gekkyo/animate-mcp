@@ -10,8 +10,10 @@ import { createRunner } from "./runner.js";
 import { registerApplyScripts } from "./tools/apply-scripts.js";
 import { registerEditLibrary } from "./tools/edit-library.js";
 import { registerEditTimeline } from "./tools/edit-timeline.js";
+import { registerEditTween } from "./tools/edit-tween.js";
 import { registerExportScripts } from "./tools/export-scripts.js";
 import { registerGetDocumentInfo } from "./tools/get-document-info.js";
+import { registerInspectTimeline } from "./tools/inspect-timeline.js";
 import { registerInstallGreensock } from "./tools/install-greensock.js";
 import { registerRunJsfl } from "./tools/run-jsfl.js";
 
@@ -29,6 +31,8 @@ Basic flow:
 3. Run apply_scripts to apply them. The .fla is not saved; the user saves it.
 - To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.
 - Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
+- Use inspect_timeline to check instances and tweens instead of run_jsfl; use the distributeToLayers operation to split a layer.
+- Use edit_tween to animate instances; motion is the default and ease presets include quad, cubic, quart, quint, sine, expo, circ and back.
 - Use edit_library to organize library folders and items. Re-export with export_scripts before apply_scripts; deleteItem requires confirm: true and refuses items in use.
 - If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
 - If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).
@@ -62,6 +66,8 @@ async function main() {
     registerInstallGreensock(server, { runner, bundle });
     registerExportScripts(server, { runner, bundle });
     registerEditTimeline(server, { runner, bundle });
+    registerInspectTimeline(server, { runner, bundle });
+    registerEditTween(server, { runner, bundle });
     registerEditLibrary(server, { runner, bundle });
     registerApplyScripts(server, { runner, bundle });
 

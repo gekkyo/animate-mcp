@@ -36,7 +36,7 @@
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
       var op = __ops[opIndex];
       try {
-        if (op.op === 'addLayer' || op.op === 'deleteLayer' || op.op === 'moveLayer' || op.op === 'renameLayer' || op.op === 'setLayerType') {
+        if (op.op === 'addLayer' || op.op === 'deleteLayer' || op.op === 'moveLayer' || op.op === 'renameLayer' || op.op === 'setLayerType' || op.op === 'distributeToLayers') {
           applyLayerOp(op);
         } else {
           applyFrameOp(op);
