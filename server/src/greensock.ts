@@ -6,7 +6,14 @@ import { join } from "node:path";
 
 export const GREEN_SOCK_VERSION = "12.1.5";
 export const GREEN_SOCK_LICENSE_URL = "https://gsap.com/standard-license/";
-const GREEN_SOCK_URL = "https://codeload.github.com/greensock/GreenSock-AS3/tar.gz/refs/tags/12.1.5";
+const GREEN_SOCK_URL = `https://codeload.github.com/greensock/GreenSock-AS3/tar.gz/refs/tags/${GREEN_SOCK_VERSION}`;
+
+/** @param error Caught value
+ * @returns Its message text
+ */
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
 
 /** Checks for the installed GreenSock entry point next to a saved document.
  * @param folder Platform path of the document folder, or null when unsaved
@@ -24,39 +31,45 @@ export async function installGreensock(folder: string): Promise<void> {
     const packageDirectory = join(folder, "com");
     const destination = join(packageDirectory, "greensock");
     const tempDirectory = await mkdtemp(join(tmpdir(), "animate-mcp-greensock-"));
-    let destinationCreated = false;
-    let stage = "Download";
+    // What this call created in the user's folder, removed again if the install fails.
+    let createdPath: string | undefined;
     try {
-        // Test seam: override the GitHub archive URL with a local HTTP server in tests.
-        // shortcut: no proxy support, upgrade when users need proxy-aware downloads.
-        const response = await fetch(process.env.ANIMATE_MCP_GREENSOCK_URL ?? GREEN_SOCK_URL, {
-            signal: AbortSignal.timeout(60_000),
-        });
-        if (!response.ok) {
-            throw new Error(`Download failed: HTTP ${response.status} ${response.statusText}`);
-        }
         const archive = join(tempDirectory, "greensock.tar.gz");
-        await writeFile(archive, Buffer.from(await response.arrayBuffer()));
-        stage = "Extract";
+        try {
+            // Test seam: override the GitHub archive URL with a local HTTP server in tests.
+            // shortcut: no proxy support, upgrade when users need proxy-aware downloads.
+            const response = await fetch(process.env.ANIMATE_MCP_GREENSOCK_URL ?? GREEN_SOCK_URL, {
+                signal: AbortSignal.timeout(60_000),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status} ${response.statusText}`);
+            }
+            await writeFile(archive, Buffer.from(await response.arrayBuffer()));
+        } catch (error) {
+            throw new Error(`Download failed: ${errorMessage(error)}`);
+        }
+
         await extractTar(archive, tempDirectory);
         const source = await findGreensockSource(tempDirectory);
         if (!source) {
             throw new Error("Extract failed: GreenSock-AS3 src/com/greensock folder not found");
         }
 
-        stage = "Install";
-        await mkdir(packageDirectory, { recursive: true });
-        await mkdir(destination);
-        destinationCreated = true;
-        await cp(source, destination, { recursive: true });
+        try {
+            // Returns the first directory it had to create, or undefined when com/ already existed.
+            createdPath = await mkdir(packageDirectory, { recursive: true });
+            // Non-recursive on purpose: a concurrent install makes this throw instead of being overwritten.
+            await mkdir(destination);
+            createdPath ??= destination;
+            await cp(source, destination, { recursive: true });
+        } catch (error) {
+            throw new Error(`Install failed: ${errorMessage(error)}`);
+        }
     } catch (error) {
-        if (destinationCreated) {
-            await rm(destination, { recursive: true, force: true });
+        if (createdPath) {
+            await rm(createdPath, { recursive: true, force: true });
         }
-        if (error instanceof Error && /^(Download failed:|tar command not found|Extract failed:)/.test(error.message)) {
-            throw error;
-        }
-        throw new Error(`${stage} failed: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
     } finally {
         await rm(tempDirectory, { recursive: true, force: true });
     }
