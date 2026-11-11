@@ -12,6 +12,8 @@ test("get_document_info returns info, or a clear error with no document", { time
             height: 400,
             frameRate: 24,
             timelines: ["Scene 1"],
+            asVersion: "AS3",
+            greensock: false,
         });
     });
     await withServer({ FAKE_NO_DOC: "1" }, async (client) => {

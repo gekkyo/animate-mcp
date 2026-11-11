@@ -84,6 +84,7 @@ Notes:
 | `edit_library`      | Organizes library folders and items, and lists unused items                                  |
 | `apply_scripts`     | Writes edited scripts back into the open document                                            |
 | `get_document_info` | Returns name, size, frame rate and timeline names of the open documents                      |
+| `install_greensock` | Fetches GreenSock-AS3 12.1.5 from GitHub on request (not bundled), AS3 documents only; license: https://gsap.com/standard-license/ |
 | `run_jsfl`          | Runs arbitrary JSFL and returns the result (primitive values only; objects become strings)   |
 
 ## Environment variables

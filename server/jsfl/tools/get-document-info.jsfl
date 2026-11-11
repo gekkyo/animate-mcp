@@ -9,11 +9,14 @@
   for (var timelineIndex = 0; timelineIndex < document.timelines.length; timelineIndex++) {
     timelineNames.push(document.timelines[timelineIndex].name);
   }
+  var runtimeInfo = documentRuntimeInfo(document);
   return serialize({
     name: document.name,
     width: document.width,
     height: document.height,
     frameRate: document.frameRate,
-    timelines: timelineNames
+    timelines: timelineNames,
+    asVersion: runtimeInfo.asVersion,
+    folder: runtimeInfo.folder
   });
 })()

@@ -8,6 +8,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 // Does not respond to code containing HANG, and logs launch start/end to FAKE_LOG.
 export const fakeAnimate = `#!/usr/bin/env node
 const { appendFileSync, existsSync, readFileSync, writeFileSync } = require("node:fs");
+const { join } = require("node:path");
+const { fileURLToPath, pathToFileURL } = require("node:url");
 const { runInNewContext } = require("node:vm");
 const src = readFileSync(process.argv[2], "utf8");
 /**
@@ -296,7 +298,7 @@ const doc = (documentName, documentType) => {
     sceneLayers.unshift(layer(process.env.FAKE_AS_LAYER, expand([makeKeyframe(0, 5)]), "normal", Boolean(process.env.FAKE_LOCK_AS)));
   }
   const sceneTimeline = makeTimeline("Scene 1", Math.max(5, ...sceneLayers.map((candidate) => candidate.frames.length)), sceneLayers);
-  const document = { name: documentName, type: documentType, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
+  const document = { name: documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? "" : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
   let editing = null;
   document.syms = {};
   /**
@@ -451,6 +453,11 @@ if (!src.includes("HANG")) runInNewContext(src, {
      * @returns The unchanged path
      */
     platformPathToURI: (path) => path,
+    /** Converts the fake document's file URI to its platform path.
+     * @param uri Document URI
+     * @returns The corresponding platform path
+     */
+    uriToPlatformPath: (uri) => fileURLToPath(uri),
     /**
      * Writes content to a fake Animate file path.
      * @param path Destination path
@@ -513,6 +520,7 @@ export async function withServer(
             // Treat the test process itself as "Animate running"
             ANIMATE_MCP_PROCESS_PATTERN: "node",
             FAKE_LOG: join(tempDir, "log"),
+            FAKE_DOCUMENT_DIR: join(tempDir, "document"),
             ...env,
         },
     });

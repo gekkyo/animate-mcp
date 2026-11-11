@@ -12,6 +12,7 @@ import { registerEditLibrary } from "./tools/edit-library.js";
 import { registerEditTimeline } from "./tools/edit-timeline.js";
 import { registerExportScripts } from "./tools/export-scripts.js";
 import { registerGetDocumentInfo } from "./tools/get-document-info.js";
+import { registerInstallGreensock } from "./tools/install-greensock.js";
 import { registerRunJsfl } from "./tools/run-jsfl.js";
 
 /** Version from package.json (the same relative path from src/ and dist/) */
@@ -30,6 +31,8 @@ Basic flow:
 - Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
 - Use edit_library to organize library folders and items. Re-export with export_scripts before apply_scripts; deleteItem requires confirm: true and refuses items in use.
 - If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
+- If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).
+- For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.
 
 Notes:
 - When several documents are open, document is required. get_document_info returns the name.
@@ -56,6 +59,7 @@ async function main() {
     const server = new McpServer({ name: "animate-mcp", version: PACKAGE_VERSION }, { instructions: INSTRUCTIONS });
     registerRunJsfl(server, { runner });
     registerGetDocumentInfo(server, { runner, bundle });
+    registerInstallGreensock(server, { runner, bundle });
     registerExportScripts(server, { runner, bundle });
     registerEditTimeline(server, { runner, bundle });
     registerEditLibrary(server, { runner, bundle });

@@ -84,6 +84,7 @@ MCP 対応の AI エージェントから、Adobe Animate のスクリプトと�
 | `edit_library`      | ライブラリのフォルダやアイテムを整理し、未使用アイテム一覧を返します               |
 | `apply_scripts`     | 編集したスクリプトを開いているドキュメントに書き戻します                           |
 | `get_document_info` | 開いているドキュメントの名前、サイズ、フレームレート、タイムライン名を返します     |
+| `install_greensock` | GreenSock-AS3 12.1.5 をユーザーの依頼時に GitHub から取得（同梱なし、AS3 のみ）。ライセンス: https://gsap.com/standard-license/ |
 | `run_jsfl`          | 任意の JSFL を実行して結果を返します（プリミティブ値のみ。オブジェクトは文字列）   |
 
 ## 環境変数
