@@ -16,19 +16,19 @@ English | [日本語](README.ja.md)
 
 ## Overview
 
-`animate-mcp` is a local Model Context Protocol (MCP) server that lets an AI agent control Adobe Animate through JSFL, Animate's scripting system. Unofficial; not affiliated with Adobe.
+`animate-mcp` is a local Model Context Protocol (MCP) server that lets AI agents inspect Adobe Animate documents and edit frame scripts and animations. It uses JSFL, Animate's scripting system, to control Animate directly.
 
-It exports frame scripts as plain files, lets the agent edit them, and applies them back to Animate. It can also change layer and frame structure and run arbitrary JSFL.
+Agents can read scripts and structure from scenes and library symbols, then apply edited scripts through files. They can also edit layers, frames, tweens, and library items.
 
 ## Highlights
 
-- Export every frame script of scenes and library symbols to files, with a description of the structure.
-- Apply edited files back to Animate. Changes made in Animate after Export are detected as conflicts and never overwritten.
-- Add, delete, move, rename, and retype layers (mask, folder, and more).
-- Organize library folders and items (symbols, bitmaps, sounds, and more): create folders, move, rename, delete, or list unused items. Deletion requires confirmation and refuses items in use.
-- Insert or remove frames, work with keyframes, set labels, adjust tween length, and shift a layer's start.
-- Run arbitrary JSFL and return the result.
-- Supports ActionScript 3 and HTML5 Canvas documents.
+- AI agents can read frame scripts and structure from scenes and library symbols through files, then apply edited scripts back to Animate.
+- Inspect layers, keyframes, instances, and tweens.
+- Edit layer and frame structure and labels.
+- Create motion and classic tweens with preset or custom Bézier easing.
+- Organize library folders and items and find unused items.
+- Install GreenSock-AS3 with a prompt.
+- Work with ActionScript 3 and HTML5 Canvas, and run arbitrary JSFL.
 
 ## Requirements
 
@@ -57,38 +57,111 @@ It exports frame scripts as plain files, lets the agent edit them, and applies t
 ## Usage
 
 1. Start Animate and open the target .fla.
-2. Ask your agent. Examples:
-    - "Export the scripts of the open document and find the cause of the `stageUp` error."
-    - "Clean up the button handling in this scene and apply it to Animate."
-3. Behind the scenes:
+2. Ask your agent to do the work.
+3. When editing scripts, the workflow is:
     1. `export_scripts` writes the structure and every frame script to `~/.animate-mcp/exports/<document name>/`.
     2. The agent edits the files.
     3. `apply_scripts` writes them back into Animate.
 
-Notes:
+### Example prompts
 
-- When several documents are open, specify which one with `document`.
-- Changes made in Animate after an Export are detected as conflicts on Apply and are not overwritten.
-- Export is refused while unapplied edits exist. Use `force: true` only when it is fine to discard them.
-- Use `inspect_timeline` to check instances and tweens instead of `run_jsfl`; use `edit_timeline`'s `distributeToLayers` operation to split a layer. `shiftLayerFrames` moves one layer's content later without shifting other layers. Always run `export_scripts` again before editing or applying scripts; layer and frame deletions require `confirm: true`.
-- Use `edit_tween` to animate instances; motion is the default and ease presets include quad, cubic, quart, quint, sine, expo, circ and back. Re-export with `export_scripts` before editing or applying scripts.
-- Use `edit_library` to organize folders and library items (`createFolder`, `moveItem`, `renameItem`, `deleteItem`, `listUnused`). Re-export with `export_scripts` before `apply_scripts`; `deleteItem` requires `confirm: true` and refuses items in use. Apply is refused if the library changed after Export. Linkage names are not changed, and code-string references such as `attachMovie` are not updated.
-- To save, save manually in Animate.
-- Both ActionScript 3 and HTML5 Canvas documents are supported.
+#### Script operations
+
+```text
+Export the scripts from the open document and find the cause of an error
+```
+
+#### Inspecting the timeline
+
+```text
+Check the instance and tween on frame 12 of the Character layer in Scene 1
+```
+
+#### Editing layers and frames
+
+```text
+Add a Background layer to Scene 1 and extend it to 24 frames
+```
+
+#### Creating a tween
+
+```text
+Move the Ball instance 200 px to the right over frames 1–24 in Scene 1, using backOut easing (overshoot and return)
+```
+
+#### Organizing the library
+
+```text
+List unused library items
+```
+
+#### Installing GreenSock
+
+```text
+Install GreenSock-AS3 for the open document
+```
+
+## Usage tips
+
+- If multiple documents are open, specify the target document.
+- Changes made in Animate after Export are detected as conflicts during Apply. Apply is refused if the library has changed.
+- Re-exporting is refused when unapplied edits exist. Use `force: true` only if you are willing to discard them.
+- After changing the timeline, tweens, or library, re-export before editing or applying scripts.
+- Deleting a layer, frames, or a library item requires `confirm: true`. Library items in use cannot be deleted.
+- Save manually in Animate. Renaming or moving a library item does not automatically update linkage names or string references in code.
 
 ## Tools
 
-| Tool                | Description                                                                                  |
-|---------------------|----------------------------------------------------------------------------------------------|
-| `export_scripts`    | Writes the timeline structure and all frame scripts (scenes and library symbols)             |
-| `inspect_timeline`  | Reads layer spans and element properties at a frame in a scene or library symbol             |
-| `edit_timeline`     | Adds, removes, moves, edits, and distributes layers and frames in a scene or library symbol  |
-| `edit_tween`        | Creates motion or classic tweens for instances and changes easing                           |
-| `edit_library`      | Organizes library folders and items, and lists unused items                                  |
-| `apply_scripts`     | Writes edited scripts back into the open document                                            |
-| `get_document_info` | Returns name, size, frame rate and timeline names of the open documents                      |
-| `install_greensock` | Fetches GreenSock-AS3 12.1.5 from GitHub on request (not bundled), AS3 documents only; license: https://gsap.com/standard-license/ |
-| `run_jsfl`          | Runs arbitrary JSFL and returns the result (primitive values only; objects become strings)   |
+| Tool | What it does | Inputs and caveats |
+|------|--------------|--------------------|
+| `get_document_info` | Reports the open document's name, dimensions, frame rate, timeline names, ActionScript version, and GreenSock status. | Takes no arguments. |
+| `export_scripts` | Exports scene and library-symbol structure and frame scripts, plus `index.md` and each timeline's `structure.md`. | Defaults to `~/.animate-mcp/exports/<document name>/`. Refuses to re-export over unapplied edits; `force: true` discards them. |
+| `apply_scripts` | Applies edits to exported scripts in Animate. An empty script file deletes that frame's script. | Pass the export directory as `dir`. Frames changed in Animate are not overwritten. Does not save the `.fla`. |
+| `inspect_timeline` | Reads layers, keyframe ranges, and instances and tweens at a specified frame of a scene or library symbol. | `timeline` is a zero-based scene index or library-item path. Frame numbers are one-based; layers can be filtered. |
+| `edit_timeline` | Edits layers, frames, keyframes, and labels, and distributes instances across layers. Runs operations in `ops` order. | `deleteLayer` and `removeFrames` require `confirm: true`. `shiftLayerFrames` overwrites the clipboard and may require Undo if it fails partway through. |
+| `edit_tween` | Creates motion or classic tweens and changes easing. Supports presets, numeric easing, and four-number custom easing. | The named instance must be alone on its layer. Existing tween spans are not replaced. |
+| `edit_library` | Creates folders, moves, renames, and deletes items, and lists unused items. | Deletion requires `confirm: true` and refuses items in use. Linkage names and string references in code are not updated. |
+| `install_greensock` | Fetches GreenSock-AS3 12.1.5 from GitHub and places it alongside a saved AS3 document. | Review the [license](https://gsap.com/standard-license/) and pass `confirm: true`. Does not change or save the `.fla`; does not support AS2 or HTML5 Canvas. |
+| `run_jsfl` | Executes arbitrary JSFL in Animate and returns the result. Object return values become strings. | Can modify documents and files; ask the user before running code that makes changes. |
+
+### Operations accepted in `ops`
+
+`edit_timeline`, `edit_tween`, and `edit_library` accept the following operations in their `ops` arrays.
+
+#### `edit_timeline`
+
+| Operation | Description |
+|-----------|-------------|
+| `addLayer` | Add a layer |
+| `deleteLayer` | Delete a layer (requires `confirm: true`) |
+| `moveLayer` | Move a layer |
+| `renameLayer` | Rename a layer |
+| `setLayerType` | Change a layer's type |
+| `distributeToLayers` | Put each symbol instance from a single-span layer on its own layer |
+| `insertFrames` | Insert frames |
+| `removeFrames` | Remove frames (requires `confirm: true`) |
+| `insertKeyframe` | Insert a keyframe |
+| `clearKeyframe` | Clear a keyframe |
+| `setLabel` | Set a frame label |
+| `setSpanLength` | Change the length of a frame span |
+| `shiftLayerFrames` | Move one layer's content later without shifting other layers |
+
+#### `edit_tween`
+
+| Operation | Description |
+|-----------|-------------|
+| `createTween` | Create a motion or classic tween for a named instance |
+| `setEase` | Change an existing tween's easing |
+
+#### `edit_library`
+
+| Operation | Description |
+|-----------|-------------|
+| `createFolder` | Create a folder |
+| `moveItem` | Move an item to another folder |
+| `renameItem` | Rename an item |
+| `deleteItem` | Delete an item (requires `confirm: true`; refuses items in use) |
+| `listUnused` | List unused items |
 
 ## Environment variables
 
