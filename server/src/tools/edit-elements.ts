@@ -85,27 +85,8 @@ export function registerEditElements(
      */
     const handleEditElements: ToolCallback<typeof EDIT_ELEMENTS_INPUT> = async ({ timeline, document, ops }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "timeline-helpers", "edit-elements")}`;
-            const result = JSON.parse(String(await runner.execute(code))) as {
-                applied: number;
-                elements: {
-                    layer: string;
-                    frame: number;
-                    element: number;
-                    name: string;
-                    x: number;
-                    y: number;
-                    scaleX: number;
-                    scaleY: number;
-                    rotation: number;
-                    skewX: number;
-                    skewY: number;
-                    colorMode: string;
-                    blendMode: string;
-                    visible: boolean;
-                    filters: Record<string, unknown>[];
-                }[];
-            };
+            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "timeline-helpers", "element-read", "edit-elements")}`;
+            const result = JSON.parse(String(await runner.execute(code))) as { applied: number; elements: Record<string, unknown>[] };
             return {
                 content: [{ type: "text", text: JSON.stringify(result) }],
                 structuredContent: result,
@@ -119,7 +100,7 @@ export function registerEditElements(
         "edit_elements",
         {
             description:
-                "Set symbol-instance properties on 1-based keyframes in a scene or library-symbol timeline. Layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors and non-instance elements are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Supplying filters replaces all existing filters; [] clears them. Animate may quantize transform values; results contain read-back values. Changes do not save the .fla; save it in Animate.",
+                "Set symbol-instance properties on 1-based keyframes in a scene or library-symbol timeline. Layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors and non-instance elements are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Supplying filters replaces all existing filters; [] clears them. Read-back element fields match inspect_timeline, plus layer/frame/element references. Animate may quantize transform values. Changes do not save the .fla; save it in Animate.",
             annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
             inputSchema: EDIT_ELEMENTS_INPUT,
         },

@@ -40,7 +40,7 @@ export function registerInspectTimeline(
         document,
     }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __layers = ${JSON.stringify(layers)};\nvar __frame = ${frame};\n${bundle("select-document", "edit-state", "export-common", "inspect-timeline")}`;
+            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __layers = ${JSON.stringify(layers)};\nvar __frame = ${frame};\n${bundle("select-document", "edit-state", "export-common", "element-read", "inspect-timeline")}`;
             const result = JSON.parse(String(await runner.execute(code))) as {
                 timeline: number | string;
                 frame: number;

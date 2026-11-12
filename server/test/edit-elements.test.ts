@@ -33,21 +33,25 @@ test("edit_elements updates instances and returns the values read back from Anim
             applied: 1,
             elements: [
                 {
-                    layer: "a/b",
-                    frame: 1,
-                    element: 0,
+                    type: "movie clip",
                     name: "runner",
+                    libraryItem: "Hero",
+                    matrix: { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 },
                     x: 12.5,
                     y: 8,
+                    transformationPoint: { x: 2, y: 3 },
                     scaleX: 1.5,
                     scaleY: 0.75,
                     rotation: 30,
                     skewX: 0,
                     skewY: 0,
-                    colorMode: "alpha",
+                    colorEffect: { mode: "alpha", alphaPercent: 75, alphaAmount: 75 },
+                    filters: [{ name: "blurFilter", blurX: 8, blurY: 4, quality: "high", enabled: false }],
                     blendMode: "multiply",
                     visible: false,
-                    filters: [{ name: "blurFilter", blurX: 8, blurY: 4, quality: "high", enabled: false }],
+                    layer: "a/b",
+                    frame: 1,
+                    element: 0,
                 },
             ],
         });
@@ -83,6 +87,7 @@ test("edit_elements applies all color modes and clears filters", { timeout: 45_0
                 },
             });
             assert.equal(result.isError, undefined, text(result));
+            assert.equal(JSON.parse(text(result)).elements[0].colorEffect.mode, colorEffect.mode);
             const element = (await layersLog(tempDir)).at(-1)[0].frames[0].elements[0];
             assert.equal(element.colorMode, colorEffect.mode);
             assert.deepEqual(element.filters, []);
@@ -102,6 +107,37 @@ test("edit_elements applies all color modes and clears filters", { timeout: 45_0
             }
         });
     }
+});
+
+test("edit_elements edits a library symbol and restores the prior scene selection", { timeout: 30_000 }, async () => {
+    await withServer(
+        {
+            FAKE_SYM_INSTANCE: "1",
+            FAKE_INITIAL_CURRENT_FRAME: "3",
+            FAKE_INITIAL_SELECTED_FRAMES: "[0,2,4]",
+            FAKE_INITIAL_SELECTED_ELEMENT: "1",
+        },
+        async (client, tempDir) => {
+            const result = await client.callTool({
+                name: "edit_elements",
+                arguments: {
+                    timeline: "dir/Hero",
+                    ops: [{ layer: "L", frame: 1, element: "symbolInstance", set: { x: 42 } }],
+                },
+            });
+            assert.equal(result.isError, undefined, text(result));
+            const element = JSON.parse(text(result)).elements[0];
+            assert.equal(element.x, 42);
+            assert.equal(element.type, "movie clip");
+            assert.equal(element.colorEffect.mode, "alpha");
+            assert.deepEqual((await stateLog(tempDir)).at(-1), {
+                currentLayer: 0,
+                currentFrame: 3,
+                selectedFrames: [0, 2, 4],
+                selectedElements: 1,
+            });
+        },
+    );
 });
 
 test("edit_elements rejects non-instance elements before any writes", { timeout: 30_000 }, async () => {

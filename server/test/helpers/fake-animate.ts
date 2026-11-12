@@ -371,7 +371,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
  * @param script Initial ActionScript for the symbol
  * @returns The constructed symbol timeline
  */
-const symTimeline = (symbolName, script) => makeTimeline(symbolName, 1, [layer("L", expand([makeKeyframe(0, 1, { actionScript: script })]))], { name: symbolName });
+const symTimeline = (symbolName, script) => makeTimeline(symbolName, 1, [layer("L", expand([makeKeyframe(0, 1, { actionScript: script, elements: process.env.FAKE_SYM_INSTANCE ? [makeInstance("symbolInstance", 10)] : [] })]))], { name: symbolName });
 /**
  * Builds a fake Animate document and its scene and library timelines.
  * @param documentName Document name

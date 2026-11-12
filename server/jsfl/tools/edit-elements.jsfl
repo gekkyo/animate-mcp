@@ -82,20 +82,12 @@
   }
 
   function validateFilters(filters) {
-    var fields = {
-      blurFilter: ['blurX', 'blurY', 'quality'],
-      glowFilter: ['blurX', 'blurY', 'color', 'alpha', 'strength', 'quality', 'inner', 'knockout'],
-      dropShadowFilter: ['blurX', 'blurY', 'color', 'alpha', 'strength', 'quality', 'distance', 'angle', 'inner', 'knockout', 'hideObject'],
-      bevelFilter: ['blurX', 'blurY', 'shadowColor', 'shadowAlpha', 'highlightColor', 'highlightAlpha', 'strength', 'quality', 'distance', 'angle', 'knockout', 'type'],
-      gradientGlowFilter: ['blurX', 'blurY', 'colors', 'alphas', 'ratios', 'strength', 'quality', 'distance', 'angle', 'knockout', 'type'],
-      gradientBevelFilter: ['blurX', 'blurY', 'colors', 'alphas', 'ratios', 'strength', 'quality', 'distance', 'angle', 'knockout', 'type'],
-      adjustColorFilter: ['brightness', 'contrast', 'saturation', 'hue']
-    };
     for (var filterIndex = 0; filterIndex < filters.length; filterIndex++) {
       var filter = filters[filterIndex];
-      if (!filter || typeof filter !== 'object' || !fields[filter.name]) throw new Error('Unsupported filter: ' + (filter && filter.name));
+      var fields = filter && ELEMENT_FILTER_FIELDS[filter.name];
+      if (!filter || typeof filter !== 'object' || !fields) throw new Error('Unsupported filter: ' + (filter && filter.name));
       for (var property in filter) {
-        if (property !== 'name' && property !== 'enabled' && fields[filter.name].indexOf(property) < 0) {
+        if (property !== 'name' && property !== 'enabled' && fields.indexOf(property) < 0) {
           throw new Error('Unsupported ' + filter.name + ' field: ' + property);
         }
         var value = filter[property];
@@ -162,45 +154,6 @@
     }
   }
 
-  function readFilter(filter) {
-    var result = { name: filter.name, enabled: filter.enabled !== false };
-    var fields = {
-      blurFilter: ['blurX', 'blurY', 'quality'],
-      glowFilter: ['blurX', 'blurY', 'color', 'alpha', 'strength', 'quality', 'inner', 'knockout'],
-      dropShadowFilter: ['blurX', 'blurY', 'color', 'alpha', 'strength', 'quality', 'distance', 'angle', 'inner', 'knockout', 'hideObject'],
-      bevelFilter: ['blurX', 'blurY', 'shadowColor', 'shadowAlpha', 'highlightColor', 'highlightAlpha', 'strength', 'quality', 'distance', 'angle', 'knockout', 'type'],
-      gradientGlowFilter: ['blurX', 'blurY', 'colors', 'alphas', 'ratios', 'strength', 'quality', 'distance', 'angle', 'knockout', 'type'],
-      gradientBevelFilter: ['blurX', 'blurY', 'colors', 'alphas', 'ratios', 'strength', 'quality', 'distance', 'angle', 'knockout', 'type'],
-      adjustColorFilter: ['brightness', 'contrast', 'saturation', 'hue']
-    }[filter.name] || [];
-    for (var index = 0; index < fields.length; index++) {
-      if (filter[fields[index]] !== undefined) result[fields[index]] = filter[fields[index]];
-    }
-    return result;
-  }
-
-  function readElement(op, element) {
-    var filters = [], sourceFilters = element.filters || [];
-    for (var index = 0; index < sourceFilters.length; index++) filters.push(readFilter(sourceFilters[index]));
-    return {
-      layer: op.layerName,
-      frame: op.frame,
-      element: op.elementIndex,
-      name: element.name || '',
-      x: Number(element.x || 0),
-      y: Number(element.y || 0),
-      scaleX: Number(element.scaleX === undefined ? 1 : element.scaleX),
-      scaleY: Number(element.scaleY === undefined ? 1 : element.scaleY),
-      rotation: Number(element.rotation || 0),
-      skewX: Number(element.skewX || 0),
-      skewY: Number(element.skewY || 0),
-      colorMode: element.colorMode || 'none',
-      blendMode: element.blendMode || 'normal',
-      visible: element.visible !== false,
-      filters: filters
-    };
-  }
-
   try {
     timeline = resolveTimeline();
     targetLayerState = timeline.currentLayer;
@@ -238,7 +191,11 @@
         timeline.currentLayer = entry.layerIndex;
         timeline.currentFrame = entry.frame.startFrame;
         applySet(entry.element, entry.op.set);
-        resultElements.push(readElement(entry.op, entry.element));
+        var resultElement = readElement(entry.element);
+        resultElement.layer = entry.op.layerName;
+        resultElement.frame = entry.op.frame;
+        resultElement.element = entry.op.elementIndex;
+        resultElements.push(resultElement);
       }
     });
   } finally {

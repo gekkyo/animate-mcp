@@ -126,6 +126,18 @@ try {
     assert.equal(lockedInspect.layers[0].locked, true);
     console.log("locked layer unlock/restore: passed");
 
+    const transformed = verifyTool(
+        await editElements({
+            document: documentName,
+            timeline: 0,
+            ops: [{ layer: "effects", frame: 1, element: "staticInstance", set: { x: 124, y: 86, scaleX: 1.4, scaleY: 0.8, rotation: 35 } }],
+        }),
+        "set position with scale and rotation",
+    );
+    near(transformed.elements[0].x, 124, "position after scale and rotation");
+    near(transformed.elements[0].y, 86, "vertical position after scale and rotation");
+    console.log("position with scale and rotation: passed");
+
     const filters = [{ name: "blurFilter", blurX: 8, blurY: 4, quality: "high", enabled: false }];
     verifyTool(
         await editElements({
@@ -184,7 +196,8 @@ try {
         }),
         "edit color effect on inactive Scene 2",
     );
-    assert.equal(sceneTwoColor.elements[0].colorMode, "alpha");
+    assert.equal(sceneTwoColor.elements[0].colorEffect.mode, "alpha");
+    near(sceneTwoColor.elements[0].colorEffect.alphaPercent, 42, "Scene 2 edit result alpha percent");
     const sceneTwoInspect = verifyTool(
         await inspectTimeline({ document: documentName, timeline: 1, layers: ["sceneTwoEffects"], frame: 1 }),
         "inspect inactive Scene 2 color effect",
