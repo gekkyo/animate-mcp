@@ -86,7 +86,10 @@ export function registerEditElements(
     const handleEditElements: ToolCallback<typeof EDIT_ELEMENTS_INPUT> = async ({ timeline, document, ops }) => {
         try {
             const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "timeline-helpers", "element-read", "edit-elements")}`;
-            const result = JSON.parse(String(await runner.execute(code))) as { applied: number; elements: Record<string, unknown>[] };
+            const result = JSON.parse(String(await runner.execute(code))) as {
+                applied: number;
+                elements: Record<string, unknown>[];
+            };
             return {
                 content: [{ type: "text", text: JSON.stringify(result) }],
                 structuredContent: result,
