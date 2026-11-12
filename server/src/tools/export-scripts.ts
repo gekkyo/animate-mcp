@@ -128,6 +128,7 @@ export function registerExportScripts(
         {
             description:
                 "Export the active Animate document's scene and library-symbol Timeline scripts (AS3 / HTML5 Canvas) to files, with index.md and per-timeline structure.md. Default dir: ~/.animate-mcp/exports/<document>/. Refuses to overwrite edits not yet applied unless force is true; files of the previous Export are replaced.",
+            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
             inputSchema: EXPORT_SCRIPTS_INPUT,
         },
         handleExportScripts,

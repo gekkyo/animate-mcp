@@ -72,6 +72,7 @@ export function registerInspectTimeline(
         {
             description:
                 "Read layer metadata, keyframe spans, and element properties at a 1-based frame in a scene or library symbol. Specify layers by name or zero-based index; defaults to all layers and frame 1. Motion tween properties are reported from motion keyframes rather than unreliable interpolated instances.",
+            annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
             inputSchema: INSPECT_TIMELINE_INPUT,
         },
         handleInspectTimeline,
