@@ -1,5 +1,6 @@
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { type ManifestFile, type ManifestTimeline, writeManifest } from "./export-workspace.js";
 
 export type ExportElement = { name: string; item: string; type: string };
 export type ExportFrame = {
@@ -16,8 +17,6 @@ export type ExportScene = {
     structureFingerprint?: string;
     error?: string;
 };
-/** Manifest entry for Apply: frame position (0-based) and the script at Export. A library symbol uses item (path in the library) instead of scene */
-export type ManifestFile = { scene: number; layer: number; start: number; script: string; item?: string };
 export type ExportData = {
     document: string;
     type: string;
@@ -26,14 +25,6 @@ export type ExportData = {
     /** Library symbols (name is the path in the library). linked is the AS3 Linked class name */
     symbols?: (ExportScene & { linked?: string })[];
 };
-export type ManifestTimeline = {
-    dir: string;
-    scene: number;
-    item?: string;
-    structureFingerprint?: string;
-    layers: { index: number; dir: string; name: string }[];
-};
-
 type RenderedScript = { path: string; layerIndex: number; frameStart: number; script: string };
 
 /**
@@ -67,16 +58,6 @@ function uniqueName(used: Set<string>, name: string): string {
     }
     used.add(candidate.toLowerCase());
     return candidate;
-}
-
-/**
- * Writes to a temp file, then replaces the target with rename (a crash mid-write cannot corrupt the original).
- * @param path Destination
- * @param content Content
- */
-export async function writeAtomic(path: string, content: string) {
-    await writeFile(`${path}.tmp`, content);
-    await rename(`${path}.tmp`, path);
 }
 
 /** Adds an element's frame range, extending a consecutive range on the same layer.
@@ -352,15 +333,12 @@ export async function writeExport(data: ExportData, dir: string) {
     }
     await writeToExportDir("index.md", `${indexMarkdownLines.join("\n")}\n`);
     // For Apply's conflict detection: record the content at Export
-    await writeAtomic(
-        join(dir, ".export.json"),
-        JSON.stringify({
-            document: data.document,
-            type: data.type,
-            files,
-            timelines: manifestTimelines,
-            ...(data.libraryFingerprint ? { libraryFingerprint: data.libraryFingerprint } : {}),
-        }),
-    );
+    await writeManifest(dir, {
+        document: data.document,
+        type: data.type,
+        files,
+        timelines: manifestTimelines,
+        ...(data.libraryFingerprint ? { libraryFingerprint: data.libraryFingerprint } : {}),
+    });
     return { dir, exported, failed, linkedClasses };
 }

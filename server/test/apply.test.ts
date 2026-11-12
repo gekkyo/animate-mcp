@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
-import { clearPreviousExport, collectEdits, markApplied } from "../src/apply.js";
+import { collectChanges, prepareExport, recordApplied } from "../src/export-workspace/export-workspace.js";
 import { layersLog, SCENE_FILE, scriptsLog, symbolLayersLog, text, withServer } from "./helpers/fake-animate.js";
 
 test("apply_scripts writes edits, deletes on empty file, skips unchanged", { timeout: 30_000 }, async () => {
@@ -47,20 +47,20 @@ test("apply manifest lifecycle is idempotent and clears only exported files", { 
         const scriptPath = join(exportDir, SCENE_FILE);
         await writeFile(scriptPath, "play();");
 
-        const pending = await collectEdits(exportDir);
+        const pending = await collectChanges(exportDir);
         assert.deepEqual(
             pending.edits.map(({ file }) => file),
             [SCENE_FILE],
         );
-        await markApplied(exportDir, pending.edits);
+        await recordApplied(exportDir, { edits: pending.edits, newScripts: [], fingerprints: [] });
 
-        const collectedAgain = await collectEdits(exportDir);
+        const collectedAgain = await collectChanges(exportDir);
         assert.deepEqual(collectedAgain.edits, []);
         assert.equal(collectedAgain.unchanged, 2);
 
         const untrackedPath = join(exportDir, "keep.txt");
         await writeFile(untrackedPath, "keep");
-        await clearPreviousExport(exportDir, false);
+        await prepareExport(exportDir, false);
         await assert.rejects(readFile(scriptPath), { code: "ENOENT" });
         assert.equal(await readFile(untrackedPath, "utf8"), "keep");
         assert.ok((await readdir(exportDir)).includes(".export.json"));

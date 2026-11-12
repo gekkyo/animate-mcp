@@ -90,6 +90,11 @@ const EDIT_TIMELINE_OP = z.discriminatedUnion("op", [
         index: z.number().int().nonnegative().optional(),
         offset: z.number().int().positive(),
     }),
+    z.object({
+        op: z.literal("distributeToLayers"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+    }),
 ]);
 const EDIT_TIMELINE_INPUT = {
     timeline: z
@@ -120,7 +125,7 @@ export function registerEditTimeline(
         try {
             const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "timeline-helpers", "timeline-layers", "timeline-frames", "timeline-index")}`;
             const result = JSON.parse(String(await runner.execute(code))) as {
-                applied: typeof ops;
+                applied: ((typeof ops)[number] & { createdLayers?: string[] })[];
                 failed: { op: (typeof ops)[number]; error: string } | null;
                 skipped: typeof ops;
                 warnings: string[];
@@ -139,7 +144,7 @@ export function registerEditTimeline(
         "edit_timeline",
         {
             description:
-                "Edit layers (addLayer, deleteLayer, moveLayer, renameLayer, setLayerType) and frames (insertFrames, removeFrames, insertKeyframe, clearKeyframe, setLabel, setSpanLength, shiftLayerFrames) in order. Layer references use a name and optional zero-based index; frame numbers are 1-based. shiftLayerFrames moves one layer's full content later without shifting other layers; it uses cut/paste (overwrites the clipboard, and if it fails midway the layer may be left changed: undo in Animate). Stops at the first failed op. deleteLayer and removeFrames require confirm: true. Tween interiors reject frame insertion/removal/keyframe changes. Always run export_scripts again before editing or applying scripts.",
+                "Edit layers (addLayer, deleteLayer, moveLayer, renameLayer, setLayerType, distributeToLayers) and frames (insertFrames, removeFrames, insertKeyframe, clearKeyframe, setLabel, setSpanLength, shiftLayerFrames) in order. Layer references use a name and optional zero-based index; frame numbers are 1-based. distributeToLayers splits a single-span layer of symbol instances into one layer per instance. shiftLayerFrames moves one layer's full content later without shifting other layers; it uses cut/paste (overwrites the clipboard, and if it fails midway the layer may be left changed: undo in Animate). Stops at the first failed op. deleteLayer and removeFrames require confirm: true. Tween interiors reject frame insertion/removal/keyframe changes. Always run export_scripts again before editing or applying scripts.",
             inputSchema: EDIT_TIMELINE_INPUT,
         },
         handleEditTimeline,

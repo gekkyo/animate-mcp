@@ -251,3 +251,227 @@ test("edit_timeline shiftLayerFrames offsets content without changing span lengt
         assert.match((empty.structuredContent as { failed: { error: string } }).failed.error, /no frames/);
     });
 });
+
+test("edit_timeline reverses bottom-to-top elements into layer order and preserves instance properties", {
+    timeout: 30_000,
+}, async () => {
+    await withServer(
+        {
+            FAKE_DISTRIBUTE: "1",
+            FAKE_LOCK_DISTRIBUTE: "1",
+            FAKE_READONLY_COLOR_PROPERTIES: "1",
+            FAKE_DISTRIBUTE_BRIGHTNESS: "1",
+        },
+        async (client, tempDir) => {
+            const result = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
+            const summary = result.structuredContent as {
+                applied: { createdLayers?: string[] }[];
+                failed: { error: string } | null;
+                layers: { name: string; locked: boolean }[];
+            };
+            assert.equal(summary.failed, null, text(result));
+            assert.deepEqual(summary.applied[0].createdLayers, ["hero_2", "Hero", "hero"], text(result));
+            assert.deepEqual(
+                summary.layers.slice(0, 3).map((entry) => entry.name),
+                ["hero_2", "Hero", "hero"],
+            );
+            assert.ok(summary.layers.slice(0, 3).every((entry) => entry.locked));
+            const layers = (await layersLog(tempDir)).at(-1);
+            assert.deepEqual(
+                layers.slice(0, 3).map((entry: { frames: { duration: number }[] }) => entry.frames[0].duration),
+                [5, 5, 5],
+            );
+            // The fake frame stores elements bottom-to-top, so the top layer gets the last element.
+            const elements = layers
+                .slice(0, 3)
+                .map((entry: { frames: { elements: unknown[] }[] }) => entry.frames[0].elements[0]);
+            assert.deepEqual(
+                elements.map((element: { name: string }) => element.name),
+                ["hero", "", "hero"],
+            );
+            assert.deepEqual(
+                elements.map((element: { x: number }) => element.x),
+                [30, 20, 10],
+            );
+            assert.deepEqual(
+                elements.map((element: { matrix: { tx: number } }) => element.matrix.tx),
+                [30, 20, 10],
+            );
+            assert.deepEqual(
+                elements.map(
+                    (element: { transformationPoint: { x: number; y: number } }) => element.transformationPoint,
+                ),
+                [
+                    { x: 2, y: 3 },
+                    { x: 2, y: 3 },
+                    { x: 2, y: 3 },
+                ],
+            );
+            assert.deepEqual(
+                elements.map((element: { colorMode: string }) => element.colorMode),
+                ["brightness", "tint", "alpha"],
+            );
+            assert.equal((elements[0] as { brightness: number }).brightness, 42);
+            assert.equal((elements[1] as { tintColor: string }).tintColor, "#336699");
+            assert.equal((elements[1] as { tintPercent: number }).tintPercent, 35);
+            assert.deepEqual((elements[0] as { filters: object[] }).filters, [
+                {
+                    name: "blurFilter",
+                    blurX: 8,
+                    blurY: 6,
+                    quality: "high",
+                    enabled: false,
+                    color: "#123456",
+                    distance: 9,
+                    angle: 30,
+                    inner: true,
+                    knockout: true,
+                    hideObject: true,
+                },
+            ]);
+            assert.ok(!summary.layers.some((entry) => entry.name === "a/b"), "the emptied source layer is removed");
+        },
+    );
+});
+
+test("edit_timeline keeps native distribution in top-to-bottom layer order", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_DISTRIBUTE: "1", FAKE_NATIVE_DISTRIBUTE: "1" }, async (client) => {
+        const result = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
+        const summary = result.structuredContent as {
+            applied: { createdLayers?: string[] }[];
+            failed: { error: string } | null;
+            layers: { name: string }[];
+        };
+        assert.equal(summary.failed, null, text(result));
+        assert.deepEqual(summary.applied[0].createdLayers, ["hero_2", "Hero", "hero"]);
+        assert.deepEqual(
+            summary.layers.slice(0, 3).map((entry) => entry.name),
+            ["hero_2", "Hero", "hero"],
+        );
+    });
+});
+
+test("edit_timeline distributeToLayers rejects unsupported or multi-span sources without deleting them", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({}, async (client) => {
+        const invalid = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
+        assert.match(
+            (invalid.structuredContent as { failed: { error: string } }).failed.error,
+            /exactly one keyframe span/,
+        );
+        assert.ok(
+            (invalid.structuredContent as { layers: { name: string }[] }).layers.some((entry) => entry.name === "a/b"),
+        );
+    });
+    await withServer(
+        { FAKE_DISTRIBUTE: "1", FAKE_DISTRIBUTE_BAD_ELEMENT: "1", FAKE_LOCK_DISTRIBUTE: "1" },
+        async (client) => {
+            const invalid = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
+            assert.match((invalid.structuredContent as { failed: { error: string } }).failed.error, /symbol instances/);
+            assert.ok(
+                (invalid.structuredContent as { layers: { name: string; locked: boolean }[] }).layers.some(
+                    (entry) => entry.name === "a/b" && entry.locked,
+                ),
+            );
+        },
+    );
+    await withServer({ FAKE_DISTRIBUTE: "1", FAKE_DISTRIBUTE_TWEEN: "motion object" }, async (client) => {
+        const invalid = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
+        assert.match(
+            (invalid.structuredContent as { failed: { error: string } }).failed.error,
+            /cannot contain a tween/,
+        );
+    });
+    for (const env of [{ FAKE_DISTRIBUTE_ACTIONSCRIPT: "1" }, { FAKE_DISTRIBUTE_LABEL: "1" }]) {
+        await withServer({ FAKE_DISTRIBUTE: "1", FAKE_LOCK_DISTRIBUTE: "1", ...env }, async (client, tempDir) => {
+            const rejected = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
+            const summary = rejected.structuredContent as {
+                failed: { error: string };
+                layers: { name: string; locked: boolean }[];
+            };
+            assert.match(summary.failed.error, /ActionScript or a label/);
+            assert.deepEqual(
+                summary.layers.map((entry) => entry.name),
+                ["a/b", "dir"],
+            );
+            assert.equal(summary.layers[0].locked, true);
+            const source = (await layersLog(tempDir)).at(-1)[0];
+            assert.equal(source.frames[0].elements.length, 3);
+        });
+    }
+    await withServer(
+        { FAKE_DISTRIBUTE: "1", FAKE_FAIL_ADD_ITEM_AFTER: "1", FAKE_LOCK_DISTRIBUTE: "1" },
+        async (client, tempDir) => {
+            const failed = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
+            const summary = failed.structuredContent as {
+                failed: { error: string };
+                layers: { name: string; locked: boolean }[];
+            };
+            assert.match(summary.failed.error, /fake addItemToDocument failure/);
+            assert.ok(
+                summary.layers.some((entry) => entry.name === "a/b" && entry.locked),
+                "the source layer remains after a copy failure",
+            );
+            assert.equal(summary.layers.filter((entry) => ["hero", "Hero", "hero_2"].includes(entry.name)).length, 0);
+            const source = (await layersLog(tempDir)).at(-1).find((entry: { name: string }) => entry.name === "a/b");
+            assert.equal(source.frames[0].elements.length, 3, "the original source instances remain intact");
+        },
+    );
+});
+
+test("edit_timeline keeps every element after native distribution partially mutates then fails", {
+    timeout: 30_000,
+}, async () => {
+    await withServer(
+        {
+            FAKE_DISTRIBUTE: "1",
+            FAKE_NATIVE_DISTRIBUTE: "1",
+            FAKE_NATIVE_DISTRIBUTE_PARTIAL_FAILURE: "1",
+            FAKE_LOCK_DISTRIBUTE: "1",
+        },
+        async (client, tempDir) => {
+            const result = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
+            const summary = result.structuredContent as {
+                failed: { error: string };
+                layers: { name: string; locked: boolean }[];
+            };
+            assert.match(summary.failed.error, /fake native distribution failure after partial mutation/);
+            assert.match(summary.failed.error, /Undo in Animate/);
+            assert.ok(summary.layers.some((entry) => entry.name === "a/b" && entry.locked));
+            assert.ok(summary.layers.some((entry) => entry.name === "Native partial"));
+            const layers = (await layersLog(tempDir)).at(-1);
+            const elements = layers.flatMap((entry: { frames: { elements: { x: number }[] }[] }) =>
+                entry.frames.flatMap((frame) => frame.elements),
+            );
+            assert.deepEqual(elements.map((element: { x: number }) => element.x).sort(), [10, 20, 30]);
+        },
+    );
+});
+
+test("edit_timeline keeps native layers when post-distribution validation fails", { timeout: 30_000 }, async () => {
+    await withServer(
+        {
+            FAKE_DISTRIBUTE: "1",
+            FAKE_NATIVE_DISTRIBUTE: "1",
+            FAKE_NATIVE_DISTRIBUTE_BAD_COUNT: "1",
+            FAKE_LOCK_DISTRIBUTE: "1",
+        },
+        async (client, tempDir) => {
+            const result = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
+            const summary = result.structuredContent as {
+                failed: { error: string };
+                layers: { name: string; locked: boolean }[];
+            };
+            assert.match(summary.failed.error, /unexpected number of layers/);
+            assert.match(summary.failed.error, /Undo in Animate/);
+            assert.ok(summary.layers.some((entry) => entry.name === "a/b" && entry.locked));
+            assert.ok(summary.layers.some((entry) => entry.name === "Native validation"));
+            const layers = (await layersLog(tempDir)).at(-1);
+            const elements = layers.flatMap((entry: { frames: { elements: { x: number }[] }[] }) =>
+                entry.frames.flatMap((frame) => frame.elements),
+            );
+            assert.deepEqual(elements.map((element: { x: number }) => element.x).sort(), [10, 20, 30]);
+        },
+    );
+});

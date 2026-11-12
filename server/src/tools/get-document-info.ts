@@ -1,4 +1,5 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { isGreensockInstalled } from "../greensock/greensock.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -20,12 +21,21 @@ export function registerGetDocumentInfo(
      */
     const handleGetDocumentInfo: ToolCallback = async () => {
         try {
-            const info = JSON.parse(
-                String(await runner.execute(bundle("export-common", "get-document-info"))),
-            ) as unknown;
+            const { folder, ...info } = JSON.parse(
+                String(await runner.execute(bundle("export-common", "document-runtime-info", "get-document-info"))),
+            ) as {
+                name: string;
+                width: number;
+                height: number;
+                frameRate: number;
+                timelines: string[];
+                asVersion: "AS3" | "AS2" | null;
+                folder: string | null;
+            };
+            const result = { ...info, greensock: info.asVersion === "AS3" && isGreensockInstalled(folder) };
             return {
-                content: [{ type: "text", text: JSON.stringify(info) }],
-                structuredContent: info as Record<string, unknown>,
+                content: [{ type: "text", text: JSON.stringify(result) }],
+                structuredContent: result,
             };
         } catch (error) {
             return failure(error);
@@ -34,7 +44,10 @@ export function registerGetDocumentInfo(
 
     server.registerTool(
         "get_document_info",
-        { description: "Get the active Animate document's name, size, frame rate and timeline names." },
+        {
+            description:
+                "Get the active Animate document's name, size, frame rate, timeline names, ActionScript version (null for Canvas/unknown), and whether GreenSock is installed beside the FLA.",
+        },
         handleGetDocumentInfo,
     );
 }

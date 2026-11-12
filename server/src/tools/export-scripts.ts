@@ -2,8 +2,8 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { clearPreviousExport } from "../apply.js";
-import { type ExportData, type ExportScene, safeName, writeExport } from "../export.js";
+import { type ExportData, type ExportScene, safeName, writeExport } from "../export-workspace/export.js";
+import { prepareExport } from "../export-workspace/export-workspace.js";
 import type { createRunner } from "../runner.js";
 import { failure, TIMELINES_PER_RUN } from "./shared.js";
 
@@ -112,7 +112,7 @@ export function registerExportScripts(
             const outputDirectory = resolve(
                 dir ?? join(homedir(), ".animate-mcp", "exports", safeName(exportData.document.replace(/\.fla$/i, ""))),
             );
-            await clearPreviousExport(outputDirectory, force ?? false);
+            await prepareExport(outputDirectory, force ?? false);
             const exportResult = { ...(await writeExport(exportData, outputDirectory)), warnings };
             return {
                 content: [{ type: "text", text: JSON.stringify(exportResult) }],
