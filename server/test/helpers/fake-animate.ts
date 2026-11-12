@@ -755,7 +755,11 @@ if (!src.includes("HANG")) runInNewContext(src, {
       save: (path) => {
         logPublish("compilerErrors.save");
         if (process.env.FAKE_TYPE === "htmlcanvas") throw new Error("not supported on HTML5 Canvas");
-        writeFileSync(path, process.env.FAKE_COMPILER_OUTPUT || "0 個のエラー, 0 個の警告");
+        const outputs = process.env.FAKE_COMPILER_OUTPUTS && JSON.parse(process.env.FAKE_COMPILER_OUTPUTS);
+        const outputIndex = process.env.FAKE_LOG
+          ? readFileSync(process.env.FAKE_LOG + ".publish", "utf8").split("\\n").filter((line) => line === "compilerErrors.save").length - 1
+          : 0;
+        writeFileSync(path, outputs ? outputs[outputIndex] ?? "" : process.env.FAKE_COMPILER_OUTPUT || "0 個のエラー, 0 個の警告");
       },
     },
     /**

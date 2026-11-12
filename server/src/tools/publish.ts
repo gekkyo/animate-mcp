@@ -102,7 +102,7 @@ export function registerPublish(
 
             const outputPath = join(tmpdir(), `animate-mcp-publish-${randomUUID()}.txt`);
             const publish = `${prelude}var __publishOutputPath = ${JSON.stringify(outputPath)};\n${bundle("select-document", "publish")}`;
-            const output = await runner.execute(publish);
+            const firstOutput = String(await runner.execute(publish));
             let result: BuildResult;
             if (documentType === "htmlcanvas") {
                 result = {
@@ -112,8 +112,18 @@ export function registerPublish(
                     note: "HTML5 Canvas: compile errors cannot be detected; ok only means Publish ran",
                 };
             } else {
-                const { errors, warnings } = parseCompilerOutput(String(output));
-                result = { ok: errors.length === 0, errors, warnings };
+                const output = firstOutput || String(await runner.execute(publish));
+                if (!output) {
+                    result = {
+                        ok: true,
+                        errors: [],
+                        warnings: [],
+                        note: "compiler output unavailable; no errors reported",
+                    };
+                } else {
+                    const { errors, warnings } = parseCompilerOutput(output);
+                    result = { ok: errors.length === 0, errors, warnings };
+                }
             }
             return {
                 content: [{ type: "text", text: JSON.stringify(result) }],
@@ -128,7 +138,7 @@ export function registerPublish(
         "publish",
         {
             description:
-                "Publish an AS3 or HTML5 Canvas document and return its Build result. Publish overwrites outputs at the document's publish settings; the .fla is not saved, and unsaved edits in the open document are published. AS3 compile errors are returned as a normal result, not a tool error. HTML5 Canvas compile errors cannot be detected; ok only means Publish ran.",
+                "Publish an AS3 or HTML5 Canvas document and return its Build result. Publish overwrites outputs at the document's publish settings; the .fla is not saved, and unsaved edits in the open document are published. AS3 compile errors are returned as a normal result, not a tool error; empty compiler output is retried once, then reported as unavailable with no errors reported. HTML5 Canvas compile errors cannot be detected; ok only means Publish ran.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: true,

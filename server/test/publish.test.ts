@@ -88,6 +88,54 @@ test("publish activates then publishes in separate Runs and returns compile erro
     );
 });
 
+test("publish retries empty AS3 compiler output and parses the retry", { timeout: 30_000 }, async () => {
+    await withServer(
+        { FAKE_COMPILER_OUTPUTS: JSON.stringify(["", "0 Error(s), 0 Warning(s)"]) },
+        async (client, tempDir) => {
+            const result = await client.callTool({ name: "publish", arguments: {} });
+            assert.equal(result.isError, undefined, text(result));
+            assert.deepEqual(result.structuredContent, { ok: true, errors: [], warnings: [] });
+            assert.deepEqual((await readFile(join(tempDir, "log.publish"), "utf8")).trim().split("\n"), [
+                "activate",
+                "publish",
+                "compilerErrors.save",
+                "remove",
+                "publish",
+                "compilerErrors.save",
+                "remove",
+            ]);
+            assert.equal((await readFile(join(tempDir, "log"), "utf8")).match(/^start$/gm)?.length, 3);
+        },
+    );
+});
+
+test("publish reports empty AS3 compiler output after one retry", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_COMPILER_OUTPUTS: JSON.stringify(["", ""]) }, async (client, tempDir) => {
+        const result = await client.callTool({ name: "publish", arguments: {} });
+        const expected = {
+            ok: true,
+            errors: [],
+            warnings: [],
+            note: "compiler output unavailable; no errors reported",
+        };
+        assert.equal(result.isError, undefined, text(result));
+        assert.deepEqual(result.structuredContent, expected);
+        assert.deepEqual(JSON.parse(text(result)), expected);
+        assert.equal((await readFile(join(tempDir, "log.publish"), "utf8")).match(/^publish$/gm)?.length, 2);
+        assert.equal((await readFile(join(tempDir, "log"), "utf8")).match(/^start$/gm)?.length, 3);
+    });
+});
+
+test("publish does not retry malformed non-empty compiler output", { timeout: 20_000 }, async () => {
+    await withServer({ FAKE_COMPILER_OUTPUT: "**Error** incomplete output" }, async (client, tempDir) => {
+        const result = await client.callTool({ name: "publish", arguments: {} });
+        assert.equal(result.isError, true);
+        assert.match(text(result), /Compiler output unavailable; retry publish/);
+        assert.equal((await readFile(join(tempDir, "log.publish"), "utf8")).match(/^publish$/gm)?.length, 1);
+        assert.equal((await readFile(join(tempDir, "log"), "utf8")).match(/^start$/gm)?.length, 2);
+    });
+});
+
 test("publish refuses unsaved documents before publishing", { timeout: 20_000 }, async () => {
     await withServer({ FAKE_UNSAVED: "1" }, async (client, tempDir) => {
         const result = await client.callTool({ name: "publish", arguments: {} });
