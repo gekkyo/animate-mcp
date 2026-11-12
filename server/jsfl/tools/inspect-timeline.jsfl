@@ -132,7 +132,8 @@
       skewY: Number(element.skewY || 0),
       colorEffect: colorEffect,
       filters: filters,
-      blendMode: element.blendMode || 'normal'
+      blendMode: element.blendMode || 'normal',
+      visible: element.visible !== false
     };
   }
 

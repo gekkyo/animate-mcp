@@ -9,6 +9,7 @@ import { bundle } from "./jsfl-bundle.js";
 import { createRunner } from "./runner.js";
 import { registerApplyScripts } from "./tools/apply-scripts.js";
 import { registerCaptureFrame } from "./tools/capture-frame.js";
+import { registerEditElements } from "./tools/edit-elements.js";
 import { registerEditLibrary } from "./tools/edit-library.js";
 import { registerEditTimeline } from "./tools/edit-timeline.js";
 import { registerEditTween } from "./tools/edit-tween.js";
@@ -33,6 +34,7 @@ Basic flow:
 3. Run apply_scripts to apply them. The .fla is not saved; the user saves it.
 - To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.
 - Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
+- Use edit_elements to set instance properties on keyframes; tween interiors are refused, and the .fla is not saved.
 - Use inspect_timeline to check instances and tweens instead of run_jsfl; use the distributeToLayers operation to split a layer.
 - Use edit_tween to animate instances; motion is the default and ease presets include quad, cubic, quart, quint, sine, expo, circ and back.
 - Use edit_library to organize library folders and items. Re-export with export_scripts before apply_scripts; deleteItem requires confirm: true and refuses items in use.
@@ -70,6 +72,7 @@ async function main() {
     registerInstallGreensock(server, { runner, bundle });
     registerExportScripts(server, { runner, bundle });
     registerEditTimeline(server, { runner, bundle });
+    registerEditElements(server, { runner, bundle });
     registerInspectTimeline(server, { runner, bundle });
     registerEditTween(server, { runner, bundle });
     registerEditLibrary(server, { runner, bundle });

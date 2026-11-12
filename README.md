@@ -27,6 +27,7 @@ Agents can read scripts and structure from scenes and library symbols, then appl
 
 - AI agents can read frame scripts and structure from scenes and library symbols through files, then apply edited scripts back to Animate.
 - Inspect layers, keyframes, instances, and tweens.
+- Edit instance transforms, color effects, filters, names, blend modes, and visibility on keyframes.
 - Edit layer and frame structure and labels.
 - Create motion and classic tweens with preset or custom Bézier easing.
 - Organize library folders and items and find unused items.
@@ -112,6 +113,7 @@ Install GreenSock-AS3 for the open document
 - After changing the timeline, tweens, or library, re-export before editing or applying scripts.
 - Deleting a layer, frames, or a library item requires `confirm: true`. Library items in use cannot be deleted.
 - Save manually in Animate. Renaming or moving a library item does not automatically update linkage names or string references in code.
+- `edit_elements` rejects tween interiors and validates all operations before writing; it does not save the `.fla`.
 
 ## Tools
 
@@ -123,6 +125,7 @@ Install GreenSock-AS3 for the open document
 | `publish` | Publishes an AS3 or HTML5 Canvas document and returns its Build result. | Overwrites outputs at the document's publish settings; unsaved edits in the open document are published, but the `.fla` is not saved. Canvas compile errors cannot be reported; `ok: true` only means Publish ran. |
 | `capture_frame` | Returns a PNG image of one frame from the active timeline, including a library symbol being edited. | `frame` is 1-based and defaults to the current frame. Saves a new file under `~/.animate-mcp/captures/<document>/` or `dir`; unsaved documents are supported. The frame is restored, but changing it may clear the selection. Stages larger than 2048px on either side are refused, without scaling. |
 | `inspect_timeline` | Reads layers, keyframe ranges, and instances and tweens at a specified frame of a scene or library symbol. | `timeline` is a zero-based scene index or library-item path. Frame numbers are one-based; layers can be filtered. |
+| `edit_elements` | Sets instance transforms, names, color effects, filters, blend modes, and visibility on keyframes. | Layer and element references are names or zero-based indexes; tween interiors are refused, and all operations are validated before any write. Rotation and skew cannot be set together in one operation. Does not save the `.fla`. |
 | `edit_timeline` | Edits layers, frames, keyframes, and labels, and distributes instances across layers. Runs operations in `ops` order. | `deleteLayer` and `removeFrames` require `confirm: true`. `shiftLayerFrames` overwrites the clipboard and may require Undo if it fails partway through. |
 | `edit_tween` | Creates motion or classic tweens and changes easing. Supports presets, numeric easing, and four-number custom easing. | The named instance must be alone on its layer. Existing tween spans are not replaced. |
 | `edit_library` | Creates folders, moves, renames, and deletes items, and lists unused items. | Deletion requires `confirm: true` and refuses items in use. Linkage names and string references in code are not updated. |

@@ -30,6 +30,7 @@ test("inspect_timeline returns layer spans and instance properties without chang
                         colorEffect: { mode: string; alphaPercent: number };
                         filters: { name: string }[];
                         blendMode: string;
+                        visible: boolean;
                     }[];
                 }[];
             };
@@ -59,6 +60,7 @@ test("inspect_timeline returns layer spans and instance properties without chang
                 { name: "blurFilter", enabled: false, blurX: 8, blurY: 4, quality: "high" },
             ]);
             assert.equal(layer.elements[0].blendMode, "normal");
+            assert.equal(layer.elements[0].visible, true);
             assert.equal(text(result).includes("Export again"), false);
         },
     );
@@ -97,6 +99,7 @@ test("inspect_timeline supports selected layers, motion keyframe values and libr
                 currentLayer: 1,
                 currentFrame: 0,
                 selectedFrames: [1, 0, 2],
+                selectedElements: 0,
             });
 
             const symbol = await client.callTool({

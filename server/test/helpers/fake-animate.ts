@@ -110,6 +110,21 @@ const layer = (name, frames, layerType = "normal", locked = false, parentLayer =
       });
     }
   }
+  if (process.env.FAKE_ENFORCE_ELEMENT_LOCK) {
+    for (const frame of new Set(frames)) for (const element of frame.elements || []) {
+      let x = element.x;
+      Object.defineProperty(element, "x", {
+        enumerable: true,
+        configurable: true,
+        get: () => x,
+        set: (value) => {
+          if (result.locked) throw new Error("Layer is locked");
+          result.writeWasUnlocked = true;
+          x = value;
+        },
+      });
+    }
+  }
   return result;
 };
 /**
@@ -439,6 +454,10 @@ const doc = (documentName, documentType) => {
     const timeline = document.getTimeline();
     return timeline.layers.flatMap((candidate) => candidate.frames[timeline.currentFrame]?.elements || []).filter((element) => element.selected);
   } });
+  if (process.env.FAKE_INITIAL_SELECTED_ELEMENT) {
+    const timeline = document.getTimeline();
+    timeline.layers[0].frames[timeline.currentFrame].elements[0].selected = true;
+  }
   /** Clears selection on every instance in the active timeline.
    * @returns Nothing
    */
@@ -525,7 +544,9 @@ const doc = (documentName, documentType) => {
     element.color = color;
     element.colorTintPercent = amount;
     if (Object.prototype.hasOwnProperty.call(element, "__fakeTintColor")) element.__fakeTintColor = color;
+    else element.tintColor = color;
     if (Object.prototype.hasOwnProperty.call(element, "__fakeTintPercent")) element.__fakeTintPercent = amount;
+    else element.tintPercent = amount;
   } };
   /** Adds a fake filter to selected instances.
    * @param name Animate filter name
@@ -758,7 +779,7 @@ process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym",
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym-layers", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers.map((candidate) => ({ name: candidate.name, script: candidate.frames[0]?.actionScript }))]))) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".library", JSON.stringify(docs[0].library.items.map((item) => ({ name: item.name, itemType: item.itemType }))) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".layers", JSON.stringify(docs[0].timelines[0].layers.map((candidate) => ({ name: candidate.name, type: candidate.layerType, parent: candidate.parentLayer?.name, locked: candidate.locked, writeWasUnlocked: candidate.writeWasUnlocked, frames: candidate.frames.map((frame, index) => frame.startFrame === index ? { start: frame.startFrame, duration: frame.duration, script: frame.actionScript, tween: frame.tweenType, tweenEasing: frame.tweenEasing, hasCustomEase: frame.hasCustomEase, useSingleEaseCurve: frame.useSingleEaseCurve, customEases: frame.customEases, label: frame.name, motionXML: frame.motionXML, elements: frame.elements.map((element) => ({ name: element.name, x: element.x, y: element.y, matrix: element.matrix, transformationPoint: element.getTransformationPoint(), scaleX: element.scaleX, scaleY: element.scaleY, rotation: element.rotation, colorMode: element.colorMode, colorAlphaPercent: element.colorAlphaPercent, colorAlphaAmount: element.colorAlphaAmount, brightness: element.brightness, tintColor: element.tintColor, tintPercent: element.tintPercent, colorBrightnessPercent: element.colorBrightnessPercent, color: element.color, colorTintPercent: element.colorTintPercent, colorRedPercent: element.colorRedPercent, colorGreenPercent: element.colorGreenPercent, colorBluePercent: element.colorBluePercent, colorRedAmount: element.colorRedAmount, colorGreenAmount: element.colorGreenAmount, colorBlueAmount: element.colorBlueAmount, blendMode: element.blendMode, visible: element.visible, cacheAsBitmap: element.cacheAsBitmap, loop: element.loop, firstFrame: element.firstFrame, lastFrame: element.lastFrame, trackAsMenu: element.trackAsMenu, filters: element.filters })) } : null).filter(Boolean) }))) + "\\n");
-process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".state", JSON.stringify({ currentLayer: docs[0].timelines[0].currentLayer, currentFrame: docs[0].timelines[0].currentFrame, selectedFrames: docs[0].timelines[0].selectedFrames }) + "\\n");
+process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".state", JSON.stringify({ currentLayer: docs[0].timelines[0].currentLayer, currentFrame: docs[0].timelines[0].currentFrame, selectedFrames: docs[0].timelines[0].selectedFrames, selectedElements: docs[0].timelines[0].layers.flatMap((candidate) => candidate.frames[docs[0].timelines[0].currentFrame]?.elements || []).filter((element) => element.selected).length }) + "\\n");
 log("end");
 `;
 
