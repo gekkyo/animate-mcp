@@ -6,6 +6,9 @@ MCP 対応の AI エージェントから、Adobe Animate のスクリプトと�
 
 [English](README.md) | 日本語
 
+[変更履歴](CHANGELOG.md)
+
+[![CI](https://github.com/gekkyo/animate-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/gekkyo/animate-mcp/actions/workflows/ci.yml)
 [![MCP compatible](https://img.shields.io/badge/MCP-compatible-blue)](https://modelcontextprotocol.io)
 [![npm](https://img.shields.io/npm/v/animate-mcp)](https://www.npmjs.com/package/animate-mcp)
 [![license MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
@@ -191,3 +194,7 @@ MCP 対応の AI エージェントから、Adobe Animate のスクリプトと�
 4. すべてのドキュメントを閉じて `get_document_info` を実行します。"No document open" が返ります。
 5. Animate を終了して `run_jsfl` を実行します。"Animate not running" が返ります。
 6. 未確認: モーダルダイアログが開いているときの挙動。
+
+## ライセンス
+
+[MIT ライセンス](LICENSE)
