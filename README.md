@@ -6,6 +6,9 @@ Edit Adobe Animate scripts and timeline structure from an MCP-compatible AI agen
 
 English | [日本語](README.ja.md)
 
+[Changelog](CHANGELOG.md)
+
+[![CI](https://github.com/gekkyo/animate-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/gekkyo/animate-mcp/actions/workflows/ci.yml)
 [![MCP compatible](https://img.shields.io/badge/MCP-compatible-blue)](https://modelcontextprotocol.io)
 [![npm](https://img.shields.io/npm/v/animate-mcp)](https://www.npmjs.com/package/animate-mcp)
 [![license MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
@@ -41,13 +44,13 @@ Agents can read scripts and structure from scenes and library symbols, then appl
 
 ### Claude Code
 
-    claude mcp add animate -- npx -y animate-mcp@latest
+    claude mcp add animate-mcp -- npx -y animate-mcp@latest
 
 ### Clients configured with JSON (Claude Desktop, etc.)
 
     {
       "mcpServers": {
-        "animate": {
+        "animate-mcp": {
           "command": "npx",
           "args": ["-y", "animate-mcp@latest"]
         }
@@ -191,3 +194,7 @@ Client config: `node /path/to/animate-mcp/server/dist/index.js` (stdio).
 4. Close all documents and run `get_document_info`. It returns "No document open".
 5. Quit Animate and run `run_jsfl`. It returns "Animate not running".
 6. Unverified: behavior while a modal dialog is open.
+
+## License
+
+[MIT License](LICENSE)
