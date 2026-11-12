@@ -58,16 +58,16 @@ export function parseCompilerOutput(output: string): { errors: Diagnostic[]; war
         }
         const prefix = severity === "error" ? "**Error**" : "**Warning**";
         const match = /^\*\*(?:Error|Warning)\*\*\s*(.*?)\t([^:]+):\s*(.*)$/.exec(line);
-        const parsed = match?.[1]?.trim() && match[2].trim();
-        const location = parsed ? match[1] : "";
+        const parsed = match && match[1].trim() && match[2].trim() ? match : null;
+        const location = parsed ? parsed[1] : "";
         const lineNumber = /(?:\bLine|行)\s+(\d+)/i.exec(location)?.[1];
         const columnNumber = /(?:\bColumn|列)\s+(\d+)/i.exec(location)?.[1];
         const diagnostic: Diagnostic = {
             location,
             ...(lineNumber ? { line: Number(lineNumber) } : {}),
             ...(columnNumber ? { column: Number(columnNumber) } : {}),
-            code: parsed ? match[2].trim() : "",
-            message: parsed ? match[3] : line.slice(prefix.length).trim(),
+            code: parsed ? parsed[2].trim() : "",
+            message: parsed ? parsed[3] : line.slice(prefix.length).trim(),
         };
         const key = `${severity}:${JSON.stringify(diagnostic)}`;
         if (seen.has(key)) {
