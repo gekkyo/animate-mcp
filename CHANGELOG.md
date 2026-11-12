@@ -12,6 +12,7 @@
 
 - Retry empty AS3 publish compiler output once; if it remains empty, report that no errors were reported instead of failing.
 - `edit_elements` now rejects non-instance elements and marks its changes as destructive; supplied `filters` replace all existing filters, and `[]` clears them.
+- Preserve compiler error and warning lines as plain diagnostics when Animate's location/code format cannot be parsed.
 
 ## 0.1.6
 

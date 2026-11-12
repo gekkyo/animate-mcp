@@ -53,6 +53,13 @@ test("compiler output parser handles Japanese and English diagnostics, duplicate
     assert.deepEqual(parseCompilerOutput("0 個のエラー, 0 個の警告"), { errors: [], warnings: [] });
     assert.deepEqual(parseCompilerOutput("0 Error(s), 0 Warning(s)"), { errors: [], warnings: [] });
     assert.throws(() => parseCompilerOutput("**Error** incomplete output"), /retry publish/);
+    assert.deepEqual(
+        parseCompilerOutput("**Error** incomplete error line\n**Warning** incomplete warning line\n1 Error(s), 1 Warning(s)"),
+        {
+            errors: [{ location: "", code: "", message: "incomplete error line" }],
+            warnings: [{ location: "", code: "", message: "incomplete warning line" }],
+        },
+    );
 });
 
 test("publish activates then publishes in separate Runs and returns compile errors normally", {

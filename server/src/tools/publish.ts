@@ -56,19 +56,18 @@ export function parseCompilerOutput(output: string): { errors: Diagnostic[]; war
         if (!severity) {
             continue;
         }
+        const prefix = severity === "error" ? "**Error**" : "**Warning**";
         const match = /^\*\*(?:Error|Warning)\*\*\s*(.*?)\t([^:]+):\s*(.*)$/.exec(line);
-        if (!match?.[1]?.trim() || !match[2].trim()) {
-            throw new Error("Compiler output unavailable; retry publish");
-        }
-        const location = match[1];
+        const parsed = match?.[1]?.trim() && match[2].trim();
+        const location = parsed ? match[1] : "";
         const lineNumber = /(?:\bLine|行)\s+(\d+)/i.exec(location)?.[1];
         const columnNumber = /(?:\bColumn|列)\s+(\d+)/i.exec(location)?.[1];
         const diagnostic: Diagnostic = {
             location,
             ...(lineNumber ? { line: Number(lineNumber) } : {}),
             ...(columnNumber ? { column: Number(columnNumber) } : {}),
-            code: match[2].trim(),
-            message: match[3],
+            code: parsed ? match[2].trim() : "",
+            message: parsed ? match[3] : line.slice(prefix.length).trim(),
         };
         const key = `${severity}:${JSON.stringify(diagnostic)}`;
         if (seen.has(key)) {
