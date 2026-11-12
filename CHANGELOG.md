@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6
+
+### Changed
+
+- Added npm package description and search keywords.
+
 ## 0.1.5
 
 ### Changed
