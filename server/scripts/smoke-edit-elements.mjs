@@ -41,6 +41,16 @@ try {
   __addInstance("motion", "motionInstance");
   var __lockedIndex = __addInstance("locked", "lockedInstance");
   __timeline.layers[__lockedIndex].locked = true;
+  __smokeDoc.addNewScene();
+  __smokeDoc.editScene(1);
+  var __sceneTwoTimeline = __smokeDoc.getTimeline();
+  __sceneTwoTimeline.insertFrames(4, true, 0);
+  var __sceneTwoLayer = __sceneTwoTimeline.addNewLayer("sceneTwoEffects", "normal", true);
+  __sceneTwoTimeline.currentLayer = __sceneTwoLayer;
+  __sceneTwoTimeline.currentFrame = 0;
+  __smokeDoc.library.addItemToDocument({ x: 50, y: 50 }, __symbol);
+  __sceneTwoTimeline.layers[__sceneTwoLayer].frames[0].elements[0].name = "sceneTwoInstance";
+  __smokeDoc.editScene(0);
   fl.setActiveWindow(__smokeDoc);
   __smokeDoc.name;
 } catch (__error) {
@@ -165,6 +175,45 @@ try {
         }
     }
     console.log("filters and all color modes: passed");
+
+    const sceneTwoColor = verifyTool(
+        await editElements({
+            document: documentName,
+            timeline: 1,
+            ops: [{ layer: "sceneTwoEffects", frame: 1, element: "sceneTwoInstance", set: { colorEffect: { mode: "alpha", alphaPercent: 42 } } }],
+        }),
+        "edit color effect on inactive Scene 2",
+    );
+    assert.equal(sceneTwoColor.elements[0].colorMode, "alpha");
+    const sceneTwoInspect = verifyTool(
+        await inspectTimeline({ document: documentName, timeline: 1, layers: ["sceneTwoEffects"], frame: 1 }),
+        "inspect inactive Scene 2 color effect",
+    );
+    near(sceneTwoInspect.layers[0].elements[0].colorEffect.alphaPercent, 42, "Scene 2 alpha percent");
+    const activeScene = await runJsfl({
+        code: `var __doc = null; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === ${JSON.stringify(documentName)}) __doc = fl.documents[__index]; __doc.currentTimeline;`,
+    });
+    assert.equal(activeScene.structuredContent?.result, 0, "Scene 1 was not restored after editing Scene 2");
+    console.log("inactive Scene 2 color effect and scene restoration: passed");
+
+    const sceneTwoTween = verifyTool(
+        await editTween({
+            document: documentName,
+            timeline: 1,
+            ops: [
+                {
+                    op: "createTween",
+                    layer: "sceneTwoEffects",
+                    instance: "sceneTwoInstance",
+                    kind: "classic",
+                    keyframes: [{ frame: 1, x: 50 }, { frame: 5, x: 150 }],
+                },
+            ],
+        }),
+        "create tween on inactive Scene 2",
+    );
+    assert.equal(sceneTwoTween.failed, null, `Scene 2 tween setup failed: ${JSON.stringify(sceneTwoTween)}`);
+    console.log("inactive Scene 2 tween: passed");
 
     const beforeInvalid = verifyTool(
         await inspectTimeline({ document: documentName, timeline: 0, layers: ["effects"], frame: 1 }),

@@ -13,6 +13,7 @@
         throw new Error('Scene not found');
       }
       if (document.getTimeline().libraryItem && document.exitEditMode) document.exitEditMode();
+      if (document.currentTimeline !== __timelineRef && document.editScene) document.editScene(__timelineRef);
       return document.timelines[__timelineRef];
     }
     var found = false;
