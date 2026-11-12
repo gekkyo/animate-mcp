@@ -1,18 +1,9 @@
 // Real-Animate smoke test (not in CI): npm run build, open the target document in Animate, then `node server/scripts/smoke-capture-frame.mjs [frame] [dir]`.
 import { readFile } from "node:fs/promises";
-import { createRunner } from "../dist/runner.js";
-import { isAnimateRunning, launcher } from "../dist/animate-launcher.js";
-import { bundle } from "../dist/jsfl-bundle.js";
 import { registerCaptureFrame } from "../dist/tools/capture-frame.js";
+import { toolHandler } from "./smoke-lib.mjs";
 
-const runner = createRunner({
-    dir: `${process.env.HOME}/.animate-mcp/runs`,
-    launch: launcher(),
-    isRunning: isAnimateRunning,
-    timeoutMs: 120000,
-});
-let handle;
-registerCaptureFrame({ registerTool: (_name, _config, callback) => (handle = callback) }, { runner, bundle });
+const handle = toolHandler(registerCaptureFrame);
 
 const [frameArg, dir] = process.argv.slice(2);
 const result = await handle({ ...(frameArg ? { frame: Number(frameArg) } : {}), ...(dir ? { dir } : {}) });
