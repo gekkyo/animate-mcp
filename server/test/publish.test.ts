@@ -98,11 +98,31 @@ test("publish refuses unsaved documents before publishing", { timeout: 20_000 },
     });
 });
 
-test("publish reports HTML5 Canvas as not supported yet", { timeout: 20_000 }, async () => {
+test("publish runs HTML5 Canvas without compiler diagnostics", { timeout: 20_000 }, async () => {
     await withServer({ FAKE_TYPE: "htmlcanvas" }, async (client, tempDir) => {
         const result = await client.callTool({ name: "publish", arguments: {} });
+        const expected = {
+            ok: true,
+            errors: [],
+            warnings: [],
+            note: "HTML5 Canvas: compile errors cannot be detected; ok only means Publish ran",
+        };
+        assert.equal(result.isError, undefined, text(result));
+        assert.deepEqual(result.structuredContent, expected);
+        assert.deepEqual(JSON.parse(text(result)), expected);
+        assert.deepEqual((await readFile(join(tempDir, "log.publish"), "utf8")).trim().split("\n"), [
+            "activate",
+            "publish",
+        ]);
+        assert.equal((await readFile(join(tempDir, "log"), "utf8")).match(/^start$/gm)?.length, 2);
+    });
+});
+
+test("publish refuses unsaved HTML5 Canvas documents", { timeout: 20_000 }, async () => {
+    await withServer({ FAKE_TYPE: "htmlcanvas", FAKE_UNSAVED: "1" }, async (client, tempDir) => {
+        const result = await client.callTool({ name: "publish", arguments: {} });
         assert.equal(result.isError, true);
-        assert.equal(text(result), "HTML5 Canvas is not supported yet");
+        assert.match(text(result), /save first/);
         assert.equal((await readFile(join(tempDir, "log"), "utf8")).match(/^start$/gm)?.length, 1);
         await assert.rejects(readFile(join(tempDir, "log.publish"), "utf8"), { code: "ENOENT" });
     });

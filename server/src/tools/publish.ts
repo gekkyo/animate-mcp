@@ -16,6 +16,13 @@ export type Diagnostic = {
     message: string;
 };
 
+export type BuildResult = {
+    ok: boolean;
+    errors: Diagnostic[];
+    warnings: Diagnostic[];
+    note?: string;
+};
+
 const PUBLISH_INPUT = {
     document: z.string().optional().describe("Open document name; defaults to the only open document"),
 };
@@ -83,21 +90,31 @@ export function registerPublish(
     deps: { runner: Runner; bundle: (...names: string[]) => string },
 ): void {
     const { runner, bundle } = deps;
-    /** Publishes an AS3 document and returns its compiler diagnostics.
+    /** Publishes an AS3 or HTML5 Canvas document and returns its Build result.
      * @param document Optional document name to select
      * @returns Tool result containing the Build result, or an MCP error result
      */
     const handlePublish: ToolCallback<typeof PUBLISH_INPUT> = async ({ document }) => {
         try {
             const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
-            const activate = `${prelude}${bundle("select-document")}\n(function () {\n  var document = selectDocument();\n  if (document.type === "htmlcanvas") throw new Error("HTML5 Canvas is not supported yet");\n  if (!document.pathURI) throw new Error("Document is not saved; save first");\n  fl.setActiveWindow(document);\n  return true;\n})()`;
-            await runner.execute(activate);
+            const activate = `${prelude}${bundle("select-document")}\n(function () {\n  var document = selectDocument();\n  if (!document.pathURI) throw new Error("Document is not saved; save first");\n  fl.setActiveWindow(document);\n  return document.type;\n})()`;
+            const documentType = await runner.execute(activate);
 
             const outputPath = join(tmpdir(), `animate-mcp-publish-${randomUUID()}.txt`);
             const publish = `${prelude}var __publishOutputPath = ${JSON.stringify(outputPath)};\n${bundle("select-document", "publish")}`;
-            const output = String(await runner.execute(publish));
-            const { errors, warnings } = parseCompilerOutput(output);
-            const result = { ok: errors.length === 0, errors, warnings };
+            const output = await runner.execute(publish);
+            let result: BuildResult;
+            if (documentType === "htmlcanvas") {
+                result = {
+                    ok: true,
+                    errors: [],
+                    warnings: [],
+                    note: "HTML5 Canvas: compile errors cannot be detected; ok only means Publish ran",
+                };
+            } else {
+                const { errors, warnings } = parseCompilerOutput(String(output));
+                result = { ok: errors.length === 0, errors, warnings };
+            }
             return {
                 content: [{ type: "text", text: JSON.stringify(result) }],
                 structuredContent: result,
@@ -111,7 +128,7 @@ export function registerPublish(
         "publish",
         {
             description:
-                "Publish an AS3 document and return its Build result. Publish overwrites outputs at the document's publish settings; the .fla is not saved, and unsaved edits in the open document are published. Compile errors are returned as a normal result, not a tool error.",
+                "Publish an AS3 or HTML5 Canvas document and return its Build result. Publish overwrites outputs at the document's publish settings; the .fla is not saved, and unsaved edits in the open document are published. AS3 compile errors are returned as a normal result, not a tool error. HTML5 Canvas compile errors cannot be detected; ok only means Publish ran.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: true,

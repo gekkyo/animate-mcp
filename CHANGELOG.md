@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added `publish` for AS3 and HTML5 Canvas documents; Canvas compile errors cannot be detected.
+
 ## 0.1.6
 
 ### Changed

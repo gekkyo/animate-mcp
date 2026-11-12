@@ -62,5 +62,6 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
         }
         assert.match(byName.get("publish")?.description ?? "", /overwrites outputs.*publish settings/i);
         assert.match(byName.get("publish")?.description ?? "", /compile errors are returned as a normal result/i);
+        assert.match(byName.get("publish")?.description ?? "", /HTML5 Canvas compile errors cannot be detected/i);
     });
 });

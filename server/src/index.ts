@@ -38,7 +38,7 @@ Basic flow:
 - If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
 - If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).
 - For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.
-- Use publish to publish AS3 documents and check the Build result; outputs at the document's publish settings are overwritten, and compile errors are returned as a normal result.
+- Use publish to publish AS3 or HTML5 Canvas documents and check the Build result; outputs at the document's publish settings are overwritten. Canvas compile errors cannot be detected.
 
 Notes:
 - When several documents are open, document is required. get_document_info returns the name.
