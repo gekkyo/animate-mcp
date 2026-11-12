@@ -50,6 +50,11 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
             run_jsfl: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
         };
 
+        assert.deepEqual(
+            [...byName.keys()].sort(),
+            Object.keys(annotations).sort(),
+            "every tool needs an annotations entry",
+        );
         for (const [name, expected] of Object.entries(annotations)) {
             assert.deepEqual(byName.get(name)?.annotations, expected, name);
         }
