@@ -11,6 +11,7 @@
 ### Changed
 
 - Retry empty AS3 publish compiler output once; if it remains empty, report that no errors were reported instead of failing.
+- `edit_elements` now rejects non-instance elements and marks its changes as destructive; supplied `filters` replace all existing filters, and `[]` clears them.
 
 ## 0.1.6
 

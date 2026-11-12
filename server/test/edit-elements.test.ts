@@ -104,6 +104,25 @@ test("edit_elements applies all color modes and clears filters", { timeout: 45_0
     }
 });
 
+test("edit_elements rejects non-instance elements before any writes", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_DISTRIBUTE: "1", FAKE_DISTRIBUTE_BAD_ELEMENT: "1" }, async (client, tempDir) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [
+                    { layer: "a/b", frame: 1, element: 1, set: { x: 99 } },
+                    { layer: "a/b", frame: 1, element: 0, set: { x: 99 } },
+                ],
+            },
+        });
+        assert.equal(result.isError, true);
+        assert.match(text(result), /Only symbol instances can be edited/);
+        const elements = (await layersLog(tempDir)).at(-1)[0].frames[0].elements;
+        assert.equal(elements[1].x, 20);
+    });
+});
+
 test("edit_elements rejects tween interiors, temporarily unlocks layers, and validates atomically", {
     timeout: 60_000,
 }, async () => {

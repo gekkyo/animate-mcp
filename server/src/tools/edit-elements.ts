@@ -119,8 +119,8 @@ export function registerEditElements(
         "edit_elements",
         {
             description:
-                "Set instance properties on 1-based keyframes in a scene or library-symbol timeline. Layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Animate may quantize transform values; results contain read-back values. Changes do not save the .fla; save it in Animate.",
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+                "Set symbol-instance properties on 1-based keyframes in a scene or library-symbol timeline. Layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors and non-instance elements are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Supplying filters replaces all existing filters; [] clears them. Animate may quantize transform values; results contain read-back values. Changes do not save the .fla; save it in Animate.",
+            annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
             inputSchema: EDIT_ELEMENTS_INPUT,
         },
         handleEditElements,

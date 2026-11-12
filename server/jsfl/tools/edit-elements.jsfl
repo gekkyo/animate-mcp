@@ -219,6 +219,7 @@
         throw new Error('Frame is not a keyframe; only keyframes can be edited');
       }
       var elements = frame.elements || [], elementIndex = resolveElement(elements, op.element);
+      if (elements[elementIndex].elementType !== 'instance') throw new Error('Only symbol instances can be edited');
       validateSet(op.set);
       op.layerName = layer.name;
       op.frameIndex = frameIndex;
