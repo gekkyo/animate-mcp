@@ -7,7 +7,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 // Fake Animate: runs the Run file with minimal FLfile/fl stubs.
 // Does not respond to code containing HANG, and logs launch start/end to FAKE_LOG.
 export const fakeAnimate = `#!/usr/bin/env node
-const { appendFileSync, existsSync, readFileSync, writeFileSync } = require("node:fs");
+const { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { fileURLToPath, pathToFileURL } = require("node:url");
 const { runInNewContext } = require("node:vm");
@@ -17,6 +17,7 @@ const src = readFileSync(process.argv[2], "utf8");
  * @param message Message to append to the fake-runtime log
  */
 const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, message + "\\n");
+const logPublish = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".publish", message + "\\n");
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
 const lib = { name: "Hero", itemType: "movie clip" };
@@ -415,7 +416,7 @@ const doc = (documentName, documentType) => {
   if (process.env.FAKE_INITIAL_CURRENT_LAYER !== undefined) sceneTimeline.currentLayer = Number(process.env.FAKE_INITIAL_CURRENT_LAYER);
   if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
   if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
-  const document = { name: documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? "" : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
+  const document = { name: documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
   let editing = null;
   document.syms = {};
   /**
@@ -672,6 +673,7 @@ const doc = (documentName, documentType) => {
   document.library = library;
   return document; };
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
+let activeDocument = null;
 if (process.env.FAKE_PERSIST_AS && docs[0] && existsSync(process.env.FAKE_LOG + ".scene-script")) {
   const actionLayer = docs[0].timelines[0].layers.find((candidate) => candidate.name === "a/b");
   actionLayer.frames[0].actionScript = readFileSync(process.env.FAKE_LOG + ".scene-script", "utf8");
@@ -698,6 +700,9 @@ if (!src.includes("HANG")) runInNewContext(src, {
      * @returns The unchanged path
      */
     platformPathToURI: (path) => path,
+    exists: (path) => existsSync(path),
+    read: (path) => readFileSync(path, "utf8"),
+    remove: (path) => { if (existsSync(path)) { unlinkSync(path); logPublish("remove"); } },
     /** Converts the fake document's file URI to its platform path.
      * @param uri Document URI
      * @returns The corresponding platform path
@@ -714,11 +719,19 @@ if (!src.includes("HANG")) runInNewContext(src, {
     /** Provides the no-op trace method used by the fake Animate API. */
     trace() {},
     documents: docs,
+    setActiveWindow: (document) => { logPublish("activate"); activeDocument = document; },
+    publishDocument: () => { logPublish("publish"); return !process.env.FAKE_PUBLISH_FALSE; },
+    compilerErrors: {
+      save: (path) => {
+        logPublish("compilerErrors.save");
+        writeFileSync(path, process.env.FAKE_COMPILER_OUTPUT || "0 個のエラー, 0 個の警告");
+      },
+    },
     /**
      * Returns the first open fake document, or null when no document is open.
      * @returns The active document or null
      */
-    getDocumentDOM: () => docs[0] || null,
+      getDocumentDOM: () => activeDocument || docs[0] || null,
   },
 });
 if (process.env.FAKE_LOG && src.includes("var __newScripts")) {

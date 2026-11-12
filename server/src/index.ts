@@ -15,6 +15,7 @@ import { registerExportScripts } from "./tools/export-scripts.js";
 import { registerGetDocumentInfo } from "./tools/get-document-info.js";
 import { registerInspectTimeline } from "./tools/inspect-timeline.js";
 import { registerInstallGreensock } from "./tools/install-greensock.js";
+import { registerPublish } from "./tools/publish.js";
 import { registerRunJsfl } from "./tools/run-jsfl.js";
 
 /** Version from package.json (the same relative path from src/ and dist/) */
@@ -37,6 +38,7 @@ Basic flow:
 - If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
 - If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).
 - For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.
+- Use publish to publish AS3 documents and check the Build result; outputs at the document's publish settings are overwritten, and compile errors are returned as a normal result.
 
 Notes:
 - When several documents are open, document is required. get_document_info returns the name.
@@ -50,7 +52,7 @@ Notes:
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
- * Builds the Runner, registers the MCP tools (run_jsfl / get_document_info / export_scripts / apply_scripts) and listens on stdio.
+ * Builds the Runner, registers the MCP tools and listens on stdio.
  * @returns Promise<void> that resolves once connected (rejects on failure; the caller sets the exit code)
  */
 async function main() {
@@ -70,6 +72,7 @@ async function main() {
     registerEditTween(server, { runner, bundle });
     registerEditLibrary(server, { runner, bundle });
     registerApplyScripts(server, { runner, bundle });
+    registerPublish(server, { runner, bundle });
 
     const transport = new StdioServerTransport();
     await server.connect(transport);

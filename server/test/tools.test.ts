@@ -35,6 +35,12 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
             edit_tween: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
             edit_library: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
             apply_scripts: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+            publish: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             install_greensock: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -54,5 +60,7 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
         for (const name of ["edit_timeline", "edit_tween", "edit_library"]) {
             assert.match(byName.get(name)?.description ?? "", /do not save the \.fla; save it in Animate/i, name);
         }
+        assert.match(byName.get("publish")?.description ?? "", /overwrites outputs.*publish settings/i);
+        assert.match(byName.get("publish")?.description ?? "", /compile errors are returned as a normal result/i);
     });
 });

@@ -18,6 +18,7 @@ const JSFL_FILES: Record<string, { path: string; order: number }> = {
     "library-ops": { path: "library/ops.jsfl", order: 14 },
     "library-index": { path: "library/index.jsfl", order: 15 },
     "inspect-timeline": { path: "tools/inspect-timeline.jsfl", order: 16 },
+    publish: { path: "tools/publish.jsfl", order: 17 },
 };
 
 /**
