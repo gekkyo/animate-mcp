@@ -7,7 +7,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 // Fake Animate: runs the Run file with minimal FLfile/fl stubs.
 // Does not respond to code containing HANG, and logs launch start/end to FAKE_LOG.
 export const fakeAnimate = `#!/usr/bin/env node
-const { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } = require("node:fs");
+const { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { fileURLToPath, pathToFileURL } = require("node:url");
 const { runInNewContext } = require("node:vm");
@@ -18,6 +18,7 @@ const src = readFileSync(process.argv[2], "utf8");
  */
 const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, message + "\\n");
 const logPublish = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".publish", message + "\\n");
+const logCapture = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".capture", message + "\\n");
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
 const lib = { name: "Hero", itemType: "movie clip" };
@@ -416,7 +417,14 @@ const doc = (documentName, documentType) => {
   if (process.env.FAKE_INITIAL_CURRENT_LAYER !== undefined) sceneTimeline.currentLayer = Number(process.env.FAKE_INITIAL_CURRENT_LAYER);
   if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
   if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
-  const document = { name: documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
+  const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline],
+    /** Writes a small PNG fixture for capture_frame tests. */
+    exportPNG(uri, useCurrentSettings, currentFrameOnly) {
+      logCapture(JSON.stringify({ uri, useCurrentSettings, currentFrameOnly, frame: this.getTimeline().currentFrame }));
+      if (process.env.FAKE_EXPORT_FALSE) return false;
+      if (!process.env.FAKE_EXPORT_MISSING) writeFileSync(uri, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jHqkAAAAASUVORK5CYII=", "base64"));
+      return true;
+    } };
   let editing = null;
   document.syms = {};
   /**
@@ -700,6 +708,7 @@ if (!src.includes("HANG")) runInNewContext(src, {
      * @returns The unchanged path
      */
     platformPathToURI: (path) => path,
+    createFolder: (path) => { mkdirSync(path, { recursive: true }); return true; },
     exists: (path) => existsSync(path),
     read: (path) => readFileSync(path, "utf8"),
     remove: (path) => { if (existsSync(path)) { unlinkSync(path); logPublish("remove"); } },

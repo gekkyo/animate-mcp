@@ -41,6 +41,12 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
                 idempotentHint: true,
                 openWorldHint: false,
             },
+            capture_frame: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             install_greensock: {
                 readOnlyHint: false,
                 destructiveHint: false,

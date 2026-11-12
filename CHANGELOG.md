@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `capture_frame` to return a PNG of one frame from the active AS3 or HTML5 Canvas timeline.
 - Added `publish` for AS3 and HTML5 Canvas documents; Canvas compile errors cannot be detected.
 
 ## 0.1.6
