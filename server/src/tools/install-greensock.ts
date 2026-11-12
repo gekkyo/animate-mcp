@@ -2,7 +2,12 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { GREEN_SOCK_LICENSE_URL, GREEN_SOCK_VERSION, installGreensock, isGreensockInstalled } from "../greensock.js";
+import {
+    GREEN_SOCK_LICENSE_URL,
+    GREEN_SOCK_VERSION,
+    installGreensock,
+    isGreensockInstalled,
+} from "../greensock/greensock.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 

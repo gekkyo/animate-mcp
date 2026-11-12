@@ -1,5 +1,5 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { isGreensockInstalled } from "../greensock.js";
+import { isGreensockInstalled } from "../greensock/greensock.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
