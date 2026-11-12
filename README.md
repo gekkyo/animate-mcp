@@ -41,13 +41,13 @@ Agents can read scripts and structure from scenes and library symbols, then appl
 
 ### Claude Code
 
-    claude mcp add animate -- npx -y animate-mcp@latest
+    claude mcp add animate-mcp -- npx -y animate-mcp@latest
 
 ### Clients configured with JSON (Claude Desktop, etc.)
 
     {
       "mcpServers": {
-        "animate": {
+        "animate-mcp": {
           "command": "npx",
           "args": ["-y", "animate-mcp@latest"]
         }

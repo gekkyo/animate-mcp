@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5
+
+### Changed
+
+- Prepared the package for publication to the official MCP Registry.
+- Changed the recommended MCP client registration name from `animate` to `animate-mcp`.
+
 ## 0.1.4
 
 ### Added

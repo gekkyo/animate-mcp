@@ -41,13 +41,13 @@ MCP 対応の AI エージェントから、Adobe Animate のスクリプトと�
 
 ### Claude Code
 
-    claude mcp add animate -- npx -y animate-mcp@latest
+    claude mcp add animate-mcp -- npx -y animate-mcp@latest
 
 ### JSON で設定するクライアント（Claude Desktop など）
 
     {
       "mcpServers": {
-        "animate": {
+        "animate-mcp": {
           "command": "npx",
           "args": ["-y", "animate-mcp@latest"]
         }
