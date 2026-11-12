@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { test } from "node:test";
-import { writeExport } from "../src/export.js";
+import { writeExport } from "../src/export-workspace/export.js";
 import { SCENE_FILE, text, withServer } from "./helpers/fake-animate.js";
 
 test("layer names differing only in case get separate folders", async () => {

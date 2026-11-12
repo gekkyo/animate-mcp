@@ -1,7 +1,7 @@
 // Concatenated and evaluated after export-common and edit-state. `var __docName`, `var __edits`
 // ([{file, scene, layer, start, expected, script, item?}]) and `var __newScripts`
 // ([{file, scene, layer, start, script, item?, layerDir, asLayer}]) and `var __fingerprints`
-// ([{scene, item?, structureFingerprint}]) are injected before it; their contract is in server/src/apply-contract.ts.
+// ([{scene, item?, structureFingerprint}]) are injected before it; their contract is in server/src/export-workspace/apply-contract.ts.
 // A frame changed in Animate since Export is not written and goes to failed (if it already equals script it counts as applied).
 // An empty script deletes the frame script. New scripts are applied after existing-file edits.
 // Symbols are edited in edit mode, so the original edit state is restored at the end (warning if it cannot be).

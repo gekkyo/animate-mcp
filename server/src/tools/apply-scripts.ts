@@ -1,14 +1,14 @@
 import { resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { collectEdits, markApplied } from "../apply.js";
 import {
     type AppliedNewScript,
     type ApplyPayload,
     type ApplyResult,
     serializeApplyPayload,
     type TimelineFingerprint,
-} from "../apply-contract.js";
+} from "../export-workspace/apply-contract.js";
+import { collectChanges, recordApplied } from "../export-workspace/export-workspace.js";
 import type { createRunner } from "../runner.js";
 import { failure, TIMELINES_PER_RUN } from "./shared.js";
 
@@ -109,7 +109,7 @@ export function registerApplyScripts(
                 unchanged,
                 failed,
                 warnings: collectWarnings,
-            } = await collectEdits(exportDirectory);
+            } = await collectChanges(exportDirectory);
             if (document && document !== exportedDocument) {
                 throw new Error(`Export was made from ${exportedDocument}, not ${document}`);
             }
@@ -187,18 +187,17 @@ export function registerApplyScripts(
                     }
                 }
             }
-            await markApplied(
-                exportDirectory,
-                edits.filter(
+            await recordApplied(exportDirectory, {
+                edits: edits.filter(
                     /** Selects edits successfully applied to Animate.
                      * @param edit Script edit to check
                      * @returns Whether its file appears in the applied results
                      */
                     (edit) => applied.includes(edit.file),
                 ),
-                newApplied,
-                fingerprintUpdates,
-            );
+                newScripts: newApplied,
+                fingerprints: fingerprintUpdates,
+            });
             const result = { applied, failed, unchanged, warnings };
             return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
         } catch (error) {

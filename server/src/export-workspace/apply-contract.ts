@@ -1,4 +1,4 @@
-import type { ManifestFile } from "./export.js";
+import type { ManifestFile } from "./export-workspace.js";
 
 export type Edit = ManifestFile & { file: string; expected: string };
 export type NewScript = ManifestFile & { file: string; layerDir: string; asLayer: boolean };
