@@ -68,7 +68,7 @@ export function registerEditLibrary(
         "edit_library",
         {
             description:
-                "Organize the active Animate document's library with createFolder, moveItem, renameItem, deleteItem, and listUnused. Operations stop at the first failure; collisions are refused and linkage metadata is not changed. deleteItem requires confirm: true and refuses items in use. After reorganizing the library, run export_scripts again before apply_scripts. Changes apply to the open document but do not save the .fla; save it in Animate.",
+                "Organize the active Animate document's library: create folders, move, rename, or delete items, and list unused items. Operations stop at the first failure; collisions are refused and linkage metadata is not changed. deleteItem requires confirm: true and refuses items in use. After reorganizing the library, run export_scripts again before apply_scripts. Changes apply to the open document but do not save the .fla; save it in Animate.",
             annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
             inputSchema: EDIT_LIBRARY_INPUT,
         },
