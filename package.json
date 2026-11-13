@@ -1,12 +1,13 @@
 {
   "name": "animate-mcp",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Inspect Adobe Animate documents and edit frame scripts, timelines, tweens, and library items.",
   "mcpName": "io.github.gekkyo/animate-mcp",
   "license": "MIT",
   "keywords": [
     "mcp",
     "mcp-server",
+    "adobe",
     "adobe-animate",
     "animate",
     "jsfl",
