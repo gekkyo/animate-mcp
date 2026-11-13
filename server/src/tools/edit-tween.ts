@@ -4,7 +4,7 @@ import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
 type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
-const EASE_PRESET = z.enum([
+const EASE_PRESETS = [
     "linear",
     "quadIn",
     "quadOut",
@@ -30,7 +30,9 @@ const EASE_PRESET = z.enum([
     "backIn",
     "backOut",
     "backInOut",
-]);
+];
+// A string + refine keeps the emitted JSON schema small (an enum repeated per property exceeds scanners' string budget); the tool description lists the presets.
+const EASE_PRESET = z.string().refine((value) => EASE_PRESETS.includes(value), { message: "Unknown ease preset" });
 const EASE = z.union([
     EASE_PRESET,
     z.number().min(-100).max(100),
