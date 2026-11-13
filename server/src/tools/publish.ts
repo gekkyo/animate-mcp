@@ -57,7 +57,7 @@ export function parseCompilerOutput(output: string): { errors: Diagnostic[]; war
             continue;
         }
         const prefix = severity === "error" ? "**Error**" : "**Warning**";
-        const match = /^\*\*(?:Error|Warning)\*\*\s*(.*?)\t([^:]+):\s*(.*)$/.exec(line);
+        const match = /^\*\*(?:Error|Warning)\*\*\s*(.*?)\t(?:(?:Warning|警告):\s*)?([^:]+):\s*(.*)$/.exec(line);
         const parsed = match?.[1].trim() && match[2].trim() ? match : null;
         const location = parsed ? parsed[1] : "";
         const lineNumber = /(?:\bLine|行)\s+(\d+)/i.exec(location)?.[1];

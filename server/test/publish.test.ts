@@ -50,6 +50,24 @@ test("compiler output parser handles Japanese and English diagnostics, duplicate
             { code: "1180", line: 2, column: 17 },
         ],
     );
+    // Real Animate 2027 warning-only output: the message carries a "Warning:" prefix before the code.
+    assert.deepEqual(
+        parseCompilerOutput(
+            "**Warning** Scene 1, Layer 'Layer_1', Frame 1, Line 2, Column 5\tWarning: 1098: Illogical comparison with NaN.  This statement always evaluates to false.\n\n0 Error(s), 1 Warning(s)",
+        ),
+        {
+            errors: [],
+            warnings: [
+                {
+                    location: "Scene 1, Layer 'Layer_1', Frame 1, Line 2, Column 5",
+                    line: 2,
+                    column: 5,
+                    code: "1098",
+                    message: "Illogical comparison with NaN.  This statement always evaluates to false.",
+                },
+            ],
+        },
+    );
     assert.deepEqual(parseCompilerOutput("0 個のエラー, 0 個の警告"), { errors: [], warnings: [] });
     assert.deepEqual(parseCompilerOutput("0 Error(s), 0 Warning(s)"), { errors: [], warnings: [] });
     assert.throws(() => parseCompilerOutput("**Error** incomplete output"), /retry publish/);
