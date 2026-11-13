@@ -19,9 +19,11 @@ English | [日本語](README.ja.md)
 
 ## Overview
 
-`animate-mcp` is a local Model Context Protocol (MCP) server that lets AI agents inspect Adobe Animate documents and edit frame scripts and animations. It uses JSFL, Animate's scripting system, to control Animate directly.
+`animate-mcp` is an MCP server that lets AI agents such as Claude Code and Codex operate Adobe Animate directly.
 
-Agents can read scripts and structure from scenes and library symbols, then apply edited scripts through files. They can also edit layers, frames, tweens, and library items.
+Just give the AI instructions in plain language to write and edit frame scripts, work with animations, and automate repetitive tasks.
+
+It reads the structure and scripts of scenes and library symbols so it can edit with an understanding of what is already there, and it supports a wide range of operations, including layers, frames, tweens, instance properties, and library assets. It can also publish a document and capture a frame as a PNG image.
 
 ## Highlights
 
@@ -31,6 +33,8 @@ Agents can read scripts and structure from scenes and library symbols, then appl
 - Edit layer and frame structure and labels.
 - Create motion and classic tweens with preset or custom Bézier easing.
 - Organize library folders and items and find unused items.
+- Publish AS3 and HTML5 Canvas documents and get AS3 compile errors and warnings back.
+- Capture a single frame as a PNG image.
 - Install GreenSock-AS3 with a prompt.
 - Work with ActionScript 3 and HTML5 Canvas, and run arbitrary JSFL.
 
@@ -93,6 +97,24 @@ Add a Background layer to Scene 1 and extend it to 24 frames
 Move the Ball instance 200 px to the right over frames 1–24 in Scene 1, using backOut easing (overshoot and return)
 ```
 
+#### Editing instance properties
+
+```text
+Set the Ball instance on frame 1 of Scene 1 to 50% alpha and add a blur filter
+```
+
+#### Publishing
+
+```text
+Publish the open document and tell me the compile errors
+```
+
+#### Capturing a frame
+
+```text
+Capture frame 12 of Scene 1 and tell me how it looks
+```
+
 #### Organizing the library
 
 ```text
@@ -134,7 +156,7 @@ Install GreenSock-AS3 for the open document
 
 ### Operations accepted in `ops`
 
-`edit_timeline`, `edit_tween`, and `edit_library` accept the following operations in their `ops` arrays.
+`edit_timeline`, `edit_tween`, and `edit_library` accept the following operations in their `ops` arrays. `edit_elements` also takes `ops`, but each entry is `{ layer, frame, element, set }` (the properties to set are in `set`), not a named operation; see its row in the table above.
 
 #### `edit_timeline`
 
@@ -198,7 +220,11 @@ Client config: `node /path/to/animate-mcp/server/dist/index.js` (stdio).
 3. Run `get_document_info`. It returns name, size, frame rate and timeline names.
 4. Close all documents and run `get_document_info`. It returns "No document open".
 5. Quit Animate and run `run_jsfl`. It returns "Animate not running".
-6. Unverified: behavior while a modal dialog is open.
+6. With a saved AS3 document open, run `publish`. It returns `ok: true` with empty `errors`. Add a syntax error and run it again to see it in `errors`.
+7. Run `capture_frame`. It returns a PNG image and its saved path.
+8. Unverified: behavior while a modal dialog is open.
+
+Scripted versions of steps 6–7 (and `edit_elements`): `node server/scripts/smoke-publish.mjs`, `smoke-capture-frame.mjs`, `smoke-edit-elements.mjs` after `npm run build`, with the target document active in Animate.
 
 ## License
 
