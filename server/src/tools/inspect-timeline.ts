@@ -40,7 +40,7 @@ export function registerInspectTimeline(
         document,
     }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __layers = ${JSON.stringify(layers)};\nvar __frame = ${frame};\n${bundle("select-document", "edit-state", "export-common", "inspect-timeline")}`;
+            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __layers = ${JSON.stringify(layers)};\nvar __frame = ${frame};\n${bundle("select-document", "edit-state", "export-common", "element-read", "inspect-timeline")}`;
             const result = JSON.parse(String(await runner.execute(code))) as {
                 timeline: number | string;
                 frame: number;
@@ -72,6 +72,7 @@ export function registerInspectTimeline(
         {
             description:
                 "Read layer metadata, keyframe spans, and element properties at a 1-based frame in a scene or library symbol. Specify layers by name or zero-based index; defaults to all layers and frame 1. Motion tween properties are reported from motion keyframes rather than unreliable interpolated instances.",
+            annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
             inputSchema: INSPECT_TIMELINE_INPUT,
         },
         handleInspectTimeline,

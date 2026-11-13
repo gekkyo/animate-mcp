@@ -578,6 +578,7 @@
     if (typeof __timelineRef === 'number') {
       timeline = document.timelines[__timelineRef];
       if (!timeline || Math.floor(__timelineRef) !== __timelineRef || __timelineRef < 0) throw new Error('Scene not found');
+      if (document.currentTimeline !== __timelineRef && document.editScene) document.editScene(__timelineRef);
     } else {
       var itemFound = false;
       for (var itemIndex = 0; itemIndex < document.library.items.length; itemIndex++) {

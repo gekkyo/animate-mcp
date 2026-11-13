@@ -210,6 +210,7 @@ export function registerApplyScripts(
         {
             description:
                 "Apply edited Timeline scripts from an export_scripts directory back to the Animate document (scenes and library symbols). Empty file deletes the frame script. Frames changed in Animate since Export are not overwritten. Does not save the .fla.",
+            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
             inputSchema: APPLY_SCRIPTS_INPUT,
         },
         handleApplyScripts,

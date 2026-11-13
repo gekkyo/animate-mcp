@@ -47,6 +47,7 @@ export function registerGetDocumentInfo(
         {
             description:
                 "Get the active Animate document's name, size, frame rate, timeline names, ActionScript version (null for Canvas/unknown), and whether GreenSock is installed beside the FLA.",
+            annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
         },
         handleGetDocumentInfo,
     );

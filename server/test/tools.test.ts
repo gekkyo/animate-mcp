@@ -22,3 +22,63 @@ test("get_document_info returns info, or a clear error with no document", { time
         assert.equal(text(result), "No document open");
     });
 });
+
+test("tool metadata describes behavior and the run_jsfl last-resort boundary", { timeout: 20_000 }, async () => {
+    await withServer({}, async (client) => {
+        const { tools } = await client.listTools();
+        const byName = new Map(tools.map((tool) => [tool.name, tool]));
+        const annotations = {
+            get_document_info: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+            inspect_timeline: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+            export_scripts: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+            edit_timeline: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+            edit_elements: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            edit_tween: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+            edit_library: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+            apply_scripts: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+            publish: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            capture_frame: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            install_greensock: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                openWorldHint: true,
+                idempotentHint: true,
+            },
+            run_jsfl: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+        };
+
+        assert.deepEqual(
+            [...byName.keys()].sort(),
+            Object.keys(annotations).sort(),
+            "every tool needs an annotations entry",
+        );
+        for (const [name, expected] of Object.entries(annotations)) {
+            assert.deepEqual(byName.get(name)?.annotations, expected, name);
+        }
+
+        const runJsfl = byName.get("run_jsfl");
+        assert.match(runJsfl?.description ?? "", /^Execute arbitrary code as JSFL.*last resort/i);
+        assert.match(JSON.stringify(runJsfl?.inputSchema.properties?.code), /dedicated tools/i);
+        for (const name of ["edit_timeline", "edit_elements", "edit_tween", "edit_library"]) {
+            assert.match(byName.get(name)?.description ?? "", /do not save the \.fla; save it in Animate/i, name);
+        }
+        assert.match(byName.get("publish")?.description ?? "", /overwrites outputs.*publish settings/i);
+        assert.match(byName.get("publish")?.description ?? "", /compile errors are returned as a normal result/i);
+        assert.match(byName.get("publish")?.description ?? "", /HTML5 Canvas compile errors cannot be detected/i);
+    });
+});

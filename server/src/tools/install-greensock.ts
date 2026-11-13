@@ -87,6 +87,7 @@ export function registerInstallGreensock(
         {
             description:
                 "Download GreenSock-AS3 12.1.5 into com/greensock beside a saved AS3 document. Requires confirm: true after reviewing https://gsap.com/standard-license/; does not modify or save the .fla. Not supported for AS2 or HTML5 Canvas.",
+            annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: true },
             inputSchema: INSTALL_GREENSOCK_INPUT,
         },
         handleInstallGreensock,

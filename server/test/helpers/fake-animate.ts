@@ -7,7 +7,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 // Fake Animate: runs the Run file with minimal FLfile/fl stubs.
 // Does not respond to code containing HANG, and logs launch start/end to FAKE_LOG.
 export const fakeAnimate = `#!/usr/bin/env node
-const { appendFileSync, existsSync, readFileSync, writeFileSync } = require("node:fs");
+const { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { fileURLToPath, pathToFileURL } = require("node:url");
 const { runInNewContext } = require("node:vm");
@@ -17,6 +17,8 @@ const src = readFileSync(process.argv[2], "utf8");
  * @param message Message to append to the fake-runtime log
  */
 const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, message + "\\n");
+const logPublish = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".publish", message + "\\n");
+const logCapture = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".capture", message + "\\n");
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
 const lib = { name: "Hero", itemType: "movie clip" };
@@ -104,6 +106,21 @@ const layer = (name, frames, layerType = "normal", locked = false, parentLayer =
           if (result.locked) throw new Error("Layer is locked");
           result.writeWasUnlocked = true;
           actionScript = value;
+        },
+      });
+    }
+  }
+  if (process.env.FAKE_ENFORCE_ELEMENT_LOCK) {
+    for (const frame of new Set(frames)) for (const element of frame.elements || []) {
+      let x = element.x;
+      Object.defineProperty(element, "x", {
+        enumerable: true,
+        configurable: true,
+        get: () => x,
+        set: (value) => {
+          if (result.locked) throw new Error("Layer is locked");
+          result.writeWasUnlocked = true;
+          x = value;
         },
       });
     }
@@ -354,7 +371,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
  * @param script Initial ActionScript for the symbol
  * @returns The constructed symbol timeline
  */
-const symTimeline = (symbolName, script) => makeTimeline(symbolName, 1, [layer("L", expand([makeKeyframe(0, 1, { actionScript: script })]))], { name: symbolName });
+const symTimeline = (symbolName, script) => makeTimeline(symbolName, 1, [layer("L", expand([makeKeyframe(0, 1, { actionScript: script, elements: process.env.FAKE_SYM_INSTANCE ? [makeInstance("symbolInstance", 10)] : [] })]))], { name: symbolName });
 /**
  * Builds a fake Animate document and its scene and library timelines.
  * @param documentName Document name
@@ -415,7 +432,14 @@ const doc = (documentName, documentType) => {
   if (process.env.FAKE_INITIAL_CURRENT_LAYER !== undefined) sceneTimeline.currentLayer = Number(process.env.FAKE_INITIAL_CURRENT_LAYER);
   if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
   if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
-  const document = { name: documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? "" : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: 550, height: 400, frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline] };
+  const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline],
+    /** Writes a small PNG fixture for capture_frame tests. */
+    exportPNG(uri, useCurrentSettings, currentFrameOnly) {
+      logCapture(JSON.stringify({ uri, useCurrentSettings, currentFrameOnly, frame: this.getTimeline().currentFrame }));
+      if (process.env.FAKE_EXPORT_FALSE) return false;
+      if (!process.env.FAKE_EXPORT_MISSING) writeFileSync(uri, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jHqkAAAAASUVORK5CYII=", "base64"));
+      return true;
+    } };
   let editing = null;
   document.syms = {};
   /**
@@ -430,6 +454,10 @@ const doc = (documentName, documentType) => {
     const timeline = document.getTimeline();
     return timeline.layers.flatMap((candidate) => candidate.frames[timeline.currentFrame]?.elements || []).filter((element) => element.selected);
   } });
+  if (process.env.FAKE_INITIAL_SELECTED_ELEMENT) {
+    const timeline = document.getTimeline();
+    timeline.layers[0].frames[timeline.currentFrame].elements[0].selected = true;
+  }
   /** Clears selection on every instance in the active timeline.
    * @returns Nothing
    */
@@ -516,7 +544,9 @@ const doc = (documentName, documentType) => {
     element.color = color;
     element.colorTintPercent = amount;
     if (Object.prototype.hasOwnProperty.call(element, "__fakeTintColor")) element.__fakeTintColor = color;
+    else element.tintColor = color;
     if (Object.prototype.hasOwnProperty.call(element, "__fakeTintPercent")) element.__fakeTintPercent = amount;
+    else element.tintPercent = amount;
   } };
   /** Adds a fake filter to selected instances.
    * @param name Animate filter name
@@ -672,6 +702,7 @@ const doc = (documentName, documentType) => {
   document.library = library;
   return document; };
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
+let activeDocument = null;
 if (process.env.FAKE_PERSIST_AS && docs[0] && existsSync(process.env.FAKE_LOG + ".scene-script")) {
   const actionLayer = docs[0].timelines[0].layers.find((candidate) => candidate.name === "a/b");
   actionLayer.frames[0].actionScript = readFileSync(process.env.FAKE_LOG + ".scene-script", "utf8");
@@ -698,6 +729,10 @@ if (!src.includes("HANG")) runInNewContext(src, {
      * @returns The unchanged path
      */
     platformPathToURI: (path) => path,
+    createFolder: (path) => { mkdirSync(path, { recursive: true }); return true; },
+    exists: (path) => existsSync(path),
+    read: (path) => readFileSync(path, "utf8"),
+    remove: (path) => { if (existsSync(path)) { unlinkSync(path); logPublish("remove"); } },
     /** Converts the fake document's file URI to its platform path.
      * @param uri Document URI
      * @returns The corresponding platform path
@@ -714,11 +749,24 @@ if (!src.includes("HANG")) runInNewContext(src, {
     /** Provides the no-op trace method used by the fake Animate API. */
     trace() {},
     documents: docs,
+    setActiveWindow: (document) => { logPublish("activate"); activeDocument = document; },
+    publishDocument: () => { logPublish("publish"); return !process.env.FAKE_PUBLISH_FALSE; },
+    compilerErrors: {
+      save: (path) => {
+        logPublish("compilerErrors.save");
+        if (process.env.FAKE_TYPE === "htmlcanvas") throw new Error("not supported on HTML5 Canvas");
+        const outputs = process.env.FAKE_COMPILER_OUTPUTS && JSON.parse(process.env.FAKE_COMPILER_OUTPUTS);
+        const outputIndex = process.env.FAKE_LOG
+          ? readFileSync(process.env.FAKE_LOG + ".publish", "utf8").split("\\n").filter((line) => line === "compilerErrors.save").length - 1
+          : 0;
+        writeFileSync(path, outputs ? outputs[outputIndex] ?? "" : process.env.FAKE_COMPILER_OUTPUT || "0 個のエラー, 0 個の警告");
+      },
+    },
     /**
      * Returns the first open fake document, or null when no document is open.
      * @returns The active document or null
      */
-    getDocumentDOM: () => docs[0] || null,
+      getDocumentDOM: () => activeDocument || docs[0] || null,
   },
 });
 if (process.env.FAKE_LOG && src.includes("var __newScripts")) {
@@ -735,7 +783,7 @@ process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym",
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".sym-layers", JSON.stringify(Object.fromEntries(Object.entries(docs[0].syms).map(([symbolName, timeline]) => [symbolName, timeline.layers.map((candidate) => ({ name: candidate.name, script: candidate.frames[0]?.actionScript }))]))) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".library", JSON.stringify(docs[0].library.items.map((item) => ({ name: item.name, itemType: item.itemType }))) + "\\n");
 process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".layers", JSON.stringify(docs[0].timelines[0].layers.map((candidate) => ({ name: candidate.name, type: candidate.layerType, parent: candidate.parentLayer?.name, locked: candidate.locked, writeWasUnlocked: candidate.writeWasUnlocked, frames: candidate.frames.map((frame, index) => frame.startFrame === index ? { start: frame.startFrame, duration: frame.duration, script: frame.actionScript, tween: frame.tweenType, tweenEasing: frame.tweenEasing, hasCustomEase: frame.hasCustomEase, useSingleEaseCurve: frame.useSingleEaseCurve, customEases: frame.customEases, label: frame.name, motionXML: frame.motionXML, elements: frame.elements.map((element) => ({ name: element.name, x: element.x, y: element.y, matrix: element.matrix, transformationPoint: element.getTransformationPoint(), scaleX: element.scaleX, scaleY: element.scaleY, rotation: element.rotation, colorMode: element.colorMode, colorAlphaPercent: element.colorAlphaPercent, colorAlphaAmount: element.colorAlphaAmount, brightness: element.brightness, tintColor: element.tintColor, tintPercent: element.tintPercent, colorBrightnessPercent: element.colorBrightnessPercent, color: element.color, colorTintPercent: element.colorTintPercent, colorRedPercent: element.colorRedPercent, colorGreenPercent: element.colorGreenPercent, colorBluePercent: element.colorBluePercent, colorRedAmount: element.colorRedAmount, colorGreenAmount: element.colorGreenAmount, colorBlueAmount: element.colorBlueAmount, blendMode: element.blendMode, visible: element.visible, cacheAsBitmap: element.cacheAsBitmap, loop: element.loop, firstFrame: element.firstFrame, lastFrame: element.lastFrame, trackAsMenu: element.trackAsMenu, filters: element.filters })) } : null).filter(Boolean) }))) + "\\n");
-process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".state", JSON.stringify({ currentLayer: docs[0].timelines[0].currentLayer, currentFrame: docs[0].timelines[0].currentFrame, selectedFrames: docs[0].timelines[0].selectedFrames }) + "\\n");
+process.env.FAKE_LOG && docs[0] && appendFileSync(process.env.FAKE_LOG + ".state", JSON.stringify({ currentLayer: docs[0].timelines[0].currentLayer, currentFrame: docs[0].timelines[0].currentFrame, selectedFrames: docs[0].timelines[0].selectedFrames, selectedElements: docs[0].timelines[0].layers.flatMap((candidate) => candidate.frames[docs[0].timelines[0].currentFrame]?.elements || []).filter((element) => element.selected).length }) + "\\n");
 log("end");
 `;
 

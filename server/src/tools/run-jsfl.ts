@@ -5,7 +5,13 @@ import { failure } from "./shared.js";
 
 type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
 
-const RUN_JSFL_INPUT = { code: z.string() };
+const RUN_JSFL_INPUT = {
+    code: z
+        .string()
+        .describe(
+            "Arbitrary JSFL source to execute in Adobe Animate; use only when dedicated tools cannot accomplish the task.",
+        ),
+};
 
 /**
  * Registers the run_jsfl tool.
@@ -35,8 +41,9 @@ export function registerRunJsfl(server: McpServer, deps: { runner: Runner }): vo
         "run_jsfl",
         {
             description:
-                "Execute arbitrary JSFL code inside Adobe Animate. This runs arbitrary code and may modify documents or files.",
+                "Execute arbitrary code as JSFL inside Adobe Animate; it may modify documents or files. Prefer dedicated tools for document, timeline, tween, library, and script operations, and use run_jsfl only as a last resort when they cannot accomplish the task.",
             inputSchema: RUN_JSFL_INPUT,
+            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
         },
         handleRunJsfl,
     );

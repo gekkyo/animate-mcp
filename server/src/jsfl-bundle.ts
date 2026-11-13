@@ -17,7 +17,11 @@ const JSFL_FILES: Record<string, { path: string; order: number }> = {
     "library-helpers": { path: "library/helpers.jsfl", order: 13 },
     "library-ops": { path: "library/ops.jsfl", order: 14 },
     "library-index": { path: "library/index.jsfl", order: 15 },
-    "inspect-timeline": { path: "tools/inspect-timeline.jsfl", order: 16 },
+    "element-read": { path: "shared/element-read.jsfl", order: 16 },
+    "inspect-timeline": { path: "tools/inspect-timeline.jsfl", order: 17 },
+    publish: { path: "tools/publish.jsfl", order: 18 },
+    "capture-frame": { path: "tools/capture-frame.jsfl", order: 19 },
+    "edit-elements": { path: "tools/edit-elements.jsfl", order: 20 },
 };
 
 /**
