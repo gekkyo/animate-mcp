@@ -1,12 +1,12 @@
 // `var __docName`, `var __timelineRef`, and `var __ops` are injected before this file.
 (function () {
-  var document = selectDocument(), restore = saveEditState(document), timeline = null;
+  var document = selectDocument();
   var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.layers[originalTimeline.currentLayer];
   var originalFrame = originalTimeline.currentFrame;
   var originalSelectedFrames = originalTimeline.getSelectedFrames ? originalTimeline.getSelectedFrames() : null;
   var originalSelection = document.selection ? document.selection.slice() : [];
-  var targetLayerState = null, targetFrameState = null, targetSelectedFrames = null, targetSelection = [];
-  var targetSelectedFrameLayers = [], originalSelectedFrameLayers = editSelectedFrameLayers(originalTimeline, originalSelectedFrames);
+  var targetLayerState = null, targetFrameState = null, targetSelection = [];
+  var originalSelectedFrameLayers = editSelectedFrameLayers(originalTimeline, originalSelectedFrames);
   var resolved = [], resultElements = [], layersToUnlock = [], plannedLayers = [];
   var TEXT_ATTR_FIELDS = ['face', 'size', 'fillColor', 'bold', 'italic'];
   var STYLE_FIELDS = TEXT_ATTR_FIELDS.concat(['alignment', 'textType', 'lineType']);
@@ -83,14 +83,14 @@
     if (style.lineType !== undefined) element.lineType = style.lineType;
   }
 
+  var session = null;
   try {
-    timeline = resolveEditTimeline(document, __timelineRef);
+    session = withTimelineEdit(document, __timelineRef, function (timeline) {
     targetLayerState = timeline.layers[timeline.currentLayer];
     targetFrameState = timeline.currentFrame;
-    targetSelectedFrames = timeline.getSelectedFrames ? timeline.getSelectedFrames() : null;
-    targetSelectedFrameLayers = editSelectedFrameLayers(timeline, targetSelectedFrames);
     targetSelection = document.selection ? document.selection.slice() : [];
 
+    try {
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
       var op = __ops[opIndex], frameIndex = op.frame - 1;
       if (Math.floor(op.frame) !== op.frame || op.frame < 1) throw new Error('frame must be a positive integer');
@@ -186,24 +186,27 @@
         resultElements.push(setResult);
       }
     });
-  } finally {
+    return serialize({ applied: resultElements.length, elements: resultElements });
+    } finally {
     if (timeline && targetLayerState) {
       if (document.selectNone) document.selectNone();
-      restoreEditSelectedFrames(timeline, targetSelectedFrames, targetSelectedFrameLayers);
       var targetLayerIndex = editLayerPosition(timeline, targetLayerState);
       if (targetLayerIndex >= 0) timeline.currentLayer = targetLayerIndex;
       timeline.currentFrame = targetFrameState;
       for (var targetSelectionIndex = 0; targetSelectionIndex < targetSelection.length; targetSelectionIndex++) targetSelection[targetSelectionIndex].selected = true;
     }
-    var restoreWarning = restore(), restoredTimeline = document.getTimeline();
+    }
+    });
+    for (var warningIndex = 0; warningIndex < session.warnings.length; warningIndex++) fl.trace(session.warnings[warningIndex]);
+  } finally {
+    var restoredTimeline = document.getTimeline();
     restoreEditSelectedFrames(restoredTimeline, originalSelectedFrames, originalSelectedFrameLayers);
     var originalLayerIndex = editLayerPosition(restoredTimeline, originalLayer);
     if (originalLayerIndex >= 0) restoredTimeline.currentLayer = originalLayerIndex;
     restoredTimeline.currentFrame = originalFrame;
     if (document.selectNone) document.selectNone();
     for (var originalSelectionIndex = 0; originalSelectionIndex < originalSelection.length; originalSelectionIndex++) originalSelection[originalSelectionIndex].selected = true;
-    if (restoreWarning) fl.trace(restoreWarning);
   }
 
-  return serialize({ applied: resultElements.length, elements: resultElements });
+  return session.result;
 })();

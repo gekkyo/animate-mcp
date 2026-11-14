@@ -75,6 +75,37 @@ function resolveEditTimeline(document, timelineRef) {
   return document.getTimeline();
 }
 
+function withTimelineEdit(document, timelineRef, fn) {
+  var restore = saveEditState(document), timeline = null, selectedFrames = null, layerRefs = [], result;
+  var warnings = [], operationError, operationFailed = false;
+  try {
+    timeline = resolveEditTimeline(document, timelineRef);
+    selectedFrames = timeline.getSelectedFrames ? timeline.getSelectedFrames() : null;
+    layerRefs = editSelectedFrameLayers(timeline, selectedFrames);
+    result = fn(timeline);
+  } catch (error) {
+    operationError = error;
+    operationFailed = true;
+  } finally {
+    if (timeline) {
+      try {
+        restoreEditSelectedFrames(timeline, selectedFrames, layerRefs);
+      } catch (selectionError) {
+        warnings.push('Selected frames were not restored: ' + String(selectionError && selectionError.message ? selectionError.message : selectionError));
+      }
+    }
+    var warning = restore();
+    if (warning) warnings.push(warning);
+  }
+  if (operationFailed) {
+    if (typeof fl !== 'undefined' && fl.trace) {
+      for (var warningIndex = 0; warningIndex < warnings.length; warningIndex++) fl.trace(warnings[warningIndex]);
+    }
+    throw operationError;
+  }
+  return { result: result, warnings: warnings };
+}
+
 function resolveEditLayerIndex(targetTimeline, reference) {
   if (typeof reference === 'number') {
     if (Math.floor(reference) !== reference || reference < 0 || reference >= targetTimeline.layers.length) {

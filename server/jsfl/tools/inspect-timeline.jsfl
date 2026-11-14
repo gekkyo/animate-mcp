@@ -1,27 +1,10 @@
 // `var __docName`, `var __timelineRef`, `var __layers`, and `var __frame` are injected before this file.
 (function () {
-  var document = selectDocument(), restore = saveEditState(document), timeline = null;
-  var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.currentLayer;
+  var document = selectDocument(), timeline = null, originalTimeline = document.getTimeline();
+  var originalLayer = originalTimeline.currentLayer;
   var originalFrame = originalTimeline.currentFrame, originalSelectedFrames = originalTimeline.getSelectedFrames ? originalTimeline.getSelectedFrames() : null;
   var resultLayers = [], restoreWarning = '';
-
-  /** Resolves the requested scene or library-symbol timeline.
-   * @returns The selected timeline.
-   */
-  function resolveTimeline() {
-    if (typeof __timelineRef === 'number') {
-      var scene = document.timelines[__timelineRef];
-      if (!scene || Math.floor(__timelineRef) !== __timelineRef || __timelineRef < 0) throw new Error('Scene not found');
-      return scene;
-    }
-    var found = false;
-    for (var itemIndex = 0; itemIndex < document.library.items.length; itemIndex++) {
-      if (document.library.items[itemIndex].name === __timelineRef) found = true;
-    }
-    if (!found) throw new Error('Library item not found: ' + __timelineRef);
-    document.library.editItem(__timelineRef);
-    return document.getTimeline();
-  }
+  var targetSelectedFramesAfter = null;
 
   /** Resolves optional layer names or indexes, defaulting to every layer.
    * @returns Selected layer indexes in request order.
@@ -152,18 +135,24 @@
     return result;
   }
 
+  var session = null;
   try {
-    timeline = resolveTimeline();
+    session = withTimelineEdit(document, __timelineRef, function (targetTimeline) {
+    timeline = targetTimeline;
     var indexes = requestedLayerIndexes(), frameIndex = __frame - 1;
     for (var requestIndex = 0; requestIndex < indexes.length; requestIndex++) resultLayers.push(inspectLayer(indexes[requestIndex], frameIndex));
+    targetSelectedFramesAfter = timeline.getSelectedFrames ? timeline.getSelectedFrames() : null;
+    return resultLayers;
+    });
   } finally {
-    restoreWarning = restore();
     var restoredTimeline = document.getTimeline();
     if (originalLayer < restoredTimeline.layers.length) restoredTimeline.currentLayer = originalLayer;
     if (originalSelectedFrames && restoredTimeline.setSelectedFrames) restoredTimeline.setSelectedFrames(originalSelectedFrames);
     if (originalLayer < restoredTimeline.layers.length) restoredTimeline.currentLayer = originalLayer;
     restoredTimeline.currentFrame = originalFrame;
   }
+  if (timeline !== originalTimeline && targetSelectedFramesAfter && timeline.setSelectedFrames) timeline.setSelectedFrames(targetSelectedFramesAfter);
+  restoreWarning = session.warnings.join('; ');
   var result = { timeline: __timelineRef, frame: __frame, layers: resultLayers };
   if (restoreWarning) result.warning = restoreWarning;
   return serialize(result);

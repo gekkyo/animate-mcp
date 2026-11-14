@@ -1,7 +1,8 @@
 // `var __timelineRef` (scene index or library item path) and `var __ops` are injected before this file.
-  var document = selectDocument(), restore = saveEditState(document), timeline = null;
+  var document = selectDocument(), timeline = null;
   var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.currentLayer;
   var originalFrame = originalTimeline.currentFrame, applied = [], failed = null, skipped = [], warnings = [];
+  var targetSelectedFramesAfter = null;
 
   /** Returns the final layer list.
    * @returns The current layers and their parent relationships.
@@ -372,7 +373,7 @@
     /** Applies the tween while the target layer is unlocked.
      * @returns Nothing
      */
-    withUnlockedLayers([layer], function () {
+    withEditUnlockedLayers([layer], function () {
       timeline.currentLayer = layerIndex;
       if (kind === 'classic') {
         for (var insertIndex = keyframes.length - 1; insertIndex >= 0; insertIndex--) {
@@ -513,7 +514,7 @@
     /** Applies the ease while the target layer is unlocked.
      * @returns Nothing
      */
-    withUnlockedLayers([layer], function () {
+    withEditUnlockedLayers([layer], function () {
       timeline.currentLayer = layerIndex;
       if (span.tweenType === 'motion') {
         var arrival = { ease: op.ease };
@@ -575,19 +576,8 @@
   }
 
   try {
-    if (typeof __timelineRef === 'number') {
-      timeline = document.timelines[__timelineRef];
-      if (!timeline || Math.floor(__timelineRef) !== __timelineRef || __timelineRef < 0) throw new Error('Scene not found');
-      if (document.currentTimeline !== __timelineRef && document.editScene) document.editScene(__timelineRef);
-    } else {
-      var itemFound = false;
-      for (var itemIndex = 0; itemIndex < document.library.items.length; itemIndex++) {
-        if (document.library.items[itemIndex].name === __timelineRef) itemFound = true;
-      }
-      if (!itemFound) throw new Error('Library item not found: ' + __timelineRef);
-      document.library.editItem(__timelineRef);
-      timeline = document.getTimeline();
-    }
+    var session = withTimelineEdit(document, __timelineRef, function (targetTimeline) {
+      timeline = targetTimeline;
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
       var op = __ops[opIndex];
       try {
@@ -600,9 +590,11 @@
         break;
       }
     }
+      targetSelectedFramesAfter = timeline.getSelectedFrames ? timeline.getSelectedFrames() : null;
+    });
+    warnings = warnings.concat(session.warnings);
+    if (targetSelectedFramesAfter && timeline.setSelectedFrames) timeline.setSelectedFrames(targetSelectedFramesAfter);
   } finally {
-    var warning = restore();
-    if (warning) warnings.push(warning);
     var restoredTimeline = document.getTimeline();
     if (originalLayer < restoredTimeline.layers.length) restoredTimeline.currentLayer = originalLayer;
     restoredTimeline.currentFrame = originalFrame;

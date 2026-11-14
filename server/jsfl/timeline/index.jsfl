@@ -1,6 +1,7 @@
-  var document = selectDocument(), restore = saveEditState(document), timeline = null;
+  var document = selectDocument(), timeline = null;
   var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.currentLayer;
   var originalFrame = originalTimeline.currentFrame, applied = [], failed = null, skipped = [], warnings = [];
+  var targetSelectedFramesAfter = null;
 
   /** Returns the final layer list.
    * @returns The current layers and their parent relationships.
@@ -20,18 +21,8 @@
   }
 
   try {
-    if (typeof __timelineRef === 'number') {
-      timeline = document.timelines[__timelineRef];
-      if (!timeline || Math.floor(__timelineRef) !== __timelineRef || __timelineRef < 0) throw new Error('Scene not found');
-    } else {
-      var itemFound = false;
-      for (var itemIndex = 0; itemIndex < document.library.items.length; itemIndex++) {
-        if (document.library.items[itemIndex].name === __timelineRef) itemFound = true;
-      }
-      if (!itemFound) throw new Error('Library item not found: ' + __timelineRef);
-      document.library.editItem(__timelineRef);
-      timeline = document.getTimeline();
-    }
+    var session = withTimelineEdit(document, __timelineRef, function (targetTimeline) {
+      timeline = targetTimeline;
 
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
       var op = __ops[opIndex];
@@ -48,9 +39,11 @@
         break;
       }
     }
+      targetSelectedFramesAfter = timeline.getSelectedFrames ? timeline.getSelectedFrames() : null;
+    });
+    warnings = warnings.concat(session.warnings);
+    if (targetSelectedFramesAfter && timeline.setSelectedFrames) timeline.setSelectedFrames(targetSelectedFramesAfter);
   } finally {
-    var warning = restore();
-    if (warning) warnings.push(warning);
     var restoredTimeline = document.getTimeline();
     if (originalLayer < restoredTimeline.layers.length) restoredTimeline.currentLayer = originalLayer;
     restoredTimeline.currentFrame = originalFrame;

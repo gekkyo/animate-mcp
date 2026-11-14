@@ -18,7 +18,7 @@
     /** Cuts and pastes the layer's frames at the requested offset.
      * @returns Nothing.
      */
-    withUnlockedLayers([layer], function () {
+    withEditUnlockedLayers([layer], function () {
       timeline.setSelectedLayers(layerIndex);
       timeline.setSelectedFrames(0, originalLength, true);
       timeline.cutFrames();
@@ -82,7 +82,7 @@
       /** Inserts or removes frames on the affected layers.
        * @returns Nothing.
        */
-      withUnlockedLayers(layers, function () {
+      withEditUnlockedLayers(layers, function () {
         if (op.op === 'insertFrames') {
           timeline.currentLayer = layerIndex;
           timeline.insertFrames(count, op.ripple === true, frameIndex);
@@ -103,7 +103,7 @@
       /** Converts the selected frame to a keyframe.
        * @returns Nothing.
        */
-      withUnlockedLayers([layer], function () {
+      withEditUnlockedLayers([layer], function () {
         timeline.currentLayer = layerIndex;
         timeline.convertToKeyframes(frameIndex);
       });
@@ -115,7 +115,7 @@
       /** Clears the selected keyframe.
        * @returns Nothing.
        */
-      withUnlockedLayers([layer], function () {
+      withEditUnlockedLayers([layer], function () {
         timeline.currentLayer = layerIndex;
         timeline.clearKeyframes(frameIndex);
       });
@@ -125,7 +125,7 @@
       /** Sets the selected frame's label.
        * @returns Nothing.
        */
-      withUnlockedLayers([layer], function () {
+      withEditUnlockedLayers([layer], function () {
         timeline.currentLayer = layerIndex;
         timeline.setFrameProperty('name', op.label, frameIndex, frameIndex + 1);
       });
@@ -148,7 +148,7 @@
         /** Resizes the selected frame span.
          * @returns Nothing.
          */
-        withUnlockedLayers(layers, function () {
+        withEditUnlockedLayers(layers, function () {
           if (op.length > spanLength) {
             timeline.currentLayer = layerIndex;
             timeline.insertFrames(count, op.ripple === true, Math.max(spanStart, delta - 1));

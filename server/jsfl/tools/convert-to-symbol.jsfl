@@ -1,34 +1,16 @@
 // `var __docName`, `var __timelineRef`, and `var __request` are injected before this file.
 (function () {
-  var document = selectDocument(), restoreEditState = saveEditState(document);
+  var document = selectDocument();
   var originalTimeline = document.getTimeline();
   var originalLayer = originalTimeline.layers[originalTimeline.currentLayer];
   var originalFrame = originalTimeline.currentFrame;
   var originalSelectedFrames = originalTimeline.getSelectedFrames ? originalTimeline.getSelectedFrames() : null;
   var originalSelection = document.selection ? document.selection.slice() : [];
-  var timeline = null, targetLayer = null, targetFrame = null, targetSelectedFrames = null;
+  var timeline = null, targetLayer = null, targetFrame = null;
   var targetSelection = [], resolved = [], lockedLayers = [], lockStates = [];
   var frameIndex = __request.frame - 1;
   var allowedTypes = ["movie clip", "button", "graphic"];
   var registrationPoints = ["top left", "top center", "top right", "center left", "center", "center right", "bottom left", "bottom center", "bottom right"];
-
-  function resolveTimeline() {
-    if (typeof __timelineRef === "number") {
-      if (Math.floor(__timelineRef) !== __timelineRef || __timelineRef < 0 || __timelineRef >= document.timelines.length) {
-        throw new Error("Scene not found");
-      }
-      if (document.getTimeline().libraryItem && document.exitEditMode) document.exitEditMode();
-      if (document.currentTimeline !== __timelineRef && document.editScene) document.editScene(__timelineRef);
-      return document.timelines[__timelineRef];
-    }
-    var found = false;
-    for (var itemIndex = 0; itemIndex < document.library.items.length; itemIndex++) {
-      if (document.library.items[itemIndex].name === __timelineRef) found = true;
-    }
-    if (!found) throw new Error("Library item not found: " + __timelineRef);
-    document.library.editItem(__timelineRef);
-    return document.getTimeline();
-  }
 
   function resolveLayer(reference) {
     if (typeof reference === "number") {
@@ -119,12 +101,13 @@
       }
     }
 
-    timeline = resolveTimeline();
+    var session = withTimelineEdit(document, __timelineRef, function (targetTimeline) {
+    timeline = targetTimeline;
     targetLayer = timeline.layers[timeline.currentLayer];
     targetFrame = timeline.currentFrame;
-    targetSelectedFrames = timeline.getSelectedFrames ? timeline.getSelectedFrames() : null;
     targetSelection = document.selection ? document.selection.slice() : [];
 
+    try {
     for (var requestIndex = 0; requestIndex < __request.elements.length; requestIndex++) {
       var reference = __request.elements[requestIndex];
       var layerIndex = resolveLayer(reference.layer), layer = timeline.layers[layerIndex];
@@ -153,35 +136,52 @@
     for (var unlockIndex = 0; unlockIndex < lockedLayers.length; unlockIndex++) {
       lockStates.push({ layer: lockedLayers[unlockIndex], locked: lockedLayers[unlockIndex].locked });
     }
-    for (unlockIndex = 0; unlockIndex < lockStates.length; unlockIndex++) {
-      if (lockStates[unlockIndex].locked) lockStates[unlockIndex].layer.locked = false;
-    }
-
+    try {
+      for (unlockIndex = 0; unlockIndex < lockStates.length; unlockIndex++) {
+        if (lockStates[unlockIndex].locked) lockStates[unlockIndex].layer.locked = false;
+      }
     timeline.currentFrame = frameIndex;
     timeline.currentLayer = resolved[0].layerIndex;
     if (document.selectNone) document.selectNone();
     for (var selectIndex = 0; selectIndex < resolved.length; selectIndex++) resolved[selectIndex].element.selected = true;
     var created = document.convertToSymbol(__request.type, __request.name, __request.registrationPoint);
     if (!created) throw new Error("Animate could not convert the selection to a symbol");
-    return serialize({ name: __request.name, type: __request.type, registrationPoint: __request.registrationPoint });
-  } finally {
-    for (var restoreLockIndex = 0; restoreLockIndex < lockStates.length; restoreLockIndex++) {
-      try {
-        lockStates[restoreLockIndex].layer.locked = lockStates[restoreLockIndex].locked;
-      } catch (lockError) {
-        traceRestoreError("Layer lock was not restored", lockError);
+    } finally {
+      for (var restoreLockIndex = 0; restoreLockIndex < lockStates.length; restoreLockIndex++) {
+        try {
+          lockStates[restoreLockIndex].layer.locked = lockStates[restoreLockIndex].locked;
+        } catch (lockError) {
+          traceRestoreError("Layer lock was not restored", lockError);
+        }
       }
     }
+    return serialize({ name: __request.name, type: __request.type, registrationPoint: __request.registrationPoint });
+    } finally {
+      if (timeline) {
+        try {
+          restoreTimelineState(timeline, targetLayer, targetFrame, null, targetSelection);
+        } catch (targetRestoreError) {
+          traceRestoreError("Target timeline state was not restored", targetRestoreError);
+        }
+      }
+    }
+    });
+    for (var warningIndex = 0; warningIndex < session.warnings.length; warningIndex++) fl.trace(session.warnings[warningIndex]);
     if (timeline) {
       try {
-        restoreTimelineState(timeline, targetLayer, targetFrame, targetSelectedFrames, targetSelection);
+        var targetLayerIndex = -1;
+        for (var targetIndex = 0; targetIndex < timeline.layers.length; targetIndex++) {
+          if (timeline.layers[targetIndex] === targetLayer) targetLayerIndex = targetIndex;
+        }
+        if (targetLayerIndex >= 0) timeline.currentLayer = targetLayerIndex;
+        timeline.currentFrame = targetFrame;
       } catch (targetRestoreError) {
         traceRestoreError("Target timeline state was not restored", targetRestoreError);
       }
     }
+    return session.result;
+  } finally {
     try {
-      var restoreWarning = restoreEditState();
-      if (restoreWarning) fl.trace(restoreWarning);
       var restoredTimeline = document.getTimeline();
       restoreTimelineState(restoredTimeline, originalLayer, originalFrame, originalSelectedFrames, originalSelection);
     } catch (originalRestoreError) {
