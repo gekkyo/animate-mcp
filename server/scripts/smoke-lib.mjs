@@ -1,7 +1,64 @@
 // Shared setup for real-Animate smoke scripts (not in CI). Run `npm run build` first.
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { isAnimateRunning, launcher } from "../dist/animate-launcher.js";
 import { bundle } from "../dist/jsfl-bundle.js";
 import { createRunner } from "../dist/runner.js";
+
+const execFileAsync = promisify(execFile);
+const MODAL_QUERY = `tell application "System Events"
+    set animateProcesses to every application process whose name contains "Animate"
+    if (count of animateProcesses) is 0 then return "UNKNOWN"
+    repeat with animateProcess in animateProcesses
+        tell animateProcess
+            repeat with targetWindow in windows
+                if subrole of targetWindow is "AXDialog" then return "MODAL"
+                if (count of sheets of targetWindow) > 0 then return "MODAL"
+            end repeat
+        end tell
+    end repeat
+    return "CLEAR"
+end tell`;
+
+async function inspectAnimateModal() {
+    if (process.platform !== "darwin") {
+        return { state: "unavailable", reason: "macOS System Events is unavailable on this platform" };
+    }
+    try {
+        const { stdout } = await execFileAsync("osascript", ["-e", MODAL_QUERY], { timeout: 3000, maxBuffer: 4096 });
+        switch (stdout.trim()) {
+            case "MODAL":
+                return { state: "modal" };
+            case "CLEAR":
+                return { state: "clear" };
+            case "UNKNOWN":
+                return { state: "unknown" };
+            default:
+                return { state: "unavailable", reason: "osascript returned an unexpected response" };
+        }
+    } catch (error) {
+        const reason =
+            error?.code === "ETIMEDOUT"
+                ? "osascript timed out after 3000 ms"
+                : String(error?.stderr || error?.message || error).trim().slice(0, 400) || "osascript failed";
+        return { state: "unavailable", reason };
+    }
+}
+
+function modalHint(diagnostic) {
+    switch (diagnostic?.state) {
+        case "modal":
+            return "Animate modal diagnostic: a dialog or sheet was detected; close it manually and retry.";
+        case "clear":
+            return "Animate modal diagnostic: no dialog or sheet was detected.";
+        case "unknown":
+            return "Animate modal diagnostic: state unknown (no matching Animate process was found).";
+        case "unavailable":
+            return `Animate modal diagnostic unavailable: ${diagnostic.reason}`;
+        default:
+            return "Animate modal diagnostic unavailable: the state could not be determined.";
+    }
+}
 
 /** Creates and saves a disposable AS3 document (Test Movie and publish need a saved path).
  * @param runJsfl run_jsfl tool handler
@@ -36,7 +93,7 @@ export async function closeDocumentByPath(runJsfl, pathURI) {
     if (result.structuredContent?.result !== true) throw new Error("Animate did not confirm disposable document cleanup");
 }
 
-export function toolHandler(register) {
+export function toolHandler(register, checkModal = inspectAnimateModal) {
     const runner = createRunner({
         dir: `${process.env.HOME}/.animate-mcp/runs`,
         launch: launcher(),
@@ -45,5 +102,32 @@ export function toolHandler(register) {
     });
     let handle;
     register({ registerTool: (_name, _config, callback) => (handle = callback) }, { runner, bundle });
-    return handle;
+    return async (...args) => {
+        const result = await handle(...args);
+        const errorText = result?.content?.find((item) => item?.type === "text" && typeof item.text === "string")?.text;
+        if (
+            !result?.isError ||
+            !/^Run timed out after \d+ ms \(Animate did not run the \.jsfl; on Windows check that \.jsfl files are associated with Animate, or set ANIMATE_MCP_LAUNCH_COMMAND\)$/.test(
+                errorText ?? "",
+            )
+        ) {
+            return result;
+        }
+
+        let hint;
+        try {
+            hint = modalHint(await checkModal());
+        } catch (error) {
+            hint = `Animate modal diagnostic unavailable: ${String(error?.message || error).slice(0, 400)}`;
+        }
+        const content = Array.isArray(result.content) ? [...result.content] : [];
+        const firstTextIndex = content.findIndex((item) => item?.type === "text" && typeof item.text === "string");
+        if (firstTextIndex >= 0) {
+            const firstText = content[firstTextIndex];
+            content[firstTextIndex] = { ...firstText, text: `${firstText.text}\n${hint}` };
+        } else {
+            content.push({ type: "text", text: hint });
+        }
+        return { ...result, content };
+    };
 }

@@ -3,104 +3,16 @@
   var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.layers[originalTimeline.currentLayer];
   var originalFrame = originalTimeline.currentFrame;
   var originalSelectedFrames = originalTimeline.getSelectedFrames ? originalTimeline.getSelectedFrames() : null;
-  var originalSelectedFrameLayers = selectedFrameLayers(originalTimeline, originalSelectedFrames);
+  var originalSelectedFrameLayers = editSelectedFrameLayers(originalTimeline, originalSelectedFrames);
   var originalSelection = document.selection ? document.selection.slice() : [];
   var targetLayerState = null, targetFrameState = null, targetSelectedFrames = null, targetSelection = [];
   var targetSelectedFrameLayers = null, resolved = [], resultElements = [], layersToUnlock = [], plannedLayers = [];
 
-  function layerPosition(target) {
-    for (var index = 0; index < timeline.layers.length; index++) if (timeline.layers[index] === target) return index;
-    return -1;
-  }
-
-  function selectedFrameLayers(targetTimeline, frames) {
-    var result = [];
-    if (!frames) return result;
-    for (var index = 0; index < frames.length; index += 3) {
-      result.push({ offset: index, layer: targetTimeline.layers[frames[index]] });
+  function findLibraryItem(name) {
+    for (var index = 0; index < document.library.items.length; index++) {
+      if (document.library.items[index].name === name) return document.library.items[index];
     }
-    return result;
-  }
-
-  function restoreSelectedFrames(targetTimeline, frames, layerRefs) {
-    if (!frames || !targetTimeline.setSelectedFrames) return;
-    var restoredFrames = frames.slice();
-    for (var refIndex = 0; refIndex < layerRefs.length; refIndex++) {
-      var targetLayer = layerRefs[refIndex].layer;
-      if (!targetLayer) continue;
-      for (var layerIndex = 0; layerIndex < targetTimeline.layers.length; layerIndex++) {
-        if (targetTimeline.layers[layerIndex] === targetLayer) restoredFrames[layerRefs[refIndex].offset] = layerIndex;
-      }
-    }
-    targetTimeline.setSelectedFrames(restoredFrames);
-  }
-
-  function resolveTimeline() {
-    if (typeof __timelineRef === 'number') {
-      if (Math.floor(__timelineRef) !== __timelineRef || __timelineRef < 0 || __timelineRef >= document.timelines.length) {
-        throw new Error('Scene not found');
-      }
-      if (document.getTimeline().libraryItem && document.exitEditMode) document.exitEditMode();
-      if (document.currentTimeline !== __timelineRef && document.editScene) document.editScene(__timelineRef);
-      return document.timelines[__timelineRef];
-    }
-    var found = false;
-    for (var itemIndex = 0; itemIndex < document.library.items.length; itemIndex++) {
-      if (document.library.items[itemIndex].name === __timelineRef) found = true;
-    }
-    if (!found) throw new Error('Library item not found: ' + __timelineRef);
-    document.library.editItem(__timelineRef);
-    return document.getTimeline();
-  }
-
-  function resolveLayer(reference) {
-    if (typeof reference === 'number') {
-      if (Math.floor(reference) !== reference || reference < 0 || reference >= timeline.layers.length) {
-        throw new Error('Layer index not found: ' + reference);
-      }
-      return reference;
-    }
-    return findLayerIndex(reference, undefined);
-  }
-
-  function resolveElement(elements, reference) {
-    if (typeof reference === 'number') {
-      if (Math.floor(reference) !== reference || reference < 0 || reference >= elements.length) {
-        throw new Error('Element index not found: ' + reference);
-      }
-      return reference;
-    }
-    var found = -1, matches = 0;
-    for (var index = 0; index < elements.length; index++) {
-      if (elements[index].name === reference) {
-        found = index;
-        matches++;
-      }
-    }
-    if (matches === 0) throw new Error('Element not found: ' + reference);
-    if (matches > 1) throw new Error('Element name is ambiguous: ' + reference);
-    return found;
-  }
-
-  function resolveAddLayer(name) {
-    var found = -1, matches = 0;
-    for (var index = 0; index < timeline.layers.length; index++) {
-      if (timeline.layers[index].name === name) {
-        found = index;
-        matches++;
-      }
-    }
-    if (matches > 1) throw new Error('Layer name is ambiguous: ' + name);
-    return found;
-  }
-
-  function plannedLayer(name) {
-    for (var index = 0; index < plannedLayers.length; index++) {
-      if (plannedLayers[index].name === name) return plannedLayers[index];
-    }
-    var plan = { name: name, layer: null };
-    plannedLayers.push(plan);
-    return plan;
+    return null;
   }
 
   function numberInRange(value, name, minimum, maximum) {
@@ -156,7 +68,31 @@
     }
   }
 
-  function validateSet(set) {
+  function graphicFrameCount(item) {
+    var symbolTimeline = item.timeline;
+    if (symbolTimeline && typeof symbolTimeline.frameCount === 'number') {
+      if (!isFinite(symbolTimeline.frameCount) || symbolTimeline.frameCount < 0 || Math.floor(symbolTimeline.frameCount) !== symbolTimeline.frameCount) {
+        throw new Error('Could not determine graphic frame count');
+      }
+      return symbolTimeline.frameCount;
+    }
+    var layers = symbolTimeline && symbolTimeline.layers;
+    if (!layers || typeof layers.length !== 'number' || !isFinite(layers.length) || layers.length < 0 || Math.floor(layers.length) !== layers.length) {
+      throw new Error('Could not determine graphic frame count');
+    }
+    var count = 0;
+    for (var index = 0; index < layers.length; index++) {
+      var frames = layers[index] && layers[index].frames;
+      if (!frames || typeof frames.length !== 'number' || !isFinite(frames.length) || frames.length < 0 || Math.floor(frames.length) !== frames.length) {
+        throw new Error('Could not determine graphic frame count');
+      }
+      if (frames.length > count) count = frames.length;
+    }
+    // An empty timeline has zero frames, so no nonnegative firstFrame is valid.
+    return count;
+  }
+
+  function validateSet(set, reference) {
     var numeric = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'skewX', 'skewY'];
     for (var index = 0; index < numeric.length; index++) {
       if (set[numeric[index]] !== undefined && (typeof set[numeric[index]] !== 'number' || !isFinite(set[numeric[index]]))) {
@@ -165,17 +101,42 @@
     }
     if (set.colorEffect) validateColorEffect(set.colorEffect);
     if (set.filters) validateFilters(set.filters);
+    var item = reference && reference.libraryItem ? reference.libraryItem : reference;
+    var symbolType = reference && reference.elementType === 'instance' ? reference.symbolType : reference && reference.itemType;
+    if (set.swapSymbol !== undefined) {
+      var swapItem = findLibraryItem(set.swapSymbol);
+      if (!swapItem) throw new Error('Library item not found: ' + set.swapSymbol);
+      if (['movie clip', 'graphic', 'button'].indexOf(swapItem.itemType) < 0) {
+        throw new Error('Library item is not a symbol: ' + set.swapSymbol);
+      }
+    }
+    if (set.loop !== undefined || set.firstFrame !== undefined) {
+      if (symbolType !== 'graphic') throw new Error('loop and firstFrame can only be set on graphic instances');
+      if (set.firstFrame !== undefined) {
+        var frameCount = graphicFrameCount(item);
+        if (set.firstFrame >= frameCount) {
+          throw new Error('firstFrame must be less than the graphic frame count (' + frameCount + ')');
+        }
+      }
+    }
     if (set.rotation !== undefined && (set.skewX !== undefined || set.skewY !== undefined)) {
       throw new Error('rotation and skew cannot be set together in one operation');
     }
   }
 
   function applySet(element, set) {
+    if (set.swapSymbol !== undefined) {
+      document.selectNone();
+      element.selected = true;
+      document.swapElement(set.swapSymbol);
+    }
     var properties = ['x', 'y', 'scaleX', 'scaleY', 'skewX', 'skewY', 'rotation', 'name', 'blendMode', 'visible'];
     for (var index = 0; index < properties.length; index++) {
       var property = properties[index];
       if (set[property] !== undefined) element[property] = set[property];
     }
+    if (set.loop !== undefined) element.loop = set.loop;
+    if (set.firstFrame !== undefined) element.firstFrame = set.firstFrame;
     if (set.filters !== undefined) element.filters = set.filters;
     if (set.colorEffect) {
       var effect = set.colorEffect;
@@ -204,25 +165,22 @@
   }
 
   try {
-    timeline = resolveTimeline();
+    timeline = resolveEditTimeline(document, __timelineRef);
     targetLayerState = timeline.layers[timeline.currentLayer];
     targetFrameState = timeline.currentFrame;
     targetSelectedFrames = timeline.getSelectedFrames ? timeline.getSelectedFrames() : null;
-    targetSelectedFrameLayers = selectedFrameLayers(timeline, targetSelectedFrames);
+    targetSelectedFrameLayers = editSelectedFrameLayers(timeline, targetSelectedFrames);
     targetSelection = document.selection ? document.selection.slice() : [];
 
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
       var op = __ops[opIndex];
       if (op.op === 'add') {
-        var item = null;
-        for (var itemIndex = 0; itemIndex < document.library.items.length; itemIndex++) {
-          if (document.library.items[itemIndex].name === op.item) item = document.library.items[itemIndex];
-        }
+        var item = findLibraryItem(op.item);
         var visualItemTypes = ['movie clip', 'graphic', 'button', 'bitmap', 'component', 'compiled clip'];
         if (!item) throw new Error('Library item not found: ' + op.item);
         if (visualItemTypes.indexOf(item.itemType) < 0) throw new Error('Library item is not a visual item: ' + op.item);
         if (timeline.libraryItem && timeline.libraryItem.name === op.item) throw new Error('Cannot add a Library item to its own symbol timeline: ' + op.item);
-        var addLayerIndex = resolveAddLayer(op.layer), addLayer = addLayerIndex < 0 ? null : timeline.layers[addLayerIndex];
+        var addLayer = resolveEditAddLayer(timeline, op.layer);
         if (addLayer && addLayer.layerType === 'folder') throw new Error('Cannot add to a folder layer: ' + op.layer);
         var addFrameIndex = op.frame - 1, spanToCheck = null;
         if (addLayer && addLayer.frames.length) {
@@ -231,8 +189,9 @@
           spanToCheck = spanFrame && addLayer.frames[spanFrame.startFrame];
           if (spanToCheck && (spanToCheck.tweenType || 'none') !== 'none') throw new Error('Cannot add a Library item to a tween span');
         }
-        if (op.set) validateSet(op.set);
-        resolved.push({ kind: 'add', op: op, layer: addLayer, layerPlan: addLayer ? null : plannedLayer(op.layer) });
+        if (op.set && op.set.swapSymbol !== undefined) throw new Error('swapSymbol cannot be used with add operations');
+        if (op.set) validateSet(op.set, item);
+        resolved.push({ kind: 'add', op: op, layer: addLayer, layerPlan: addLayer ? null : plannedEditLayer(plannedLayers, op.layer) });
         if (addLayer) {
           var addLayerAlreadyUnlocked = false;
           for (var addLockedIndex = 0; addLockedIndex < layersToUnlock.length; addLockedIndex++) {
@@ -242,7 +201,7 @@
         }
         continue;
       }
-      var layerIndex = resolveLayer(op.layer), layer = timeline.layers[layerIndex];
+      var layerIndex = resolveEditLayerIndex(timeline, op.layer), layer = timeline.layers[layerIndex];
       var frameIndex = op.frame - 1;
       if (frameIndex >= layer.frames.length || !layer.frames[frameIndex]) throw new Error('Frame not found: ' + op.frame);
       var frame = layer.frames[frameIndex];
@@ -251,9 +210,9 @@
         if (span && (span.tweenType || 'none') !== 'none') throw new Error('Frame is inside a tween; only keyframes can be edited');
         throw new Error('Frame is not a keyframe; only keyframes can be edited');
       }
-      var elements = frame.elements || [], elementIndex = resolveElement(elements, op.element);
+      var elements = frame.elements || [], elementIndex = resolveEditElement(elements, op.element);
       if (elements[elementIndex].elementType !== 'instance') throw new Error('Only symbol instances can be edited');
-      validateSet(op.set);
+      validateSet(op.set, elements[elementIndex]);
       op.layerName = layer.name;
       op.frameIndex = frameIndex;
       op.elementIndex = elementIndex;
@@ -263,6 +222,17 @@
         if (layersToUnlock[lockedIndex] === layer) alreadyAdded = true;
       }
       if (!alreadyAdded) layersToUnlock.push(layer);
+    }
+
+    for (var swapCheckIndex = 0; swapCheckIndex < resolved.length; swapCheckIndex++) {
+      var swapEntry = resolved[swapCheckIndex];
+      if (!swapEntry.element || !swapEntry.op.set || swapEntry.op.set.swapSymbol === undefined) continue;
+      for (var playbackCheckIndex = 0; playbackCheckIndex < resolved.length; playbackCheckIndex++) {
+        var playbackEntry = resolved[playbackCheckIndex], playbackSet = playbackEntry.op.set;
+        if (playbackEntry.element === swapEntry.element && playbackSet && (playbackSet.loop !== undefined || playbackSet.firstFrame !== undefined)) {
+          throw new Error('Cannot combine swapSymbol with loop or firstFrame because symbolType after swap is unverified');
+        }
+      }
     }
 
     withUnlockedLayers(layersToUnlock, function () {
@@ -336,7 +306,7 @@
   } finally {
     if (timeline && targetLayerState) {
       if (document.selectNone) document.selectNone();
-      restoreSelectedFrames(timeline, targetSelectedFrames, targetSelectedFrameLayers);
+      restoreEditSelectedFrames(timeline, targetSelectedFrames, targetSelectedFrameLayers);
       var targetLayerIndex = layerPosition(targetLayerState);
       if (targetLayerIndex >= 0) timeline.currentLayer = targetLayerIndex;
       timeline.currentFrame = targetFrameState;
@@ -344,11 +314,8 @@
     }
     var restoreWarning = restore();
     var restoredTimeline = document.getTimeline();
-    restoreSelectedFrames(restoredTimeline, originalSelectedFrames, originalSelectedFrameLayers);
-    var originalLayerIndex = -1;
-    for (var originalLayerSearch = 0; originalLayerSearch < restoredTimeline.layers.length; originalLayerSearch++) {
-      if (restoredTimeline.layers[originalLayerSearch] === originalLayer) originalLayerIndex = originalLayerSearch;
-    }
+    restoreEditSelectedFrames(restoredTimeline, originalSelectedFrames, originalSelectedFrameLayers);
+    var originalLayerIndex = editLayerPosition(restoredTimeline, originalLayer);
     if (originalLayerIndex >= 0) restoredTimeline.currentLayer = originalLayerIndex;
     restoredTimeline.currentFrame = originalFrame;
     if (document.selectNone) document.selectNone();

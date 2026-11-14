@@ -28,6 +28,7 @@ export function registerGetDocumentInfo(
                 width: number;
                 height: number;
                 frameRate: number;
+                backgroundColor: string;
                 timelines: string[];
                 asVersion: "AS3" | "AS2" | null;
                 folder: string | null;
@@ -46,7 +47,7 @@ export function registerGetDocumentInfo(
         "get_document_info",
         {
             description:
-                "Get the active Animate document's name, size, frame rate, timeline names, ActionScript version (null for Canvas/unknown), and whether GreenSock is installed beside the FLA.",
+                "Get the active Animate document's name, size, frame rate, background color, timeline names, ActionScript version (null for Canvas/unknown), and whether GreenSock is installed beside the FLA.",
             annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
         },
         handleGetDocumentInfo,

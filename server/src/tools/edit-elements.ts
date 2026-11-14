@@ -42,6 +42,9 @@ const EDIT_ELEMENT_SET = z
         name: z.string().optional(),
         blendMode: z.string().min(1).optional(),
         visible: z.boolean().optional(),
+        loop: z.enum(["loop", "play once", "single frame"]).optional(),
+        firstFrame: z.number().int().nonnegative().optional(),
+        swapSymbol: z.string().min(1).optional(),
         colorEffect: COLOR_EFFECT.optional(),
         filters: z.array(z.record(z.string(), z.unknown())).optional(),
     })
@@ -114,7 +117,7 @@ export function registerEditElements(
         "edit_elements",
         {
             description:
-                "Set symbol-instance properties on 1-based keyframes in a scene or library-symbol timeline, or add a Library item to a named layer and frame. Add creates a missing layer and extends the timeline; omitted coordinates use the stage center. Existing layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors and non-instance elements are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Supplying filters replaces all existing filters; [] clears them. Read-back element fields match inspect_timeline, plus layer/frame/element references. Animate may quantize transform values. Changes do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
+                "Set symbol-instance properties on 1-based keyframes in a scene or library-symbol timeline, or add a Library item to a named layer and frame. Add creates a missing layer and extends the timeline; omitted coordinates use the stage center. Graphic instances support loop and firstFrame; swapSymbol replaces the selected instance's Library symbol. Existing layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors and non-instance elements are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Supplying filters replaces all existing filters; [] clears them. Read-back element fields match inspect_timeline, plus layer/frame/element references. Animate may quantize transform values. Changes do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
             annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
             inputSchema: EDIT_ELEMENTS_INPUT,
         },

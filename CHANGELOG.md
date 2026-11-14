@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added `edit_text` for adding and updating whole text fields, with text read-back in `inspect_timeline`.
+- Added `import_assets` for images and audio, refusing Library name collisions before Animate can open a blocking dialog.
+- Added `set_document_properties` for stage size, frame rate, and background color; `get_document_info` now reports background color.
+- Added `edit_library` operations `findUsages`, `createSymbol`, and `duplicateItem`.
+- Added graphic `loop`/`firstFrame` and symbol swapping to `edit_elements`.
+
 ## 0.1.8
 
 ### Added

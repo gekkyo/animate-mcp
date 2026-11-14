@@ -1,6 +1,66 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { test } from "node:test";
+import { createContext, runInContext } from "node:vm";
+import { z } from "zod";
+import { registerEditElements } from "../src/tools/edit-elements.js";
 import { layersLog, stateLog, text, withServer } from "./helpers/fake-animate.js";
+
+const callEditElementsWithSymbolType = async (
+    input: Record<string, unknown>,
+    options: {
+        libraryItemType: string;
+        symbolType: string;
+        timeline?: { frameCount?: number; layers?: { frames?: unknown[] }[] };
+    },
+) => {
+    const context = createContext({});
+    runInContext(
+        `var __libraryItem = { name: "Hero", itemType: ${JSON.stringify(options.libraryItemType)}, timeline: ${JSON.stringify(options.timeline ?? { frameCount: 3 })} };
+var __targetItem = { name: "SwapTarget", itemType: "graphic", timeline: { frameCount: 3 } };
+var __element = { elementType: "instance", symbolType: ${JSON.stringify(options.symbolType)}, name: "hero", libraryItem: __libraryItem, x: 0, y: 0,
+  scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0, loop: "loop", firstFrame: 1, filters: [], blendMode: "normal", visible: true };
+var __frame = { startFrame: 0, tweenType: "none", elements: [__element] };
+var __layer = { name: "L", layerType: "normal", locked: false, frames: [__frame] };
+var __timeline = { currentLayer: 0, currentFrame: 0, libraryItem: null, layers: [__layer], getSelectedFrames: function () { return []; }, setSelectedFrames: function () {} };
+var __doc = { name: "fixture.fla", type: "Flash", currentTimeline: 0, timelines: [__timeline], library: { items: [__libraryItem, __targetItem], editItem: function () {},
+  addItemToDocument: function (point, name) { var added = {}; for (var property in __element) added[property] = __element[property]; added.name = ""; added.selected = false;
+    added.libraryItem = this.items.filter(function (item) { return item.name === name; })[0]; added.symbolType = added.libraryItem.itemType; added.x = point.x; added.y = point.y; __frame.elements.push(added); return true; } },
+  getTimeline: function () { return this.timelines[0]; }, exitEditMode: function () {}, editScene: function () {}, selectNone: function () { __element.selected = false; },
+  swapElement: function (name) { __swapWrites++; __element.libraryItem = this.library.items.filter(function (item) { return item.name === name; })[0]; } };
+var __swapWrites = 0;
+Object.defineProperty(__doc, "selection", { get: function () { return __element.selected ? [__element] : []; } });
+var fl = { documents: [__doc], trace: function () {} };`,
+        context,
+    );
+    let handler: ((input: never) => Promise<unknown>) | undefined;
+    let inputSchema: z.ZodRawShape = {};
+    const bundlePaths: Record<string, string> = {
+        "select-document": "server/jsfl/shared/select-document.jsfl",
+        "edit-state": "server/jsfl/shared/edit-state.jsfl",
+        "export-common": "server/jsfl/shared/export-common.jsfl",
+        "timeline-helpers": "server/jsfl/timeline/helpers.jsfl",
+        "element-read": "server/jsfl/shared/element-read.jsfl",
+        "edit-elements": "server/jsfl/tools/edit-elements.jsfl",
+    };
+    const bundle = (...names: string[]) =>
+        names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
+    registerEditElements(
+        {
+            registerTool: (_name, config, callback) => {
+                inputSchema = config.inputSchema as z.ZodRawShape;
+                handler = callback as (input: never) => Promise<unknown>;
+            },
+        } as never,
+        { runner: { execute: async (code) => runInContext(code, context) }, bundle },
+    );
+    const parsed = z.object(inputSchema).safeParse(input);
+    if (!parsed.success) {
+        return { isError: true, content: [{ type: "text", text: parsed.error.message }], context };
+    }
+    return { ...((await handler?.(parsed.data as never)) as object), context };
+};
 
 test("edit_elements updates instances and returns the values read back from Animate", { timeout: 30_000 }, async () => {
     await withServer({}, async (client, tempDir) => {
@@ -455,5 +515,211 @@ test("edit_elements rejects tween interiors, temporarily unlocks layers, and val
         assert.equal(invalidColor.isError, true);
         assert.match(text(invalidColor), /brightnessPercent/);
         assert.equal((await layersLog(tempDir)).at(-1)[0].frames[0].elements[0].x, 0);
+    });
+});
+
+test("edit_elements sets graphic loop on added instances", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_EXTRA: "1" }, async (client, tempDir) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [{ op: "add", item: "S0", layer: "a/b", frame: 1, set: { loop: "single frame" } }],
+            },
+        });
+        assert.equal(result.isError, undefined, text(result));
+        const element = (await layersLog(tempDir)).at(-1)[0].frames[0].elements.at(-1);
+        assert.equal(element.loop, "single frame");
+    });
+});
+
+test("edit_elements rejects graphic-only properties on movie clips before writes", { timeout: 30_000 }, async () => {
+    await withServer({}, async (client, tempDir) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [
+                    { layer: "a/b", frame: 1, element: 0, set: { x: 99 } },
+                    { layer: "a/b", frame: 1, element: 0, set: { loop: "play once" } },
+                ],
+            },
+        });
+        assert.equal(result.isError, true);
+        assert.match(text(result), /graphic/i);
+        assert.equal((await layersLog(tempDir)).at(-1)[0].frames[0].elements[0].x, 0);
+    });
+});
+
+test("edit_elements validates swapSymbol before applying earlier operations", { timeout: 30_000 }, async () => {
+    await withServer({}, async (client, tempDir) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [
+                    { layer: "a/b", frame: 1, element: 0, set: { x: 99 } },
+                    { layer: "a/b", frame: 1, element: 0, set: { swapSymbol: "Missing" } },
+                ],
+            },
+        });
+        assert.equal(result.isError, true);
+        assert.match(text(result), /Library item not found: Missing/);
+        assert.equal((await layersLog(tempDir)).at(-1)[0].frames[0].elements[0].x, 0);
+    });
+});
+
+test("edit_elements refuses swapSymbol on non-instance elements before writes", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_DISTRIBUTE: "1", FAKE_DISTRIBUTE_BAD_ELEMENT: "1" }, async (client, tempDir) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [
+                    { layer: "a/b", frame: 1, element: 0, set: { x: 99 } },
+                    { layer: "a/b", frame: 1, element: 1, set: { swapSymbol: "dir/Hero" } },
+                ],
+            },
+        });
+        assert.equal(result.isError, true);
+        assert.match(text(result), /Only symbol instances can be edited/);
+        assert.equal((await layersLog(tempDir)).at(-1)[0].frames[0].elements[0].x, 10);
+    });
+});
+
+test("edit_elements uses instance.symbolType for playback validation and readback", async () => {
+    const graphicInstance = await callEditElementsWithSymbolType(
+        { timeline: 0, ops: [{ layer: "L", frame: 1, element: "hero", set: { loop: "play once", firstFrame: 2 } }] },
+        { libraryItemType: "movie clip", symbolType: "graphic" },
+    );
+    assert.equal(graphicInstance.isError, undefined, text(graphicInstance));
+    const graphicReadback = graphicInstance.structuredContent as {
+        elements: { loop: string; firstFrame: number; type: string }[];
+    };
+    assert.equal(graphicReadback.elements[0].type, "movie clip");
+    assert.equal(graphicReadback.elements[0].loop, "play once");
+    assert.equal(graphicReadback.elements[0].firstFrame, 2);
+
+    const nonGraphicInstance = await callEditElementsWithSymbolType(
+        {
+            timeline: 0,
+            ops: [
+                { layer: "L", frame: 1, element: "hero", set: { x: 99 } },
+                { layer: "L", frame: 1, element: "hero", set: { loop: "play once" } },
+            ],
+        },
+        { libraryItemType: "graphic", symbolType: "movie clip" },
+    );
+    assert.equal(nonGraphicInstance.isError, true);
+    assert.match(text(nonGraphicInstance), /graphic/i);
+    assert.equal(runInContext("__element.x", nonGraphicInstance.context), 0);
+
+    const nonGraphicReadback = await callEditElementsWithSymbolType(
+        { timeline: 0, ops: [{ layer: "L", frame: 1, element: "hero", set: { x: 1 } }] },
+        { libraryItemType: "graphic", symbolType: "movie clip" },
+    );
+    const nonGraphicResult = nonGraphicReadback.structuredContent as { elements: Record<string, unknown>[] };
+    assert.equal("loop" in nonGraphicResult.elements[0], false);
+    assert.equal("firstFrame" in nonGraphicResult.elements[0], false);
+});
+
+test("edit_elements derives graphic frame count when frameCount is unavailable", async () => {
+    const outOfRange = await callEditElementsWithSymbolType(
+        {
+            timeline: 0,
+            ops: [
+                { layer: "L", frame: 1, element: "hero", set: { x: 99 } },
+                { layer: "L", frame: 1, element: "hero", set: { firstFrame: 3 } },
+            ],
+        },
+        {
+            libraryItemType: "graphic",
+            symbolType: "graphic",
+            timeline: { layers: [{ frames: [0, 0, 0] }, { frames: [0] }] },
+        },
+    );
+    assert.equal(outOfRange.isError, true);
+    assert.match(text(outOfRange), /firstFrame must be less than the graphic frame count \(3\)/);
+    assert.equal(runInContext("__element.x", outOfRange.context), 0);
+
+    const validZero = await callEditElementsWithSymbolType(
+        { timeline: 0, ops: [{ layer: "L", frame: 1, element: "hero", set: { firstFrame: 0 } }] },
+        { libraryItemType: "graphic", symbolType: "graphic", timeline: { layers: [{ frames: [0, 0, 0] }] } },
+    );
+    assert.equal(validZero.isError, undefined, text(validZero));
+    assert.equal((validZero.structuredContent as { elements: { firstFrame: number }[] }).elements[0].firstFrame, 0);
+
+    const addedValidZero = await callEditElementsWithSymbolType(
+        {
+            timeline: 0,
+            ops: [{ op: "add", item: "Hero", layer: "L", frame: 1, x: 10, y: 20, set: { firstFrame: 0 } }],
+        },
+        { libraryItemType: "graphic", symbolType: "graphic", timeline: { layers: [{ frames: [0, 0, 0] }] } },
+    );
+    assert.equal(addedValidZero.isError, undefined, text(addedValidZero));
+    assert.equal(
+        (addedValidZero.structuredContent as { elements: { firstFrame: number }[] }).elements[0].firstFrame,
+        0,
+    );
+
+    const unavailable = await callEditElementsWithSymbolType(
+        {
+            timeline: 0,
+            ops: [
+                { layer: "L", frame: 1, element: "hero", set: { x: 99 } },
+                { layer: "L", frame: 1, element: "hero", set: { firstFrame: 0 } },
+            ],
+        },
+        { libraryItemType: "graphic", symbolType: "graphic", timeline: {} },
+    );
+    assert.equal(unavailable.isError, true);
+    assert.match(text(unavailable), /Could not determine graphic frame count/);
+    assert.equal(runInContext("__element.x", unavailable.context), 0);
+
+    const emptyTimeline = await callEditElementsWithSymbolType(
+        { timeline: 0, ops: [{ layer: "L", frame: 1, element: "hero", set: { firstFrame: 0 } }] },
+        { libraryItemType: "graphic", symbolType: "graphic", timeline: { layers: [] } },
+    );
+    assert.equal(emptyTimeline.isError, true);
+    assert.match(text(emptyTimeline), /graphic frame count \(0\)/);
+});
+
+test("edit_elements refuses playback changes combined with swapSymbol before swapping", async () => {
+    const result = await callEditElementsWithSymbolType(
+        {
+            timeline: 0,
+            ops: [
+                { layer: "L", frame: 1, element: "hero", set: { swapSymbol: "SwapTarget" } },
+                { layer: "L", frame: 1, element: "hero", set: { loop: "play once" } },
+            ],
+        },
+        { libraryItemType: "movie clip", symbolType: "graphic" },
+    );
+    assert.equal(result.isError, true);
+    assert.match(text(result), /symbolType after swap is unverified/i);
+    assert.equal(runInContext("__swapWrites", result.context), 0);
+    assert.equal(runInContext("__element.libraryItem.name", result.context), "Hero");
+});
+
+test("edit_elements rejects swapSymbol in add.set before earlier writes", { timeout: 30_000 }, async () => {
+    await withServer({}, async (client, tempDir) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [
+                    { layer: "a/b", frame: 1, element: 0, set: { x: 99 } },
+                    { op: "add", item: "dir/Hero", layer: "mustNotBeAdded", frame: 1, set: { swapSymbol: "dir/Hero" } },
+                ],
+            },
+        });
+        assert.equal(result.isError, true);
+        assert.match(text(result), /swapSymbol.*add/i);
+        const layers = (await layersLog(tempDir)).at(-1);
+        assert.equal(layers.find((layer) => layer.name === "a/b").frames[0].elements[0].x, 0);
+        assert.equal(
+            layers.some((layer) => layer.name === "mustNotBeAdded"),
+            false,
+        );
     });
 });

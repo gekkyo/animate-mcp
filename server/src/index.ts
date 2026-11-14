@@ -13,10 +13,12 @@ import { registerCloseDocument } from "./tools/close-document.js";
 import { registerConvertToSymbol } from "./tools/convert-to-symbol.js";
 import { registerEditElements } from "./tools/edit-elements.js";
 import { registerEditLibrary } from "./tools/edit-library.js";
+import { registerEditText } from "./tools/edit-text.js";
 import { registerEditTimeline } from "./tools/edit-timeline.js";
 import { registerEditTween } from "./tools/edit-tween.js";
 import { registerExportScripts } from "./tools/export-scripts.js";
 import { registerGetDocumentInfo } from "./tools/get-document-info.js";
+import { registerImportAssets } from "./tools/import-assets.js";
 import { registerInspectTimeline } from "./tools/inspect-timeline.js";
 import { registerInstallGreensock } from "./tools/install-greensock.js";
 import { registerOpenDocument } from "./tools/open-document.js";
@@ -24,6 +26,7 @@ import { registerPublish } from "./tools/publish.js";
 import { registerReadOutput } from "./tools/read-output.js";
 import { registerRunJsfl } from "./tools/run-jsfl.js";
 import { registerSaveDocument } from "./tools/save-document.js";
+import { registerSetDocumentProperties } from "./tools/set-document-properties.js";
 import { registerTestMovie } from "./tools/test-movie.js";
 
 /** Version from package.json (the same relative path from src/ and dist/) */
@@ -41,9 +44,11 @@ Basic flow:
 - To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.
 - Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
 - Use edit_elements to set instance properties on keyframes; tween interiors are refused, and the .fla is not saved.
+- Use edit_text to add or update whole text fields; Canvas does not support input or single-line text. Use import_assets for images/audio and set_document_properties for stage settings; neither saves the .fla.
 - Use inspect_timeline to check instances and tweens instead of run_jsfl; use the distributeToLayers operation to split a layer.
 - Use edit_tween to animate instances; motion is the default and ease presets include quad, cubic, quart, quint, sine, expo, circ and back.
 - Use edit_library to organize library folders and items. Re-export with export_scripts before apply_scripts; deleteItem requires confirm: true and refuses items in use.
+- edit_library can also create/duplicate symbols and find direct usages; edit_elements can swap a symbol and set graphic loop/firstFrame.
 - If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
 - If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).
 - For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.
@@ -83,9 +88,12 @@ async function main() {
     registerExportScripts(server, { runner, bundle });
     registerEditTimeline(server, { runner, bundle });
     registerEditElements(server, { runner, bundle });
+    registerEditText(server, { runner, bundle });
     registerInspectTimeline(server, { runner, bundle });
     registerEditTween(server, { runner, bundle });
     registerEditLibrary(server, { runner, bundle });
+    registerImportAssets(server, { runner, bundle });
+    registerSetDocumentProperties(server, { runner, bundle });
     registerApplyScripts(server, { runner, bundle });
     registerPublish(server, { runner, bundle });
     registerReadOutput(server, { runner, bundle });

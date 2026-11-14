@@ -50,7 +50,7 @@ function exportTimeline(timeline) {
         elements.push({
           name: element.name || "",
           item: libraryItem ? libraryItem.name : "",
-          type: libraryItem ? libraryItem.itemType : element.elementType,
+          type: libraryItem ? libraryItem.itemType : element.elementType
         });
       }
       frames.push({
@@ -59,7 +59,7 @@ function exportTimeline(timeline) {
         label: frame.name || "",
         tween: frame.tweenType || "none",
         script: frame.actionScript || "",
-        elements: elements,
+        elements: elements
       });
     }
     layers.push({ index: layerIndex, name: layer.name, frames: frames });

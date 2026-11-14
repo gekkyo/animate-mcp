@@ -48,6 +48,60 @@ const assertSelectionPreserved = async (description) => {
 };
 
 try {
+    const createdSymbols = verifyTool(
+        await editLibrary({
+            document: documentName,
+            ops: [
+                { op: "createSymbol", type: "movie clip", name: "EditLibraryCreatedMovieClipSmokeSymbol" },
+                { op: "createSymbol", type: "button", name: "EditLibraryCreatedButtonSmokeSymbol" },
+                { op: "createSymbol", type: "graphic", name: "EditLibraryCreatedGraphicSmokeSymbol" },
+            ],
+        }),
+        "create symbols",
+    );
+    assert.deepEqual(
+        createdSymbols.results.map(({ result }) => result),
+        [
+            { name: "EditLibraryCreatedMovieClipSmokeSymbol", type: "movie clip" },
+            { name: "EditLibraryCreatedButtonSmokeSymbol", type: "button" },
+            { name: "EditLibraryCreatedGraphicSmokeSymbol", type: "graphic" },
+        ],
+    );
+    await assertSelectionPreserved("create symbols");
+
+    const duplicated = verifyTool(
+        await editLibrary({
+            document: documentName,
+            ops: [
+                {
+                    op: "duplicateItem",
+                    item: "EditLibraryCreatedMovieClipSmokeSymbol",
+                    newName: "EditLibraryDuplicatedSmokeSymbol",
+                },
+            ],
+        }),
+        "duplicate item",
+    );
+    assert.deepEqual(duplicated.results[0].result, {
+        name: "EditLibraryDuplicatedSmokeSymbol",
+        itemType: "movie clip",
+    });
+    await assertSelectionPreserved("duplicate item");
+
+    const usages = verifyTool(
+        await editLibrary({
+            document: documentName,
+            ops: [{ op: "findUsages", item: "EditLibraryCreatedMovieClipSmokeSymbol" }],
+        }),
+        "find unused symbol usages",
+    );
+    assert.deepEqual(usages.results[0].result, {
+        item: "EditLibraryCreatedMovieClipSmokeSymbol",
+        usages: [],
+    });
+    await assertSelectionPreserved("findUsages");
+    console.log("symbol creation, duplication, and usage scan: passed");
+
     const initial = verifyTool(
         await editLibrary({ document: documentName, ops: [{ op: "getLinkage", item: "EditLibraryLinkageSmokeSymbol" }] }),
         "read default linkage",

@@ -15,6 +15,7 @@
     width: document.width,
     height: document.height,
     frameRate: document.frameRate,
+    backgroundColor: document.backgroundColor,
     timelines: timelineNames,
     asVersion: runtimeInfo.asVersion,
     folder: runtimeInfo.folder

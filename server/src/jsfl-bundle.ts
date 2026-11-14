@@ -29,6 +29,9 @@ const JSFL_FILES: Record<string, { path: string; order: number }> = {
     "convert-to-symbol": { path: "tools/convert-to-symbol.jsfl", order: 25 },
     "close-document": { path: "tools/close-document.jsfl", order: 26 },
     "save-document": { path: "tools/save-document.jsfl", order: 27 },
+    "edit-text": { path: "tools/edit-text.jsfl", order: 28 },
+    "import-assets": { path: "tools/import-assets.jsfl", order: 29 },
+    "set-document-properties": { path: "tools/set-document-properties.jsfl", order: 30 },
 };
 
 /**

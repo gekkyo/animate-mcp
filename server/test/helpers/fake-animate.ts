@@ -438,7 +438,7 @@ const doc = (documentName, documentType) => {
   if (process.env.FAKE_INITIAL_CURRENT_LAYER !== undefined) sceneTimeline.currentLayer = Number(process.env.FAKE_INITIAL_CURRENT_LAYER);
   if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
   if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
-  const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline],
+  const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, backgroundColor: "#FFFFFF", currentTimeline: 0, timelines: [sceneTimeline],
     /** Simulates Test Movie while preserving the Output panel for the next Run. */
     testMovie(abortOnErrors) {
       if (abortOnErrors !== true) throw new Error("Test Movie must abort on compiler errors");

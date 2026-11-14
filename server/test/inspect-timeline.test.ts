@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { test } from "node:test";
+import { createContext, runInContext } from "node:vm";
+import { registerInspectTimeline } from "../src/tools/inspect-timeline.js";
 import { stateLog, text, withServer } from "./helpers/fake-animate.js";
 
 test("inspect_timeline returns layer spans and instance properties without changing the document", {
@@ -110,4 +114,72 @@ test("inspect_timeline supports selected layers, motion keyframe values and libr
             assert.equal((symbol.structuredContent as { layers: { name: string }[] }).layers[0].name, "L");
         },
     );
+});
+
+test("inspect_timeline reports text content and whole-field style", async () => {
+    const context = createContext({});
+    runInContext(
+        `var __textAttrs = { face: "Arial", size: 18, fillColor: "#123456", bold: true, italic: false };
+var __lineType = "multiline";
+var __text = { elementType: "text", name: "caption", textType: "dynamic", get lineType() { if (this.textType === "static") throw new Error("lineType is unsupported for static text"); return __lineType; }, alignment: "center", textRuns: [{ textAttrs: __textAttrs }], getTextString: function () { return "Hello"; } };
+var __frame = { startFrame: 0, duration: 1, tweenType: "none", elements: [__text] };
+var __layer = { name: "Text", layerType: "normal", locked: false, visible: true, frames: [__frame] };
+var __timeline = { currentLayer: 0, currentFrame: 0, selectedFrames: [], layers: [__layer], getSelectedFrames: function () { return this.selectedFrames; }, setSelectedFrames: function (frames) { this.selectedFrames = frames; } };
+var __doc = { name: "text.fla", type: "Flash", currentTimeline: 0, timelines: [__timeline], library: { items: [] }, getTimeline: function () { return this.timelines[this.currentTimeline]; }, exitEditMode: function () {}, editScene: function (index) { this.currentTimeline = index; } };
+var fl = { documents: [__doc], trace: function () {} };`,
+        context,
+    );
+    let handler: ((input: never) => Promise<unknown>) | undefined;
+    const bundlePaths: Record<string, string> = {
+        "select-document": "server/jsfl/shared/select-document.jsfl",
+        "edit-state": "server/jsfl/shared/edit-state.jsfl",
+        "export-common": "server/jsfl/shared/export-common.jsfl",
+        "element-read": "server/jsfl/shared/element-read.jsfl",
+        "inspect-timeline": "server/jsfl/tools/inspect-timeline.jsfl",
+    };
+    const bundle = (...names: string[]) =>
+        names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
+    registerInspectTimeline(
+        {
+            registerTool: (_name, _config, callback) => {
+                handler = callback as (input: never) => Promise<unknown>;
+            },
+        } as never,
+        {
+            runner: { execute: async (code) => runInContext(code, context) },
+            bundle,
+        },
+    );
+
+    const result = (await handler?.({ timeline: 0, frame: 1 } as never)) as {
+        structuredContent: { layers: { elements: { type: string; text: string; style: Record<string, unknown> }[] }[] };
+    };
+    const element = result.structuredContent.layers[0].elements[0];
+    assert.equal(element.type, "text");
+    assert.equal(element.text, "Hello");
+    assert.deepEqual(element.style, {
+        face: "Arial",
+        size: 18,
+        fillColor: "#123456",
+        bold: true,
+        italic: false,
+        alignment: "center",
+        textType: "dynamic",
+        lineType: "multiline",
+    });
+
+    runInContext('__text.textType = "static";', context);
+    const staticResult = (await handler?.({ timeline: 0, frame: 1 } as never)) as {
+        structuredContent: { layers: { elements: { style: { textType: string; lineType: null } }[] }[] };
+    };
+    assert.deepEqual(staticResult.structuredContent.layers[0].elements[0].style, {
+        face: "Arial",
+        size: 18,
+        fillColor: "#123456",
+        bold: true,
+        italic: false,
+        alignment: "center",
+        textType: "static",
+        lineType: null,
+    });
 });

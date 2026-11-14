@@ -11,6 +11,7 @@ test("get_document_info returns info, or a clear error with no document", { time
             width: 550,
             height: 400,
             frameRate: 24,
+            backgroundColor: "#FFFFFF",
             timelines: ["Scene 1"],
             asVersion: "AS3",
             greensock: false,
@@ -33,6 +34,14 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
             export_scripts: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
             edit_timeline: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
             edit_elements: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            edit_text: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+            import_assets: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            set_document_properties: {
                 readOnlyHint: false,
                 destructiveHint: true,
                 idempotentHint: false,
@@ -110,7 +119,15 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
         const runJsfl = byName.get("run_jsfl");
         assert.match(runJsfl?.description ?? "", /^Execute arbitrary code as JSFL.*last resort/i);
         assert.match(JSON.stringify(runJsfl?.inputSchema.properties?.code), /dedicated tools/i);
-        for (const name of ["edit_timeline", "edit_elements", "edit_tween", "edit_library"]) {
+        for (const name of [
+            "edit_timeline",
+            "edit_elements",
+            "edit_text",
+            "edit_tween",
+            "edit_library",
+            "import_assets",
+            "set_document_properties",
+        ]) {
             assert.match(byName.get(name)?.description ?? "", /do not save the \.fla; use save_document/i, name);
         }
         assert.match(byName.get("publish")?.description ?? "", /overwrites outputs.*publish settings/i);

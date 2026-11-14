@@ -1,8 +1,100 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
+import { runInNewContext } from "node:vm";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerEditLibrary } from "../src/tools/edit-library.js";
 import { text, withServer } from "./helpers/fake-animate.js";
+
+const libraryJsflParts = {
+    "select-document": readFileSync(new URL("../jsfl/shared/select-document.jsfl", import.meta.url), "utf8"),
+    "edit-state": readFileSync(new URL("../jsfl/shared/edit-state.jsfl", import.meta.url), "utf8"),
+    "export-common": readFileSync(new URL("../jsfl/shared/export-common.jsfl", import.meta.url), "utf8"),
+    "library-helpers": readFileSync(new URL("../jsfl/library/helpers.jsfl", import.meta.url), "utf8"),
+    "library-ops": readFileSync(new URL("../jsfl/library/ops.jsfl", import.meta.url), "utf8"),
+    "library-index": readFileSync(new URL("../jsfl/library/index.jsfl", import.meta.url), "utf8"),
+};
+
+function libraryToolFor(document: Record<string, unknown>) {
+    let handler: ((input: unknown) => Promise<unknown>) | undefined;
+    registerEditLibrary(
+        {
+            registerTool(_name, _options, callback) {
+                handler = callback as (input: unknown) => Promise<unknown>;
+            },
+        } as unknown as McpServer,
+        {
+            runner: {
+                execute: async (code) => runInNewContext(code, { fl: { documents: [document] } }),
+            },
+            bundle: (...names) =>
+                names.map((name) => libraryJsflParts[name as keyof typeof libraryJsflParts]).join("\n"),
+        },
+    );
+    assert.ok(handler);
+    return handler;
+}
+
+function makeLibraryDocument(items: { name: string; itemType: string }[], frame: Record<string, unknown>) {
+    const selectedItems: { name: string; itemType: string }[] = [];
+    const layer = { name: "Audio", layerType: "normal", frames: [{ startFrame: 0, elements: [], ...frame }] };
+    const timeline = {
+        name: "Scene 1",
+        currentLayer: 0,
+        currentFrame: 0,
+        layers: [layer],
+        getSelectedFrames: () => [],
+    };
+    const document = {
+        name: "test.fla",
+        type: "Flash",
+        currentTimeline: 0,
+        timelines: [timeline],
+        getTimeline: () => timeline,
+        exitEditMode() {},
+        editScene() {},
+        selectNone() {},
+        library: {
+            items,
+            getSelectedItems: () => selectedItems.slice(),
+            selectNone: () => (selectedItems.length = 0),
+            selectItem(name: string, replaceCurrentSelection = true) {
+                const selected = items.find((item) => item.name === name);
+                if (!selected) {
+                    throw new Error("Library item not found");
+                }
+                if (replaceCurrentSelection) {
+                    selectedItems.length = 0;
+                }
+                if (!selectedItems.includes(selected)) {
+                    selectedItems.push(selected);
+                }
+            },
+            itemExists: (name: string) => items.some((item) => item.name === name),
+            duplicateItem(name: string) {
+                const source = items.find((item) => item.name === name);
+                if (!source) {
+                    return false;
+                }
+                items.push({ name: `${name} コピー`, itemType: source.itemType });
+                return true;
+            },
+            renameItemCalls: [] as [string, string][],
+            renameItem(newName: string, oldName: string) {
+                this.renameItemCalls.push([newName, oldName]);
+                const item = items.find((candidate) => candidate.name === oldName);
+                if (!item) {
+                    throw new Error("Library item not found");
+                }
+                const parent = oldName.slice(0, oldName.lastIndexOf("/") + 1);
+                item.name = parent + newName;
+            },
+        },
+    };
+    return document;
+}
 
 test("edit_library creates folders, moves and renames items, and lists unused items", { timeout: 30_000 }, () =>
     withServer({}, async (client, tempDir) => {
@@ -36,6 +128,190 @@ test("edit_library creates folders, moves and renames items, and lists unused it
         assert.deepEqual(content.warnings, []);
     }),
 );
+
+test("edit_library finds direct placements in scene keyframes and restores state", { timeout: 30_000 }, () =>
+    withServer(
+        {
+            FAKE_DISTRIBUTE: "1",
+            FAKE_NO_BROKEN: "1",
+            FAKE_SYM_INSTANCE: "1",
+            FAKE_INITIAL_CURRENT_FRAME: "2",
+            FAKE_INITIAL_SELECTED_FRAMES: "[0,1,2]",
+            FAKE_INITIAL_SELECTED_ELEMENT: "1",
+            FAKE_SELECTED_LIBRARY_ITEMS: "Sound,Bitmap",
+        },
+        async (client, tempDir) => {
+            const result = await client.callTool({
+                name: "edit_library",
+                arguments: { ops: [{ op: "findUsages", item: "dir/Hero" }] },
+            });
+            assert.equal(result.isError, undefined, text(result));
+            const content = result.structuredContent as {
+                failed: { error: string } | null;
+                results: {
+                    result: { usages: { timeline: string | number; layer: string; frame: number; element: number }[] };
+                }[];
+            };
+            assert.equal(content.failed, null);
+            assert.deepEqual(content.results[0].result.usages, [
+                { timeline: 0, layer: "a/b", frame: 1, element: 0 },
+                { timeline: 0, layer: "a/b", frame: 1, element: 1 },
+                { timeline: 0, layer: "a/b", frame: 1, element: 2 },
+            ]);
+            const states = (await readFile(join(tempDir, "log.state"), "utf8"))
+                .trim()
+                .split("\n")
+                .map((line) => JSON.parse(line));
+            assert.ok(
+                states.every(
+                    (state) =>
+                        state.currentFrame === 2 &&
+                        state.selectedFrames?.join(",") === "0,1,2" &&
+                        state.selectedElements === 1,
+                ),
+            );
+            const selections = (await readFile(join(tempDir, "log.library-selection"), "utf8"))
+                .trim()
+                .split("\n")
+                .map((line) => JSON.parse(line));
+            assert.deepEqual(selections.at(-1), ["Sound", "Bitmap"]);
+        },
+    ),
+);
+
+test("edit_library findUsages returns empty for unused items and refuses unknown items", { timeout: 30_000 }, () =>
+    withServer({ FAKE_NO_BROKEN: "1" }, async (client) => {
+        const unused = await client.callTool({
+            name: "edit_library",
+            arguments: { ops: [{ op: "findUsages", item: "Bitmap" }] },
+        });
+        assert.equal(unused.isError, undefined, text(unused));
+        assert.deepEqual((unused.structuredContent as { results: { result: unknown }[] }).results[0].result, {
+            item: "Bitmap",
+            usages: [],
+        });
+        const unknown = await client.callTool({
+            name: "edit_library",
+            arguments: { ops: [{ op: "findUsages", item: "Missing" }] },
+        });
+        assert.match((unknown.structuredContent as { failed: { error: string } }).failed.error, /not found/i);
+    }),
+);
+
+test("edit_library finds uses inside nested symbol timelines", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SYM_INSTANCE: "1", FAKE_NO_BROKEN: "1" }, async (client) => {
+        const result = await client.callTool({
+            name: "edit_library",
+            arguments: {
+                ops: [
+                    { op: "moveItem", item: "dir/Hero", toFolder: "" },
+                    { op: "findUsages", item: "Hero" },
+                ],
+            },
+        });
+        assert.equal(result.isError, undefined, text(result));
+        const usages = (
+            result.structuredContent as {
+                results: {
+                    result: { usages: { timeline: string | number; layer: string; frame: number; element: number }[] };
+                }[];
+            }
+        ).results[1].result.usages;
+        assert.ok(
+            usages.some(
+                (usage) =>
+                    usage.timeline === "Broken" && usage.layer === "L" && usage.frame === 1 && usage.element === 0,
+            ),
+        );
+    }),
+);
+
+test("edit_library reports direct sound usages without an element index", async () => {
+    const sound = { name: "Theme", itemType: "sound" };
+    const handler = libraryToolFor(makeLibraryDocument([sound], { soundLibraryItem: sound }));
+    const result = (await handler({ ops: [{ op: "findUsages", item: "Theme" }] })) as {
+        structuredContent: { results: { result: { usages: unknown[] } }[] };
+    };
+    assert.deepEqual(result.structuredContent.results[0].result.usages, [
+        { timeline: 0, layer: "Audio", frame: 1, element: null },
+    ]);
+});
+
+test("edit_library duplicates with explicit rename arguments and restores Library selection", async () => {
+    const item = { name: "dir/Hero", itemType: "movie clip" };
+    const document = makeLibraryDocument([{ name: "dir", itemType: "folder" }, item], {});
+    document.library.selectItem(item.name);
+    const handler = libraryToolFor(document);
+    const result = (await handler({ ops: [{ op: "duplicateItem", item: item.name, newName: "Copy" }] })) as {
+        structuredContent: { results: { result: { name: string; itemType: string } }[] };
+    };
+    assert.deepEqual(result.structuredContent.results[0].result, { name: "dir/Copy", itemType: "movie clip" });
+    assert.deepEqual(document.library.renameItemCalls, [["Copy", "dir/Hero コピー"]]);
+    assert.deepEqual(
+        document.library.getSelectedItems().map((selected) => selected.name),
+        [item.name],
+    );
+});
+
+test("edit_library reports the generated duplicate name when rename fails", async () => {
+    const item = { name: "dir/Hero", itemType: "movie clip" };
+    const document = makeLibraryDocument([{ name: "dir", itemType: "folder" }, item], {});
+    document.library.renameItem = () => {
+        throw new Error("fake rename failure");
+    };
+    const handler = libraryToolFor(document);
+    const result = (await handler({ ops: [{ op: "duplicateItem", item: "dir/Hero", newName: "Copy" }] })) as {
+        structuredContent: { failed: { error: string } };
+    };
+    assert.match(result.structuredContent.failed.error, /dir\/Hero コピー/);
+});
+
+test("edit_library validates symbol creation and duplication and refuses existing names before writing", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({}, async (client, tempDir) => {
+        for (const op of [
+            { op: "createSymbol", type: "graphic", name: "Bitmap" },
+            { op: "duplicateItem", item: "dir/Hero", newName: "Bitmap" },
+        ]) {
+            const result = await client.callTool({ name: "edit_library", arguments: { ops: [op] } });
+            assert.equal(result.isError, undefined, text(result));
+            assert.match((result.structuredContent as { failed: { error: string } }).failed.error, /already exists/i);
+        }
+        const items = (await readFile(join(tempDir, "log.library"), "utf8"))
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line))
+            .at(-1) as { name: string }[];
+        assert.deepEqual(
+            items.map((item) => item.name),
+            ["F", "dir", "dir/Hero", "dir/Bitmap", "Bitmap", "Sound", "Font", "Broken"],
+        );
+    });
+    await withServer({}, async (client) => {
+        for (const op of [
+            { op: "createSymbol", type: "unsupported", name: "NewSymbol" },
+            { op: "createSymbol", type: "graphic", name: "Folder/NewSymbol" },
+            { op: "duplicateItem", item: "dir/Hero", newName: "Folder/NewName" },
+        ]) {
+            const result = await client.callTool({ name: "edit_library", arguments: { ops: [op] } });
+            assert.equal(result.isError, true, text(result));
+        }
+        const folderCopy = await client.callTool({
+            name: "edit_library",
+            arguments: { ops: [{ op: "duplicateItem", item: "dir", newName: "FolderCopy" }] },
+        });
+        assert.equal(folderCopy.isError, undefined, text(folderCopy));
+        assert.match((folderCopy.structuredContent as { failed: { error: string } }).failed.error, /folder/i);
+        for (const op of [
+            { op: "createSymbol", type: "graphic" },
+            { op: "duplicateItem", item: "dir/Hero" },
+        ]) {
+            const result = await client.callTool({ name: "edit_library", arguments: { ops: [op] } });
+            assert.equal(result.isError, true, text(result));
+        }
+    });
+});
 
 test("edit_library refuses collisions and marks later operations skipped", { timeout: 30_000 }, () =>
     withServer({}, async (client) => {

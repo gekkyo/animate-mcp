@@ -62,6 +62,15 @@
     return 'none';
   }
 
+  function readTimelineElement(element) {
+    var result = readElement(element);
+    if (element.elementType === 'text') {
+      result.text = element.getTextString ? element.getTextString() : '';
+      result.style = readTextStyle(element);
+    }
+    return result;
+  }
+
   /** Reads keyframe property values stored in a motion-object XML channel.
    * @param frame Animate motion-tween keyframe.
    * @param startFrame Zero-based start of the motion span.
@@ -125,7 +134,7 @@
       var currentFrame = layer.frames[requestedFrame], currentSpan = currentFrame && layer.frames[currentFrame.startFrame];
       var elementFrame = currentSpan && currentSpan.tweenType && currentSpan.tweenType !== 'none' ? currentSpan : currentFrame;
       for (var elementIndex = 0; elementIndex < ((elementFrame && elementFrame.elements) || []).length; elementIndex++) {
-        frameElements.push(readElement(elementFrame.elements[elementIndex]));
+        frameElements.push(readTimelineElement(elementFrame.elements[elementIndex]));
       }
     }
     var result = {
