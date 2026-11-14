@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -143,7 +144,11 @@ export function registerEditTween(
      */
     const handleEditTween: ToolCallback<typeof EDIT_TWEEN_INPUT> = async ({ timeline, ops, document }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "timeline-helpers", "tween-index")}`;
+            const code = jsflRun(
+                "tween-index",
+                { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
+                bundle,
+            );
             const result = JSON.parse(String(await runner.execute(code))) as {
                 applied: typeof ops;
                 failed: { op: (typeof ops)[number]; error: string } | null;

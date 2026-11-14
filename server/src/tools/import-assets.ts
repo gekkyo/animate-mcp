@@ -3,6 +3,7 @@ import { basename, extname, isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -49,7 +50,11 @@ export function registerImportAssets(
                 }),
             );
 
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __assets = ${JSON.stringify(assets.map(({ name, uri }) => ({ name, uri })))};\n${bundle("select-document", "export-common", "import-assets")}`;
+            const code = jsflRun(
+                "import-assets",
+                { __docName: document ?? "", __assets: assets.map(({ name, uri }) => ({ name, uri })) },
+                bundle,
+            );
             const result = JSON.parse(String(await runner.execute(code))) as { document: string; items: string[] };
             return {
                 content: [{ type: "text", text: JSON.stringify(result) }],

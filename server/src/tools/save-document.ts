@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -19,7 +20,15 @@ export function registerSaveDocument(
     const { runner, bundle } = deps;
     const handleSaveDocument: ToolCallback<typeof SAVE_DOCUMENT_INPUT> = async ({ document, path, confirm }) => {
         try {
-            const code = `var __saveDocumentTarget = ${JSON.stringify(document)};\nvar __saveDocumentPath = ${JSON.stringify(path ?? "")};\nvar __saveDocumentConfirm = ${confirm === true};\n${bundle("document-target", "save-document")}`;
+            const code = jsflRun(
+                "save-document",
+                {
+                    __saveDocumentTarget: document,
+                    __saveDocumentPath: path ?? "",
+                    __saveDocumentConfirm: confirm === true,
+                },
+                bundle,
+            );
             const savedPath = await runner.execute(code);
             if (typeof savedPath !== "string" || !savedPath) {
                 throw new Error("Animate returned an invalid saved path");

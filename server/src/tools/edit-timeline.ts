@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -123,7 +124,11 @@ export function registerEditTimeline(
      */
     const handleEditTimeline: ToolCallback<typeof EDIT_TIMELINE_INPUT> = async ({ timeline, ops, document }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "timeline-helpers", "timeline-layers", "timeline-frames", "timeline-index")}`;
+            const code = jsflRun(
+                "timeline-index",
+                { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
+                bundle,
+            );
             const result = JSON.parse(String(await runner.execute(code))) as {
                 applied: ((typeof ops)[number] & { createdLayers?: string[] })[];
                 failed: { op: (typeof ops)[number]; error: string } | null;

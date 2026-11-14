@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -103,7 +104,11 @@ export function registerEditText(
      */
     const handleEditText: ToolCallback<typeof EDIT_TEXT_INPUT> = async ({ timeline, document, ops }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "element-read", "edit-text")}`;
+            const code = jsflRun(
+                "edit-text",
+                { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
+                bundle,
+            );
             const result = JSON.parse(String(await runner.execute(code))) as {
                 applied: number;
                 elements: Record<string, unknown>[];

@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -31,7 +32,7 @@ export function registerCloseDocument(
             );
         }
         try {
-            const code = `var __closeDocumentTarget = ${JSON.stringify(document)};\n${bundle("document-target", "close-document")}`;
+            const code = jsflRun("close-document", { __closeDocumentTarget: document }, bundle);
             const value = String(await runner.execute(code));
             const separator = value.indexOf("\n");
             if (separator < 1) {

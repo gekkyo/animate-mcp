@@ -4,6 +4,7 @@ import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/m
 import { z } from "zod";
 import { type ExportData, type ExportScene, safeName, writeExport } from "../export-workspace/export.js";
 import { prepareExport } from "../export-workspace/export-workspace.js";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure, TIMELINES_PER_RUN } from "./shared.js";
 
@@ -40,11 +41,11 @@ export function registerExportScripts(
              * @returns Parsed result returned by Animate
              */
             const runJsflOnce = async (jsfl: string, items?: string[] | null) => {
-                let prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
-                if (items !== undefined) {
-                    prelude += `var __items = ${JSON.stringify(items)};\n`;
-                }
-                const code = `${prelude}${bundle("select-document", "edit-state", "export-common", jsfl)}`;
+                const code = jsflRun(
+                    jsfl,
+                    { __docName: document ?? "", ...(items !== undefined ? { __items: items } : {}) },
+                    bundle,
+                );
                 return JSON.parse(String(await runner.execute(code)));
             };
             const exportData = (await runJsflOnce("export-scenes")) as ExportData;

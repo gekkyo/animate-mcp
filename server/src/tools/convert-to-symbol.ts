@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -55,7 +56,15 @@ export function registerConvertToSymbol(
         registrationPoint,
     }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __timelineRef = ${JSON.stringify(timeline)};\nvar __request = ${JSON.stringify({ frame, elements, name, type, registrationPoint })};\n${bundle("select-document", "edit-state", "export-common", "convert-to-symbol")}`;
+            const code = jsflRun(
+                "convert-to-symbol",
+                {
+                    __docName: document ?? "",
+                    __timelineRef: timeline,
+                    __request: { frame, elements, name, type, registrationPoint },
+                },
+                bundle,
+            );
             const result = JSON.parse(String(await runner.execute(code))) as {
                 name: string;
                 type: string;

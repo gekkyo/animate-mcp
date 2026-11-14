@@ -3,6 +3,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { bundle, JSFL_FILES, jsflRun, loadJsfl, resolveBundleNames } from "../src/jsfl-bundle.js";
 
 const JSFL_ROOT = fileURLToPath(new URL("../jsfl/", import.meta.url));
 const BUNDLE_SOURCE = fileURLToPath(new URL("../src/jsfl-bundle.ts", import.meta.url));
@@ -54,4 +55,58 @@ test("every mapped JSFL file exists and every JSFL file is mapped" /** Verifies 
 
     const actualPaths = await listJsflFiles(JSFL_ROOT);
     assert.deepEqual(mappedPaths.sort(), actualPaths.sort(), "the bundle map covers exactly the JSFL files");
+});
+
+test("JSFL dependencies exist and the complete bundle graph is acyclic" /** Verifies every dependency and resolves every entry.
+ * @returns Nothing
+ */, () => {
+    const names = Object.keys(JSFL_FILES);
+    for (const [name, entry] of Object.entries(JSFL_FILES)) {
+        for (const dependency of entry.deps) {
+            assert.ok(dependency in JSFL_FILES, `${name} depends on known entry ${dependency}`);
+        }
+    }
+    assert.equal(resolveBundleNames(names).length, names.length);
+    assert.throws(() => resolveBundleNames(["missing-entry"]), /Unknown JSFL bundle/);
+    assert.throws(
+        () =>
+            resolveBundleNames(["first"], {
+                first: { path: "first.jsfl", deps: ["second"] },
+                second: { path: "second.jsfl", deps: ["first"] },
+            }),
+        /Cyclic JSFL bundle dependencies/,
+    );
+});
+
+test("bundle expands transitive dependencies in stable topological order" /** Verifies dependency closure and order.
+ * @returns Nothing
+ */, () => {
+    const expected = [
+        "select-document",
+        "edit-state",
+        "export-common",
+        "library-helpers",
+        "library-ops",
+        "library-index",
+    ];
+    assert.deepEqual(resolveBundleNames(["library-index"]), expected);
+    const allNames = resolveBundleNames(Object.keys(JSFL_FILES));
+    for (const [name, entry] of Object.entries(JSFL_FILES)) {
+        for (const dependency of entry.deps) {
+            assert.ok(allNames.indexOf(dependency) < allNames.indexOf(name), `${dependency} precedes ${name}`);
+        }
+    }
+    assert.equal(bundle("library-index"), expected.map(loadJsfl).join("\n"));
+});
+
+test("jsflRun serializes variables before the requested bundle" /** Verifies declaration order and injected bundler use.
+ * @returns Nothing
+ */, () => {
+    let receivedNames: string[] = [];
+    const code = jsflRun("save-document", { __target: "project.fla", __confirm: false, __path: null }, (...names) => {
+        receivedNames = names;
+        return "/* bundle */";
+    });
+    assert.deepEqual(receivedNames, ["document-target", "save-document"]);
+    assert.equal(code, 'var __target = "project.fla";\nvar __confirm = false;\nvar __path = null;\n/* bundle */');
 });

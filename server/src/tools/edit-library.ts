@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -82,7 +83,7 @@ export function registerEditLibrary(
      */
     const handleEditLibrary: ToolCallback<typeof EDIT_LIBRARY_INPUT> = async ({ ops, document }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __ops = ${JSON.stringify(ops)};\n${bundle("select-document", "edit-state", "export-common", "library-helpers", "library-ops", "library-index")}`;
+            const code = jsflRun("library-index", { __docName: document ?? "", __ops: ops }, bundle);
             const result = JSON.parse(String(await runner.execute(code))) as {
                 applied: typeof ops;
                 results: { op: (typeof ops)[number]; result: unknown }[];

@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -21,7 +22,11 @@ export function registerOpenDocument(
             if (Boolean(path) === Boolean(type)) {
                 throw new Error("Specify exactly one of path or type");
             }
-            const code = `var __openDocumentPath = ${JSON.stringify(path ?? "")};\nvar __openDocumentType = ${JSON.stringify(type ?? "")};\n${bundle("document-target", "open-document")}`;
+            const code = jsflRun(
+                "open-document",
+                { __openDocumentPath: path ?? "", __openDocumentType: type ?? "" },
+                bundle,
+            );
             const value = String(await runner.execute(code));
             const separator = value.indexOf("\n");
             if (separator < 1) {

@@ -60,7 +60,7 @@ export function registerCaptureFrame(
                 `var __captureRoot = ${JSON.stringify(join(homedir(), ".animate-mcp", "captures"))};`,
             ].join("\n");
             const result = JSON.parse(
-                String(await runner.execute(`${prelude}\n${bundle("export-common", "capture-frame")}`)),
+                String(await runner.execute(`${prelude}\n${bundle("capture-frame")}`)),
             ) as CaptureResponse;
             if ("captures" in result) {
                 const content = [];

@@ -8,6 +8,7 @@ import {
     installGreensock,
     isGreensockInstalled,
 } from "../greensock/greensock.js";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -31,7 +32,11 @@ export function registerInstallGreensock(
      */
     const handleInstallGreensock: ToolCallback<typeof INSTALL_GREENSOCK_INPUT> = async ({ confirm, document }) => {
         try {
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\n${bundle("select-document", "export-common", "document-runtime-info")}\nserialize(documentRuntimeInfo(selectDocument()))`;
+            const code = `${jsflRun(
+                ["select-document", "export-common", "document-runtime-info"],
+                { __docName: document ?? "" },
+                bundle,
+            )}\nserialize(documentRuntimeInfo(selectDocument()))`;
             const info = JSON.parse(String(await runner.execute(code))) as {
                 folder: string | null;
                 kind: "as3" | "as2" | "canvas" | "other";

@@ -101,7 +101,7 @@ export function registerPublish(
             const documentType = await runner.execute(activate);
 
             const outputPath = join(tmpdir(), `animate-mcp-publish-${randomUUID()}.txt`);
-            const publish = `${prelude}var __publishOutputPath = ${JSON.stringify(outputPath)};\n${bundle("select-document", "publish")}`;
+            const publish = `${prelude}var __publishOutputPath = ${JSON.stringify(outputPath)};\n${bundle("publish")}`;
             const firstOutput = String(await runner.execute(publish));
             let result: BuildResult;
             if (documentType === "htmlcanvas") {

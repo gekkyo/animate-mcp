@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isGreensockInstalled } from "../greensock/greensock.js";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -22,7 +23,7 @@ export function registerGetDocumentInfo(
     const handleGetDocumentInfo: ToolCallback = async () => {
         try {
             const { folder, ...info } = JSON.parse(
-                String(await runner.execute(bundle("export-common", "document-runtime-info", "get-document-info"))),
+                String(await runner.execute(jsflRun("get-document-info", {}, bundle))),
             ) as {
                 name: string;
                 width: number;

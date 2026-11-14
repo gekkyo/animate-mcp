@@ -1,5 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure } from "./shared.js";
 
@@ -34,7 +35,11 @@ export function registerSetDocumentProperties(
             if (Object.values(properties).every((value) => value === undefined)) {
                 throw new Error("Set at least one of width, height, frameRate, or backgroundColor");
             }
-            const code = `var __docName = ${JSON.stringify(document ?? "")};\nvar __properties = ${JSON.stringify(properties)};\n${bundle("select-document", "export-common", "set-document-properties")}`;
+            const code = jsflRun(
+                "set-document-properties",
+                { __docName: document ?? "", __properties: properties },
+                bundle,
+            );
             const result = JSON.parse(String(await runner.execute(code))) as {
                 document: string;
                 properties: typeof properties;

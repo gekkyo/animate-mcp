@@ -1,14 +1,14 @@
 import { resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import {
-    type AppliedNewScript,
-    type ApplyPayload,
-    type ApplyResult,
-    serializeApplyPayload,
-    type TimelineFingerprint,
+import type {
+    AppliedNewScript,
+    ApplyPayload,
+    ApplyResult,
+    TimelineFingerprint,
 } from "../export-workspace/apply-contract.js";
 import { collectChanges, recordApplied } from "../export-workspace/export-workspace.js";
+import { jsflRun } from "../jsfl-bundle.js";
 import type { createRunner } from "../runner.js";
 import { failure, TIMELINES_PER_RUN } from "./shared.js";
 
@@ -132,7 +132,17 @@ export function registerApplyScripts(
                     fingerprints: chunkFingerprints,
                     ...(libraryFingerprint ? { libraryFingerprint } : {}),
                 };
-                const code = `var __docName = ${JSON.stringify(exportedDocument)};\n${serializeApplyPayload(payload)}\n${bundle("select-document", "edit-state", "export-common", "apply-scenes")}`;
+                const code = jsflRun(
+                    "apply-scenes",
+                    {
+                        __docName: exportedDocument,
+                        __edits: payload.edits,
+                        __newScripts: payload.newScripts,
+                        __fingerprints: payload.fingerprints,
+                        __libraryFingerprint: payload.libraryFingerprint ?? null,
+                    },
+                    bundle,
+                );
                 return JSON.parse(String(await runner.execute(code))) as ApplyResult;
             };
             const applied: string[] = [];
