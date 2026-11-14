@@ -20,6 +20,7 @@ import { registerInstallGreensock } from "./tools/install-greensock.js";
 import { registerPublish } from "./tools/publish.js";
 import { registerReadOutput } from "./tools/read-output.js";
 import { registerRunJsfl } from "./tools/run-jsfl.js";
+import { registerTestMovie } from "./tools/test-movie.js";
 
 /** Version from package.json (the same relative path from src/ and dist/) */
 const PACKAGE_VERSION = (
@@ -80,6 +81,7 @@ async function main() {
     registerApplyScripts(server, { runner, bundle });
     registerPublish(server, { runner, bundle });
     registerReadOutput(server, { runner, bundle });
+    registerTestMovie(server, { runner, bundle });
     registerCaptureFrame(server, { runner, bundle });
 
     const transport = new StdioServerTransport();

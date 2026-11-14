@@ -19,6 +19,7 @@ const src = readFileSync(process.argv[2], "utf8");
 const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, message + "\\n");
 const logPublish = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".publish", message + "\\n");
 const logReadOutput = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".read-output", message + "\\n");
+const logTestMovie = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".test-movie", message + "\\n");
 const logCapture = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".capture", message + "\\n");
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
@@ -438,6 +439,16 @@ const doc = (documentName, documentType) => {
   if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
   if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
   const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline],
+    /** Simulates Test Movie while preserving the Output panel for the next Run. */
+    testMovie(abortOnErrors) {
+      if (abortOnErrors !== true) throw new Error("Test Movie must abort on compiler errors");
+      const compileError = Boolean(process.env.FAKE_TEST_MOVIE_COMPILE_ERROR);
+      logTestMovie(JSON.stringify({ document: this.name, abortOnErrors, playerOpened: !compileError }));
+      const outputPath = process.env.FAKE_LOG + ".output-panel";
+      const output = existsSync(outputPath) ? readFileSync(outputPath, "utf8") : process.env.FAKE_OUTPUT_PANEL ?? "";
+      const runtimeOutput = compileError ? "" : process.env.FAKE_TEST_MOVIE_OUTPUT ?? "";
+      writeFileSync(outputPath, output + (output && runtimeOutput ? "\\n" : "") + runtimeOutput);
+    },
     /** Writes a small PNG fixture for capture_frame tests. */
     exportPNG(uri, useCurrentSettings, currentFrameOnly) {
       logCapture(JSON.stringify({ uri, useCurrentSettings, currentFrameOnly, frame: this.getTimeline().currentFrame }));
@@ -766,7 +777,10 @@ const doc = (documentName, documentType) => {
   document.library = library;
   return document; };
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
-let activeDocument = null;
+const activeDocumentPath = process.env.FAKE_LOG + ".active-document";
+let activeDocument = existsSync(activeDocumentPath)
+  ? docs.find((document) => document.name === readFileSync(activeDocumentPath, "utf8")) || null
+  : null;
 if (process.env.FAKE_PERSIST_AS && docs[0] && existsSync(process.env.FAKE_LOG + ".scene-script")) {
   const actionLayer = docs[0].timelines[0].layers.find((candidate) => candidate.name === "a/b");
   actionLayer.frames[0].actionScript = readFileSync(process.env.FAKE_LOG + ".scene-script", "utf8");
@@ -818,17 +832,21 @@ if (!src.includes("HANG")) runInNewContext(src, {
     /** Provides the no-op trace method used by the fake Animate API. */
     trace() {},
     documents: docs,
-    setActiveWindow: (document) => { logPublish("activate"); activeDocument = document; },
+    setActiveWindow: (document) => {
+      logPublish("activate");
+      writeFileSync(activeDocumentPath, document.name);
+    },
     publishDocument: () => { logPublish("publish"); return !process.env.FAKE_PUBLISH_FALSE; },
     outputPanel: {
-      save: (path) => { logReadOutput("outputPanel.save"); writeFileSync(path, process.env.FAKE_OUTPUT_PANEL ?? ""); },
+      save: (path) => { logReadOutput("outputPanel.save"); const outputPath = process.env.FAKE_LOG + ".output-panel"; writeFileSync(path, existsSync(outputPath) ? readFileSync(outputPath, "utf8") : process.env.FAKE_OUTPUT_PANEL ?? ""); },
     },
     compilerErrors: {
       save: (path) => {
         if (src.includes("var __readOutputPath")) {
           logReadOutput("compilerErrors.save");
           if (process.env.FAKE_COMPILER_PANEL_ERROR || process.env.FAKE_TYPE === "htmlcanvas") throw new Error("compiler panel unavailable");
-          writeFileSync(path, process.env.FAKE_COMPILER_PANEL ?? "");
+          const panels = process.env.FAKE_COMPILER_PANELS && JSON.parse(process.env.FAKE_COMPILER_PANELS);
+          writeFileSync(path, panels ? panels[(activeDocument || docs[0])?.name] ?? "" : process.env.FAKE_COMPILER_PANEL ?? "");
           return;
         }
         logPublish("compilerErrors.save");
