@@ -111,6 +111,149 @@ test("edit_library requires delete confirmation and refuses items in use", { tim
 });
 
 test(
+    "edit_library reads and updates AS3 linkage, returns read-back values, and preserves library selection",
+    { timeout: 30_000 },
+    () =>
+        withServer(
+            {
+                FAKE_SELECTED_LIBRARY_ITEMS: "Sound,Bitmap",
+                FAKE_INITIAL_SELECTED_ELEMENT: "1",
+                FAKE_INITIAL_SELECTED_FRAMES: "[0,0,1]",
+            },
+            async (client, tempDir) => {
+                const read = async () =>
+                    client.callTool({
+                        name: "edit_library",
+                        arguments: { ops: [{ op: "getLinkage", item: "dir/Hero" }] },
+                    });
+                const initial = await read();
+                assert.equal(initial.isError, undefined, text(initial));
+                const initialValues = (initial.structuredContent as { results: { result: unknown }[] }).results[0]
+                    .result;
+                assert.deepEqual(initialValues, {
+                    name: "dir/Hero",
+                    exportForAS: true,
+                    className: "com.Hero",
+                    baseClass: "flash.display.MovieClip",
+                    exportInFirstFrame: false,
+                });
+
+                const updated = await client.callTool({
+                    name: "edit_library",
+                    arguments: {
+                        ops: [
+                            {
+                                op: "setLinkage",
+                                item: "dir/Hero",
+                                exportForAS: true,
+                                className: "com.example.CustomClass",
+                                baseClass: "",
+                                exportInFirstFrame: true,
+                            },
+                            { op: "setLinkage", item: "dir/Hero", exportForAS: true },
+                            { op: "setLinkage", item: "dir/Hero", exportForAS: false },
+                            { op: "setLinkage", item: "dir/Hero", exportForAS: false },
+                            { op: "setLinkage", item: "dir/Hero", exportForAS: false, exportInFirstFrame: false },
+                            { op: "getLinkage", item: "dir/Hero" },
+                        ],
+                    },
+                });
+                assert.equal(updated.isError, undefined, text(updated));
+                const updatedResults = (updated.structuredContent as { results: { result: unknown }[] }).results;
+                assert.deepEqual(updatedResults[0].result, {
+                    name: "dir/Hero",
+                    exportForAS: true,
+                    className: "com.example.CustomClass",
+                    baseClass: "",
+                    exportInFirstFrame: true,
+                });
+                assert.deepEqual(updatedResults[1].result, updatedResults[0].result);
+                assert.deepEqual(updatedResults[2].result, {
+                    name: "dir/Hero",
+                    exportForAS: false,
+                    className: "",
+                    baseClass: "",
+                    exportInFirstFrame: false,
+                });
+                assert.deepEqual(updatedResults[3].result, updatedResults[2].result);
+                assert.deepEqual(updatedResults[4].result, updatedResults[2].result);
+                assert.deepEqual(updatedResults[5].result, updatedResults[2].result);
+                const linkageWrites = JSON.parse((await readFile(join(tempDir, "log.linkage-writes"), "utf8")).trim());
+                assert.deepEqual(
+                    linkageWrites.filter((write) => write.property === "linkageExportForAS"),
+                    [{ item: "dir/Hero", property: "linkageExportForAS", value: false }],
+                );
+                assert.ok(
+                    !linkageWrites.some(
+                        (write) => write.property === "linkageExportInFirstFrame" && write.value === false,
+                    ),
+                );
+
+                const selections = (await readFile(join(tempDir, "log.library-selection"), "utf8"))
+                    .trim()
+                    .split("\n")
+                    .map((line) => JSON.parse(line));
+                assert.deepEqual(selections.at(-1), ["Sound", "Bitmap"]);
+                const states = (await readFile(join(tempDir, "log.state"), "utf8"))
+                    .trim()
+                    .split("\n")
+                    .map((line) => JSON.parse(line));
+                assert.ok(
+                    states.every(
+                        (state) => state.selectedFrames?.join(",") === "0,0,1" && state.selectedElements === 1,
+                    ),
+                );
+            },
+        ),
+);
+
+test("edit_library validates linkage operations before writing and rejects unsupported documents", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({}, async (client, tempDir) => {
+        const invalid = await client.callTool({
+            name: "edit_library",
+            arguments: {
+                ops: [
+                    { op: "setLinkage", item: "dir/Hero", exportForAS: false, exportInFirstFrame: true },
+                    { op: "getLinkage", item: "dir/Hero" },
+                ],
+            },
+        });
+        const content = invalid.structuredContent as {
+            applied: unknown[];
+            failed: { error: string };
+            skipped: unknown[];
+        };
+        assert.equal(content.applied.length, 0);
+        assert.match(content.failed.error, /exportForAS|export flag/i);
+        assert.equal(content.skipped.length, 1);
+        await assert.rejects(readFile(join(tempDir, "log.linkage-writes"), "utf8"), /ENOENT/);
+
+        const missingSetting = await client.callTool({
+            name: "edit_library",
+            arguments: { ops: [{ op: "setLinkage", item: "dir/Hero" }] },
+        });
+        assert.equal(missingSetting.isError, true);
+        const emptyClassName = await client.callTool({
+            name: "edit_library",
+            arguments: { ops: [{ op: "setLinkage", item: "dir/Hero", className: "" }] },
+        });
+        assert.equal(emptyClassName.isError, true);
+    });
+    for (const env of [{ FAKE_TYPE: "htmlcanvas" }, { FAKE_AS_VERSION: "AS2" }]) {
+        await withServer(env, async (client) => {
+            const unsupported = await client.callTool({
+                name: "edit_library",
+                arguments: { ops: [{ op: "getLinkage", item: "dir/Hero" }] },
+            });
+            const content = unsupported.structuredContent as { failed: { error: string } };
+            assert.match(content.failed.error, /AS3.*Flash|Flash.*AS3/i);
+        });
+    }
+});
+
+test(
     "edit_library warns about linkage references when moving, renaming, or deleting linked items",
     { timeout: 30_000 },
     () =>

@@ -18,6 +18,8 @@ const src = readFileSync(process.argv[2], "utf8");
  */
 const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, message + "\\n");
 const logPublish = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".publish", message + "\\n");
+const logReadOutput = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".read-output", message + "\\n");
+const logTestMovie = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".test-movie", message + "\\n");
 const logCapture = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".capture", message + "\\n");
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
@@ -350,7 +352,8 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
      * @returns The zero-based index of the new layer
      */
     addNewLayer(layerName, layerType, addAbove) {
-      const newLayer = layer(layerName, expand([makeKeyframe(0, this.frameCount)]), layerType);
+      const actualName = process.env.FAKE_RENAME_STATIC && layerName === "static" ? "static_idn" : layerName;
+      const newLayer = layer(actualName, expand([makeKeyframe(0, this.frameCount)]), layerType);
       const insertIndex = this.layers.length ? this.currentLayer + (addAbove ? 0 : 1) : 0;
       this.layers.splice(insertIndex, 0, newLayer);
       this.currentLayer = insertIndex;
@@ -403,6 +406,9 @@ const doc = (documentName, documentType) => {
     makeKeyframe(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [makeInstance("hero", Number(process.env.FAKE_INITIAL_X ?? 0))] }),
     makeKeyframe(2, 3, { name: "end", ...(process.env.FAKE_TWEEN ? { tweenType: process.env.FAKE_TWEEN } : {}), elements: [makeInstance(process.env.FAKE_INSTANCE_CONTINUES ? "hero" : "", Number(process.env.FAKE_INITIAL_X ?? 0))] }),
   ];
+  if (process.env.FAKE_FRAME_COUNT !== undefined && sceneFrames.length > 1) {
+    sceneFrames[1].duration = Number(process.env.FAKE_FRAME_COUNT) - sceneFrames[0].duration;
+  }
   if (process.env.FAKE_INITIAL_BRIGHTNESS !== undefined) {
     for (const frame of sceneFrames) for (const element of frame.elements || []) {
       element.colorMode = "brightness";
@@ -433,10 +439,21 @@ const doc = (documentName, documentType) => {
   if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
   if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
   const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, currentTimeline: 0, timelines: [sceneTimeline],
+    /** Simulates Test Movie while preserving the Output panel for the next Run. */
+    testMovie(abortOnErrors) {
+      if (abortOnErrors !== true) throw new Error("Test Movie must abort on compiler errors");
+      const compileError = Boolean(process.env.FAKE_TEST_MOVIE_COMPILE_ERROR);
+      logTestMovie(JSON.stringify({ document: this.name, abortOnErrors, playerOpened: !compileError }));
+      const outputPath = process.env.FAKE_LOG + ".output-panel";
+      const output = existsSync(outputPath) ? readFileSync(outputPath, "utf8") : process.env.FAKE_OUTPUT_PANEL ?? "";
+      const runtimeOutput = compileError ? "" : process.env.FAKE_TEST_MOVIE_OUTPUT ?? "";
+      writeFileSync(outputPath, output + (output && runtimeOutput ? "\\n" : "") + runtimeOutput);
+    },
     /** Writes a small PNG fixture for capture_frame tests. */
     exportPNG(uri, useCurrentSettings, currentFrameOnly) {
       logCapture(JSON.stringify({ uri, useCurrentSettings, currentFrameOnly, frame: this.getTimeline().currentFrame }));
       if (process.env.FAKE_EXPORT_FALSE) return false;
+      if (Number(process.env.FAKE_EXPORT_FAIL_FRAME) === this.getTimeline().currentFrame + 1) return false;
       if (!process.env.FAKE_EXPORT_MISSING) writeFileSync(uri, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jHqkAAAAASUVORK5CYII=", "base64"));
       return true;
     } };
@@ -564,17 +581,69 @@ const doc = (documentName, documentType) => {
   const libraryItems = [
     { name: "F", itemType: "folder" },
     { name: "dir", itemType: "folder" },
-    { name: "dir/Hero", itemType: "movie clip", linkageExportForAS: true, linkageClassName: "com.Hero" },
+    { name: "dir/Hero", itemType: "movie clip", linkageExportForAS: true, linkageClassName: "com.Hero", linkageBaseClass: "flash.display.MovieClip", linkageExportInFirstFrame: false },
     { name: "dir/Bitmap", itemType: "bitmap" },
     { name: "Bitmap", itemType: "bitmap" },
     { name: "Sound", itemType: "sound" },
+    { name: "Font", itemType: "font" },
     ...Array.from({ length: Number(process.env.FAKE_EXTRA ?? 0) }, (_, index) => ({ name: "S" + index, itemType: "graphic" })),
     { name: "Broken", itemType: "button" },
   ];
-  let selectedLibraryItem = null;
+  const linkageWrites = [];
+  for (const item of libraryItems) {
+    const values = {};
+    for (const property of ["linkageExportForAS", "linkageClassName", "linkageBaseClass", "linkageExportInFirstFrame"]) {
+      values[property] = item[property];
+      Object.defineProperty(item, property, {
+        enumerable: true,
+        configurable: true,
+        get() { return values[property]; },
+        set(value) {
+          linkageWrites.push({ item: item.name, property, value });
+          if (property === "linkageExportInFirstFrame" && !item.linkageExportForAS) throw new Error("invalid argument");
+          values[property] = value;
+        },
+      });
+    }
+  }
+  let selectedLibraryItems = (process.env.FAKE_SELECTED_LIBRARY_ITEMS ?? "").split(",").filter(Boolean)
+    .map((name) => libraryItems.find((item) => item.name === name)).filter(Boolean);
+  const logLibrarySelection = () => process.env.FAKE_LOG && appendFileSync(
+    process.env.FAKE_LOG + ".library-selection",
+    JSON.stringify(selectedLibraryItems.map((item) => item.name)) + "\\n",
+  );
   let addedItemCount = 0;
   const library = {
     items: libraryItems,
+    linkageWrites,
+    /** Returns the selected Library items.
+     * @returns Selected items.
+     */
+    getSelectedItems() { return selectedLibraryItems.slice(); },
+    /** Reads a linkage property from the selected Library item.
+     * @param property Linkage property name.
+     * @returns The selected item's value, or undefined when its AS export is disabled.
+     */
+    getItemProperty(property) {
+      if (selectedLibraryItems.length !== 1) throw new Error("one library item must be selected");
+      if (!["linkageExportForAS", "linkageClassName", "linkageBaseClass", "linkageExportInFirstFrame"].includes(property)) {
+        throw new Error("invalid argument");
+      }
+      const item = selectedLibraryItems[0];
+      if (property !== "linkageExportForAS" && !item.linkageExportForAS) return undefined;
+      return item[property];
+    },
+    /** Writes the linkage property supported by Animate's Library API.
+     * @param property Linkage property name.
+     * @param value New value.
+     * @returns Nothing.
+     */
+    setItemProperty(property, value) {
+      if (selectedLibraryItems.length !== 1 || property !== "linkageExportForAS") throw new Error("invalid argument");
+      const item = selectedLibraryItems[0];
+      item[property] = value;
+      if (value) item.linkageClassName = item.name;
+    },
     /** Returns library items that are not marked as used by the test environment.
      * @returns Unused library items.
      */
@@ -603,10 +672,11 @@ const doc = (documentName, documentType) => {
       const currentLayer = timeline.layers[timeline.currentLayer];
       const frame = currentLayer.frames[timeline.currentFrame];
       if (!frame || currentLayer.locked) throw new Error("cannot add to layer");
-      const instance = makeInstance("", position.x, item);
-      instance.y = position.y;
-      instance.matrix.tx = position.x;
-      instance.matrix.ty = position.y;
+      const offset = Number(process.env.FAKE_ADD_ITEM_OFFSET || 0);
+      const instance = makeInstance("", position.x + offset, item);
+      instance.y = position.y - offset;
+      instance.matrix.tx = instance.x;
+      instance.matrix.ty = instance.y;
       if (process.env.FAKE_READONLY_COLOR_PROPERTIES) lockColorEffectProperties(instance);
       frame.elements.push(instance);
     },
@@ -650,24 +720,29 @@ const doc = (documentName, documentType) => {
      * @returns Nothing.
      */
     selectNone() {
-      selectedLibraryItem = null;
+      selectedLibraryItems = [];
+      logLibrarySelection();
     },
     /** Selects the library item at a path.
      * @param path Library item path.
      * @returns Nothing.
      */
-    selectItem(path) {
-      selectedLibraryItem = libraryItems.find((item) => item.name === path) ?? null;
+    selectItem(path, replaceCurrentSelection = true) {
+      const item = libraryItems.find((candidate) => candidate.name === path);
+      if (!item) throw new Error("library item not found");
+      if (replaceCurrentSelection) selectedLibraryItems = [];
+      if (!selectedLibraryItems.includes(item)) selectedLibraryItems.push(item);
+      logLibrarySelection();
     },
     /** Renames the selected library item.
      * @param name New basename.
      * @returns Nothing.
      */
     renameItem(name) {
-      if (!selectedLibraryItem) {
+      if (!selectedLibraryItems[0]) {
         throw new Error("nothing selected");
       }
-      const oldPath = selectedLibraryItem.name;
+      const oldPath = selectedLibraryItems[0].name;
       const parent = oldPath.includes("/") ? oldPath.slice(0, oldPath.lastIndexOf("/")) + "/" : "";
       const nextPath = parent + name;
       for (const item of libraryItems) {
@@ -702,7 +777,10 @@ const doc = (documentName, documentType) => {
   document.library = library;
   return document; };
 const docs = process.env.FAKE_NO_DOC ? [] : [doc("a.fla", process.env.FAKE_TYPE || "Flash")].concat(process.env.FAKE_TWO ? [doc("b.fla", "Flash")] : []);
-let activeDocument = null;
+const activeDocumentPath = process.env.FAKE_LOG + ".active-document";
+let activeDocument = existsSync(activeDocumentPath)
+  ? docs.find((document) => document.name === readFileSync(activeDocumentPath, "utf8")) || null
+  : null;
 if (process.env.FAKE_PERSIST_AS && docs[0] && existsSync(process.env.FAKE_LOG + ".scene-script")) {
   const actionLayer = docs[0].timelines[0].layers.find((candidate) => candidate.name === "a/b");
   actionLayer.frames[0].actionScript = readFileSync(process.env.FAKE_LOG + ".scene-script", "utf8");
@@ -721,6 +799,11 @@ if (process.env.FAKE_CONFLICT_NEW && src.includes("var __newScripts")) {
   const newFrame = Object.assign({}, oldFrame, { startFrame: 3, duration: end - 3, actionScript: "changed in Animate" });
   for (let index = 3; index < end; index++) { targetLayer.frames[index] = newFrame; }
 }
+if (process.env.FAKE_LINKAGE_CONFLICT && src.includes("var __newScripts")) {
+  const hero = docs[0].library.items.find((item) => item.name === "dir/Hero");
+  if (process.env.FAKE_LINKAGE_CONFLICT === "class") hero.linkageClassName = "com.RenamedHero";
+  else if (process.env.FAKE_LINKAGE_CONFLICT === "disabled") hero.linkageExportForAS = false;
+}
 if (!src.includes("HANG")) runInNewContext(src, {
   FLfile: {
     /**
@@ -732,7 +815,7 @@ if (!src.includes("HANG")) runInNewContext(src, {
     createFolder: (path) => { mkdirSync(path, { recursive: true }); return true; },
     exists: (path) => existsSync(path),
     read: (path) => readFileSync(path, "utf8"),
-    remove: (path) => { if (existsSync(path)) { unlinkSync(path); logPublish("remove"); } },
+    remove: (path) => { if (existsSync(path)) { unlinkSync(path); if (src.includes("var __readOutputPath")) logReadOutput(path.endsWith("-output.txt") ? "outputPanel.remove" : "compilerErrors.remove"); else logPublish("remove"); } },
     /** Converts the fake document's file URI to its platform path.
      * @param uri Document URI
      * @returns The corresponding platform path
@@ -749,10 +832,23 @@ if (!src.includes("HANG")) runInNewContext(src, {
     /** Provides the no-op trace method used by the fake Animate API. */
     trace() {},
     documents: docs,
-    setActiveWindow: (document) => { logPublish("activate"); activeDocument = document; },
+    setActiveWindow: (document) => {
+      logPublish("activate");
+      writeFileSync(activeDocumentPath, document.name);
+    },
     publishDocument: () => { logPublish("publish"); return !process.env.FAKE_PUBLISH_FALSE; },
+    outputPanel: {
+      save: (path) => { logReadOutput("outputPanel.save"); const outputPath = process.env.FAKE_LOG + ".output-panel"; writeFileSync(path, existsSync(outputPath) ? readFileSync(outputPath, "utf8") : process.env.FAKE_OUTPUT_PANEL ?? ""); },
+    },
     compilerErrors: {
       save: (path) => {
+        if (src.includes("var __readOutputPath")) {
+          logReadOutput("compilerErrors.save");
+          if (process.env.FAKE_COMPILER_PANEL_ERROR || process.env.FAKE_TYPE === "htmlcanvas") throw new Error("compiler panel unavailable");
+          const panels = process.env.FAKE_COMPILER_PANELS && JSON.parse(process.env.FAKE_COMPILER_PANELS);
+          writeFileSync(path, panels ? panels[(activeDocument || docs[0])?.name] ?? "" : process.env.FAKE_COMPILER_PANEL ?? "");
+          return;
+        }
         logPublish("compilerErrors.save");
         if (process.env.FAKE_TYPE === "htmlcanvas") throw new Error("not supported on HTML5 Canvas");
         const outputs = process.env.FAKE_COMPILER_OUTPUTS && JSON.parse(process.env.FAKE_COMPILER_OUTPUTS);
@@ -769,6 +865,9 @@ if (!src.includes("HANG")) runInNewContext(src, {
       getDocumentDOM: () => activeDocument || docs[0] || null,
   },
 });
+if (process.env.FAKE_LOG && docs[0] && docs[0].library.linkageWrites.length) {
+  appendFileSync(process.env.FAKE_LOG + ".linkage-writes", JSON.stringify(docs[0].library.linkageWrites) + "\\n");
+}
 if (process.env.FAKE_LOG && src.includes("var __newScripts")) {
   const stage = [];
   if (!src.includes("var __edits = [];")) stage.push("edits");

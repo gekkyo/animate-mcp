@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile, rm } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -74,6 +74,119 @@ test("capture_frame accepts unsaved HTML5 Canvas documents and a directory overr
     });
 });
 
+test("capture_frame returns ordered PNGs and metadata for an inclusive range", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_INITIAL_CURRENT_FRAME: "2" }, async (client, tempDir) => {
+        const dir = join(tempDir, "range captures");
+        const result = await client.callTool({
+            name: "capture_frame",
+            arguments: { range: { start: 1, end: 5, step: 2 }, dir },
+        });
+        assert.equal(result.isError, undefined, text(result));
+        const captures = (
+            result.structuredContent as { captures: Array<{ frame: number; path: string; timeline: string }> }
+        ).captures;
+        assert.deepEqual(
+            captures.map(({ frame }) => frame),
+            [1, 3, 5],
+        );
+        assert.ok(captures.every(({ path, timeline }) => path.startsWith(`${dir}/`) && timeline === "Scene 1"));
+        const content = result.content;
+        assert.deepEqual(
+            content.map(({ type }) => type),
+            ["image", "text", "image", "text", "image", "text"],
+        );
+        for (let index = 0; index < captures.length; index++) {
+            const image = content[index * 2];
+            const metadata = content[index * 2 + 1];
+            assert.equal(image?.type, "image");
+            if (image?.type === "image") {
+                assert.equal(image.mimeType, "image/png");
+                assert.deepEqual(Buffer.from(image.data, "base64"), PNG);
+                assert.deepEqual(await readFile(captures[index].path), PNG);
+            }
+            assert.equal(metadata?.type, "text");
+            if (metadata?.type === "text") {
+                assert.deepEqual(JSON.parse(metadata.text), captures[index]);
+            }
+        }
+        const defaultStep = await client.callTool({
+            name: "capture_frame",
+            arguments: { range: { start: 2, end: 3 }, dir },
+        });
+        assert.equal(defaultStep.isError, undefined, text(defaultStep));
+        assert.deepEqual(
+            (defaultStep.structuredContent as { captures: Array<{ frame: number }> }).captures.map(
+                ({ frame }) => frame,
+            ),
+            [2, 3],
+        );
+        assert.deepEqual(
+            (await stateLog(tempDir)).map(({ currentFrame }) => currentFrame),
+            [2, 2],
+        );
+        assert.deepEqual(
+            (await readFile(join(tempDir, "log.capture"), "utf8"))
+                .trim()
+                .split("\n")
+                .map((entry) => JSON.parse(entry).frame),
+            [0, 2, 4, 1, 2],
+        );
+    });
+});
+
+test("capture_frame rejects invalid or oversized ranges before launching Animate", { timeout: 30_000 }, async () => {
+    await withServer({}, async (client, tempDir) => {
+        for (const args of [
+            { frame: 1, range: { start: 1, end: 2 } },
+            { range: { start: 0, end: 2 } },
+            { range: { start: 2, end: 1 } },
+            { range: { start: 1, end: 3, step: 0 } },
+            { range: { start: 1, end: 25 } },
+            { range: { start: 1, end: 2, unexpected: true } },
+        ]) {
+            const result = await client.callTool({ name: "capture_frame", arguments: args });
+            assert.equal(result.isError, true);
+        }
+        await assert.rejects(readFile(join(tempDir, "log")), { code: "ENOENT" });
+    });
+});
+
+test("capture_frame accepts exactly 24 captures", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_FRAME_COUNT: "24" }, async (client, tempDir) => {
+        const tooMany = await client.callTool({ name: "capture_frame", arguments: { range: { start: 1, end: 25 } } });
+        assert.equal(tooMany.isError, true);
+        await assert.rejects(readFile(join(tempDir, "log")), { code: "ENOENT" });
+
+        const dir = join(tempDir, "24 captures");
+        const result = await client.callTool({
+            name: "capture_frame",
+            arguments: { range: { start: 1, end: 24 }, dir },
+        });
+        assert.equal(result.isError, undefined, text(result));
+        const captures = (result.structuredContent as { captures: Array<{ frame: number }> }).captures;
+        assert.deepEqual(
+            captures.map(({ frame }) => frame),
+            Array.from({ length: 24 }, (_, index) => index + 1),
+        );
+        assert.equal(result.content.filter((item) => item.type === "image").length, 24);
+        assert.equal(result.content.filter((item) => item.type === "text").length, 24);
+        assert.equal((await readdir(dir)).filter((name) => name.endsWith(".png")).length, 24);
+    });
+});
+
+test("capture_frame validates every requested frame before rendering a range", { timeout: 20_000 }, async () => {
+    await withServer({ FAKE_INITIAL_CURRENT_FRAME: "2" }, async (client, tempDir) => {
+        const result = await client.callTool({ name: "capture_frame", arguments: { range: { start: 4, end: 6 } } });
+        assert.equal(result.isError, true);
+        assert.equal(text(result), "Frame 6 does not exist (timeline has 5 frames)");
+        await assert.rejects(readFile(join(tempDir, "log.capture")), { code: "ENOENT" });
+        assert.deepEqual(
+            (await stateLog(tempDir)).map(({ currentFrame }) => currentFrame),
+            [2],
+        );
+    });
+});
+
 test("capture_frame reports missing documents, invalid frames, and oversized stages", { timeout: 40_000 }, async () => {
     await withServer({ FAKE_NO_DOC: "1" }, async (client) => {
         const result = await client.callTool({ name: "capture_frame", arguments: {} });
@@ -106,4 +219,28 @@ test("capture_frame restores the frame when export fails", { timeout: 20_000 }, 
             );
         });
     }
+    await withServer({ FAKE_EXPORT_FAIL_FRAME: "3", FAKE_INITIAL_CURRENT_FRAME: "2" }, async (client, tempDir) => {
+        const dir = join(tempDir, "partial captures");
+        await mkdir(dir);
+        await writeFile(join(dir, "preexisting.png"), PNG);
+        const result = await client.callTool({
+            name: "capture_frame",
+            arguments: { range: { start: 1, end: 4 }, dir },
+        });
+        assert.equal(result.isError, true);
+        assert.equal(text(result), "Capture export failed");
+        assert.deepEqual(await readdir(dir), ["preexisting.png"]);
+        assert.deepEqual(await readFile(join(dir, "preexisting.png")), PNG);
+        assert.deepEqual(
+            (await stateLog(tempDir)).map(({ currentFrame }) => currentFrame),
+            [2],
+        );
+        assert.deepEqual(
+            (await readFile(join(tempDir, "log.capture"), "utf8"))
+                .trim()
+                .split("\n")
+                .map((entry) => JSON.parse(entry).frame),
+            [0, 1, 2],
+        );
+    });
 });

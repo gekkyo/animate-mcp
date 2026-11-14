@@ -34,6 +34,118 @@
     }
   }
 
+  /** Selects an item for linkage access and restores the prior Library selection.
+   * @param item Library item to select.
+   * @param callback Work to run with the item selected.
+   * @returns The callback result.
+   */
+  function withSelectedLibraryItem(item, callback) {
+    var library = document.library, selectedItems = library.getSelectedItems(), selectedNames = [];
+    for (var selectedIndex = 0; selectedIndex < selectedItems.length; selectedIndex++) {
+      selectedNames.push(selectedItems[selectedIndex].name);
+    }
+    library.selectNone();
+    try {
+      library.selectItem(item.name);
+      return callback();
+    } finally {
+      library.selectNone();
+      for (var restoreIndex = 0; restoreIndex < selectedNames.length; restoreIndex++) {
+        library.selectItem(selectedNames[restoreIndex], false);
+      }
+    }
+  }
+
+  /** Reads supported AS3 linkage values for the selected item.
+   * @param item Selected library item.
+   * @returns Read-back values; disabled AS export uses stable empty defaults.
+   */
+  function readLibraryLinkage(item) {
+    var library = document.library;
+    var exportForAS = !!library.getItemProperty("linkageExportForAS");
+    if (!exportForAS) {
+      return { name: item.name, exportForAS: false, className: "", baseClass: "", exportInFirstFrame: false };
+    }
+    var className = library.getItemProperty("linkageClassName");
+    var baseClass = library.getItemProperty("linkageBaseClass");
+    var exportInFirstFrame = library.getItemProperty("linkageExportInFirstFrame");
+    return {
+      name: item.name,
+      exportForAS: exportForAS,
+      className: typeof className === "undefined" || className === null ? item.name : className,
+      baseClass: typeof baseClass === "undefined" || baseClass === null ? "" : baseClass,
+      exportInFirstFrame: !!exportInFirstFrame
+    };
+  }
+
+  /** Validates and reads one item's AS3 linkage settings.
+   * @param op Linkage operation.
+   * @param set Whether the operation writes linkage values.
+   * @returns The operation's read-back values.
+   */
+  function applyLinkageOp(op, set) {
+    if (document.type !== "Flash" || String(document.asVersion).indexOf("3") < 0) {
+      throw new Error("AS3 linkage is supported only for Flash/AS3 documents");
+    }
+    if (typeof op.item !== "string" || !op.item) {
+      throw new Error("A library item path is required");
+    }
+    var item = findLibraryItem(op.item);
+    if (!item) {
+      throw new Error("Library item not found: " + op.item);
+    }
+    if (item.itemType === "folder") {
+      throw new Error("Library folders do not support AS3 linkage: " + op.item);
+    }
+    if (set) {
+      var fields = ["exportForAS", "className", "baseClass", "exportInFirstFrame"], hasSetting = false;
+      for (var fieldIndex = 0; fieldIndex < fields.length; fieldIndex++) {
+        var field = fields[fieldIndex];
+        if (typeof op[field] !== "undefined") {
+          hasSetting = true;
+          if (field === "className" && (typeof op[field] !== "string" || !op[field])) {
+            throw new Error("className must be a non-empty string");
+          }
+          if (field === "baseClass" && typeof op[field] !== "string") {
+            throw new Error(field + " must be a string");
+          }
+          if ((field === "exportForAS" || field === "exportInFirstFrame") && typeof op[field] !== "boolean") {
+            throw new Error(field + " must be a boolean");
+          }
+        }
+      }
+      if (!hasSetting) {
+        throw new Error("setLinkage requires at least one linkage setting");
+      }
+    }
+    return withSelectedLibraryItem(item, function () {
+      var current = readLibraryLinkage(item);
+      if (!set) {
+        return current;
+      }
+      var nextExportForAS = typeof op.exportForAS === "undefined" ? current.exportForAS : op.exportForAS;
+      if ((typeof op.className !== "undefined" || typeof op.baseClass !== "undefined") && !nextExportForAS) {
+        throw new Error("className and baseClass require exportForAS to be true");
+      }
+      if (op.exportInFirstFrame === true && !nextExportForAS) {
+        throw new Error("exportInFirstFrame requires exportForAS to be true");
+      }
+      libraryChanged = true;
+      if (op.exportForAS === true && !current.exportForAS) {
+        document.library.setItemProperty("linkageExportForAS", true);
+      }
+      if (typeof op.className !== "undefined") item.linkageClassName = op.className;
+      if (typeof op.baseClass !== "undefined") item.linkageBaseClass = op.baseClass;
+      if (typeof op.exportInFirstFrame !== "undefined" && nextExportForAS) {
+        item.linkageExportInFirstFrame = op.exportInFirstFrame;
+      }
+      if (op.exportForAS === false && current.exportForAS) {
+        document.library.setItemProperty("linkageExportForAS", false);
+      }
+      return readLibraryLinkage(item);
+    });
+  }
+
   /** Applies one library operation and reports its result.
    * @param op Library operation to apply.
    * @returns Operation-specific result data.
@@ -42,6 +154,12 @@
     var item, targetPath, parent, linked;
     if (op.op === "listUnused") {
       return { items: listUnusedItems() };
+    }
+    if (op.op === "getLinkage") {
+      return applyLinkageOp(op, false);
+    }
+    if (op.op === "setLinkage") {
+      return applyLinkageOp(op, true);
     }
     if (op.op === "createFolder") {
       if (document.library.itemExists(op.path)) {

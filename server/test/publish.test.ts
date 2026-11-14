@@ -92,9 +92,9 @@ test("publish activates then publishes in separate Runs and returns compile erro
         },
         async (client, tempDir) => {
             const result = await client.callTool({ name: "publish", arguments: { document: "a.fla" } });
-            assert.equal(result.isError, undefined, text(result));
-            assert.deepEqual(result.structuredContent, {
+            const expected = {
                 ok: false,
+                compilerOutput: "verified",
                 errors: [
                     {
                         location: "Scene 1, Layer 'Layer_1', Frame 1",
@@ -103,7 +103,10 @@ test("publish activates then publishes in separate Runs and returns compile erro
                     },
                 ],
                 warnings: [],
-            });
+            };
+            assert.equal(result.isError, undefined, text(result));
+            assert.deepEqual(result.structuredContent, expected);
+            assert.equal(text(result), JSON.stringify(expected));
             assert.deepEqual((await readFile(join(tempDir, "log.publish"), "utf8")).trim().split("\n"), [
                 "activate",
                 "publish",
@@ -121,7 +124,9 @@ test("publish retries empty AS3 compiler output and parses the retry", { timeout
         async (client, tempDir) => {
             const result = await client.callTool({ name: "publish", arguments: {} });
             assert.equal(result.isError, undefined, text(result));
-            assert.deepEqual(result.structuredContent, { ok: true, errors: [], warnings: [] });
+            const expected = { ok: true, compilerOutput: "verified", errors: [], warnings: [] };
+            assert.deepEqual(result.structuredContent, expected);
+            assert.equal(text(result), JSON.stringify(expected));
             assert.deepEqual((await readFile(join(tempDir, "log.publish"), "utf8")).trim().split("\n"), [
                 "activate",
                 "publish",
@@ -141,6 +146,7 @@ test("publish reports empty AS3 compiler output after one retry", { timeout: 30_
         const result = await client.callTool({ name: "publish", arguments: {} });
         const expected = {
             ok: true,
+            compilerOutput: "unavailable",
             errors: [],
             warnings: [],
             note: "compiler output unavailable; no errors reported",
@@ -178,9 +184,10 @@ test("publish runs HTML5 Canvas without compiler diagnostics", { timeout: 20_000
         const result = await client.callTool({ name: "publish", arguments: {} });
         const expected = {
             ok: true,
+            compilerOutput: "not_checked",
             errors: [],
             warnings: [],
-            note: "HTML5 Canvas: compile errors cannot be detected; ok only means Publish ran",
+            note: "HTML5 Canvas: compile errors are unverified; ok only means Publish ran",
         };
         assert.equal(result.isError, undefined, text(result));
         assert.deepEqual(result.structuredContent, expected);

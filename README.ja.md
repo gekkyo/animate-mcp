@@ -34,6 +34,7 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 - モーション／クラシックトゥイーンを作成し、プリセットやベジェ曲線によるカスタムイーズを設定できます。
 - ライブラリのフォルダやアイテムを整理し、未使用アイテムを確認できます。
 - AS3 と HTML5 Canvas のドキュメントを Publish し、AS3 のコンパイルエラーと警告を受け取れます。
+- Animate の診断パネルを読み取り、AS3 の Test Movie を実行してランタイム出力を取得できます。
 - 1 フレームを PNG 画像として取得できます。
 - GreenSock-AS3 をプロンプトから簡単に導入できます。
 - ActionScript 3 と HTML5 Canvas に対応し、任意の JSFL も実行できます。
@@ -134,7 +135,7 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 - 未反映の編集があると再 Export はできません。破棄してよい場合に限り `force: true` を使ってください。
 - タイムライン・トゥイーン・ライブラリを変更した後は、スクリプトを編集・適用する前に再 Export してください。
 - レイヤー・フレーム・ライブラリアイテムの削除には `confirm: true` が必要です。使用中のライブラリアイテムは削除できません。
-- Animate 上の保存は手動です。ライブラリの名前変更・移動でも、リンケージ名とコード内の文字列参照は自動更新されません。
+- 保存には `save_document`（上書き時は事前に確認）か Animate の保存操作を使います。`edit_library` の `getLinkage` と `setLinkage` で AS3 のリンケージを読み書きできます。アイテムの名前変更・移動によって、リンケージ名やコード内の文字列参照が自動更新されるわけではありません。
 - `edit_elements` はトゥイーン途中のフレームを拒否し、書き込み前に全操作を検証します。`.fla` は保存されません。
 
 ## ツール
@@ -142,21 +143,27 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 | ツール | できること | 入力・注意点 |
 |--------|------------|--------------|
 | `get_document_info` | 開いているドキュメントの名前、サイズ、フレームレート、タイムライン名、ActionScript のバージョン、GreenSock の導入状況を確認します。 | 引数は不要です。 |
+| `open_document` | 既存の `.fla` を開くか、Animate の標準サイズ・フレームレートで AS3 / HTML5 Canvas ドキュメントを新規作成します。 | `path`（既存 `.fla`）か `type`（`timeline` / `htmlcanvas`）をどちらか一方指定します。ドキュメント名と保存済みならパスを返します。 |
+| `save_document` | 明示的に指定したドキュメントを現在のパスまたは新しいパスに保存します。 | `document`（正確な名前またはパス）が必要です。未保存文書には `path` が必要です。現在のファイルや別の既存ファイルの上書きには、ユーザーへの確認後に `confirm: true` を指定します。アクティブ文書を自動選択しません。 |
+| `close_document` | 明示的に指定したドキュメントを保存せず閉じます。 | `document`（正確な名前またはパス）と `discardUnsavedChanges: true` が必要で、未保存の編集は破棄されます。必要なら先に保存してください。アクティブ文書を自動選択せず、Test Movie Player も閉じません。 |
 | `export_scripts` | シーンとライブラリシンボルの構造・フレームスクリプトを書き出し、`index.md` と各タイムラインの `structure.md` も生成します。 | 既定の出力先は `~/.animate-mcp/exports/<ドキュメント名>/`。未適用の編集があると再 Export を拒否します。`force: true` はその編集を破棄します。 |
 | `apply_scripts` | 書き出したスクリプトの編集を Animate に反映します。空ファイルはそのフレームのスクリプト削除を意味します。 | Export 先の `dir` を指定します。Animate 側で変更されたフレームは上書きしません。`.fla` は保存しません。 |
-| `publish` | AS3 または HTML5 Canvas ドキュメントを Publish し、Build result を返します。 | Publish 設定の出力を上書きします。未保存の編集も Publish されますが、`.fla` は保存しません。AS3 のコンパイラ出力が空の場合は1回再試行し、それでも空ならエラーなしとして扱い、出力を確認できなかった注記を返します。サマリー行がある場合、位置やコードを解析できない診断もメッセージとして返します。Canvas のコンパイルエラーは検出できず、`ok: true` は Publish が実行されたことだけを示します。 |
-| `capture_frame` | アクティブなタイムライン（編集中のライブラリシンボルを含む）の1フレームを PNG 画像で返します。 | `frame` は1始まりで、省略時は現在のフレームです。`~/.animate-mcp/captures/<ドキュメント名>/` または `dir` に新しいファイルを保存します。未保存ドキュメントにも対応します。フレームは復元しますが、変更すると選択が解除される場合があります。長辺が2048pxを超えるステージは縮小せずエラーにします。 |
+| `read_output` | 現在の Output / Compiler Errors パネルを生テキストで読み、コンパイラー診断を解析します。 | 読み取り専用です。Animate は出所のドキュメントや実行を示さないため、内容は古いものや混在したものの可能性があります。`compilerDiagnostics.status: "unavailable"` はパネルが空・不完全・未対応のいずれかを示し、コンパイル成功を意味しません。 |
+| `test_movie` | 保存済み AS3 ドキュメントを現在メモリー上にある内容で Test Movie 実行します。コンパイルエラー時は Player の起動を中止し、コンパイラー診断と Output パネルの差分を返します。 | `.fla` は保存・Publish・クローズしません。起動した Player は開いたままなので手動で閉じてください。Output パネルは起動から2秒後に一度だけ取得するため、それ以降のメッセージは取得されず、同時出力が混在する場合があります。差分が空でもランタイムエラーがなかった証明にはなりません。 |
+| `publish` | AS3 または HTML5 Canvas ドキュメントを Publish し、Build result を返します。 | Publish 設定の出力を上書きします。未保存の編集も Publish されますが、`.fla` は保存しません。`compilerOutput` は解析済みの AS3 出力なら `verified`、空出力を1回再試行しても取得できなければ `unavailable`、Canvas なら `not_checked` です。取得不能・未確認の場合、`errors` が空でもエラーなしとは断定できません。サマリー行がある場合、位置やコードを解析できない診断もメッセージとして返します。Canvas のコンパイルエラーは未検証で、`ok: true` は Publish が実行されたことだけを示します。 |
+| `capture_frame` | アクティブなタイムライン（編集中のライブラリシンボルを含む）の1フレームまたは範囲を PNG 画像で返します。 | `frame`（1始まり、省略時は現在のフレーム）または `range: { start, end, step? }`（1始まり、昇順・終端を含む。`step` は省略時1、正の整数。最大24フレーム）のどちらかを指定します。範囲の結果はフレーム順の画像・メタデータの組で、`structuredContent.captures` にも含まれます。各画像を `~/.animate-mcp/captures/<ドキュメント名>/` または `dir` に保存します。未保存ドキュメントにも対応します。現在のフレームは復元しますが、変更すると選択が解除される場合があります。長辺が2048pxを超えるステージは縮小せずエラーにします。 |
 | `inspect_timeline` | シーンやライブラリシンボルのレイヤー、キーフレーム範囲、指定フレームのインスタンス・トゥイーンを読み取ります。 | `timeline` は 0 始まりのシーン番号かライブラリアイテムのパス。フレーム番号は 1 始まりで、レイヤーも絞り込めます。 |
-| `edit_elements` | キーフレーム上のシンボルインスタンスの変形、名前、色効果、フィルター、ブレンドモード、表示状態を設定します。 | レイヤーと要素は名前または 0 始まりの番号で指定します。シンボルインスタンス以外とトゥイーン途中は拒否され、全操作を事前検証します。`filters` を指定すると既存フィルターをすべて置き換え、`[]` はすべてクリアします。読み戻す要素フィールドは `inspect_timeline` と共通で、レイヤー・フレーム・要素の参照を追加します。rotation と skew は同じ操作で同時に指定できません。`.fla` は保存されません。 |
+| `edit_elements` | キーフレーム上のシンボルインスタンスの変形・各種プロパティを設定するか、ライブラリアイテムをタイムラインに配置します。 | 更新操作ではレイヤー・要素を名前または 0 始まりの番号で指定します。`{ op: "add", item, layer, frame, x?, y?, set? }` は名前付きレイヤーの 1 始まりのフレームに配置し、レイヤーがなければ作成、フレームが足りなければ延長します。座標を省略するとステージ中央に配置します。インスタンス以外とトゥイーン途中は拒否され、全操作を事前検証します。`filters` は既存を置き換え、`[]` はすべてクリアします。読み戻しは `inspect_timeline` と共通の要素フィールドにレイヤー・フレーム・要素の参照を加えます。rotation と skew は同時に指定できません。`.fla` は保存されません。 |
+| `convert_to_symbol` | タイムラインの同一フレーム上にある指定要素を、ムービークリップ・ボタン・グラフィックのいずれかに変換します。 | シーンまたはライブラリのタイムライン、1 始まりのフレーム、要素参照、一意のシンボル名、必要に応じて基準点（既定は中央）を指定します。トゥイーン途中は拒否します。リンケージの設定や `.fla` の保存はせず、AS3 リンケージには別途 `edit_library` の `setLinkage` を使います。 |
 | `edit_timeline` | レイヤー・フレーム・キーフレーム・ラベルを編集し、インスタンスをレイヤーに分配します。操作は `ops` の順に実行します。 | `deleteLayer` と `removeFrames` は `confirm: true` が必要です。`shiftLayerFrames` はクリップボードを上書きし、失敗時に Undo が必要な場合があります。 |
 | `edit_tween` | モーション／クラシックトゥイーンの作成とイージングの変更を行います。プリセット、数値、4 つの数値によるカスタムイーズに対応します。 | 対象の名前付きインスタンスはレイヤー上で単独である必要があります。既存のトゥイーン範囲は置換しません。 |
-| `edit_library` | フォルダ作成、アイテムの移動・名前変更・削除、未使用アイテムの一覧取得を行います。 | 削除は `confirm: true` が必要で、使用中のアイテムは削除できません。リンケージ名やコード内の参照文字列は自動更新しません。 |
+| `edit_library` | フォルダ作成、アイテムの移動・名前変更・削除、未使用アイテムの一覧取得、AS3 リンケージの読み書きを行います。 | `getLinkage` と `setLinkage` は Flash/AS3 ドキュメントのみ対応します。`setLinkage` は `exportForAS`、`className`、`baseClass`、`exportInFirstFrame` を受け付け、Animate からの読み戻し値を返します。Export が無効な場合のリンケージ各値は `{ exportForAS: false, className: "", baseClass: "", exportInFirstFrame: false }` で、結果にはアイテムの `name` も含まれます。class/base の設定や first-frame export の有効化には `exportForAS: true` が必要です。`setLinkage` でムービークリップ・グラフィック・ボタンの AS3 export または class name を変更した場合は、Export workspace の linked-class 情報を更新するため `export_scripts` を再実行してください。古いリンケージの Export に対する `apply_scripts` は拒否されます。削除は `confirm: true` が必要で、使用中のアイテムは削除できません。移動・名前変更でコード内の文字列参照は更新されません。 |
 | `install_greensock` | 保存済みの AS3 ドキュメントの隣に GreenSock-AS3 12.1.5 を GitHub から取得・配置します。 | [ライセンス](https://gsap.com/standard-license/)の確認後に `confirm: true` が必要です。`.fla` は変更・保存せず、AS2・HTML5 Canvas は対象外です。 |
 | `run_jsfl` | 任意の JSFL コードを Animate で実行して結果を返します。オブジェクトの返却値は文字列になります。 | ドキュメントやファイルを変更するコードも実行できます。変更操作の前にユーザーの確認が必要です。 |
 
 ### `ops` で指定できる操作
 
-`edit_timeline`、`edit_tween`、`edit_library` は、以下の操作を `ops` に並べて指定できます。`edit_elements` も `ops` を取りますが、各要素は操作名ではなく `{ layer, frame, element, set }`（設定するプロパティは `set` に入れる）です。詳しくは上のツール表を参照してください。
+`edit_timeline`、`edit_tween`、`edit_library` は、以下の操作を `ops` に並べて指定できます。`edit_elements` は既存インスタンスの更新に `{ layer, frame, element, set }`、ライブラリアイテム配置に `{ op: "add", item, layer, frame, x?, y?, set? }` を使います。詳しくは上のツール表を参照してください。
 
 #### `edit_timeline`
 
@@ -192,6 +199,8 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 | `renameItem` | アイテム名を変更する |
 | `deleteItem` | アイテムを削除する（`confirm: true` 必須。使用中は削除不可） |
 | `listUnused` | 未使用アイテムを一覧にする |
+| `getLinkage` | アイテムの AS3 リンケージ設定を読み取る（Flash/AS3 のみ） |
+| `setLinkage` | AS3 リンケージ設定を1つ以上更新し、読み戻し値を返す（Flash/AS3 のみ） |
 
 ## 環境変数
 
@@ -224,7 +233,7 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 7. `capture_frame` を実行します。PNG 画像と保存先のパスが返ります。
 8. 未確認: モーダルダイアログが開いているときの挙動。
 
-手順 6〜7（と `edit_elements`）のスクリプト版: `npm run build` の後、対象ドキュメントを Animate でアクティブにして `node server/scripts/smoke-publish.mjs`、`smoke-capture-frame.mjs`、`smoke-edit-elements.mjs` を実行します。
+手順 6〜7（と `edit_elements`）のスクリプト版: `npm run build` の後、対象ドキュメントを Animate でアクティブにして `node server/scripts/smoke-publish.mjs`、`smoke-capture-frame.mjs`、`smoke-edit-elements.mjs` を実行します。`node server/scripts/smoke-test-movie.mjs` は使い捨ての AS3 FLA を作成・クローズしますが、Test Movie Player は開いたままなので手動で閉じてください。`smoke-document-ops.mjs`（AS3）と `smoke-canvas.mjs`（HTML5 Canvas）は、使い捨ての保存済み FLA を作成して操作し、クローズします。
 
 ## ライセンス
 

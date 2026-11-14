@@ -9,6 +9,8 @@ import { bundle } from "./jsfl-bundle.js";
 import { createRunner } from "./runner.js";
 import { registerApplyScripts } from "./tools/apply-scripts.js";
 import { registerCaptureFrame } from "./tools/capture-frame.js";
+import { registerCloseDocument } from "./tools/close-document.js";
+import { registerConvertToSymbol } from "./tools/convert-to-symbol.js";
 import { registerEditElements } from "./tools/edit-elements.js";
 import { registerEditLibrary } from "./tools/edit-library.js";
 import { registerEditTimeline } from "./tools/edit-timeline.js";
@@ -17,8 +19,12 @@ import { registerExportScripts } from "./tools/export-scripts.js";
 import { registerGetDocumentInfo } from "./tools/get-document-info.js";
 import { registerInspectTimeline } from "./tools/inspect-timeline.js";
 import { registerInstallGreensock } from "./tools/install-greensock.js";
+import { registerOpenDocument } from "./tools/open-document.js";
 import { registerPublish } from "./tools/publish.js";
+import { registerReadOutput } from "./tools/read-output.js";
 import { registerRunJsfl } from "./tools/run-jsfl.js";
+import { registerSaveDocument } from "./tools/save-document.js";
+import { registerTestMovie } from "./tools/test-movie.js";
 
 /** Version from package.json (the same relative path from src/ and dist/) */
 const PACKAGE_VERSION = (
@@ -31,7 +37,7 @@ const INSTRUCTIONS = `Read and write Adobe Animate timeline scripts as files.
 Basic flow:
 1. Run export_scripts to export the active document. Read index.md, then each structure.md, then the scripts.
 2. Edit the exported .as / .js files (an empty file deletes that frame's script).
-3. Run apply_scripts to apply them. The .fla is not saved; the user saves it.
+3. Run apply_scripts to apply them. The .fla is not saved; use save_document after asking the user before overwriting, or save in Animate.
 - To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.
 - Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
 - Use edit_elements to set instance properties on keyframes; tween interiors are refused, and the .fla is not saved.
@@ -42,12 +48,12 @@ Basic flow:
 - If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).
 - For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.
 - Use publish to publish AS3 or HTML5 Canvas documents and check the Build result; outputs at the document's publish settings are overwritten. Canvas compile errors cannot be detected.
-- Use capture_frame to inspect the active timeline as a PNG; it saves a new image under ~/.animate-mcp/captures/<document>/ and restores the current frame.
+- Use capture_frame to inspect the active timeline as PNG images; request one frame or an inclusive range of up to 24 frames. It saves new images under ~/.animate-mcp/captures/<document>/ and restores the current frame.
 
 Notes:
 - When several documents are open, document is required. get_document_info returns the name.
 - AS3 and HTML5 Canvas have different APIs. Check the document type before trying things with run_jsfl.
-- Runtime errors appear in Animate's Output panel. Run fl.outputPanel.save(FLfile.platformPathToURI("<native OS path>")) with run_jsfl and read the saved file (saving under ~/.animate-mcp/ is recommended; write the path in the usual form for the OS).
+- Use read_output to inspect the current Output and Compiler Errors panels; their contents may be stale or mixed because Animate does not identify their source document or run.
 - When a script fails with a null error, first check the layer's frame length and instance names with run_jsfl.
 - If you add debug traces, always remove them after checking and Apply again.
 - run_jsfl runs arbitrary code. Ask the user before any operation that modifies the document.`;
@@ -69,6 +75,10 @@ async function main() {
     const server = new McpServer({ name: "animate-mcp", version: PACKAGE_VERSION }, { instructions: INSTRUCTIONS });
     registerRunJsfl(server, { runner });
     registerGetDocumentInfo(server, { runner, bundle });
+    registerOpenDocument(server, { runner, bundle });
+    registerSaveDocument(server, { runner, bundle });
+    registerCloseDocument(server, { runner, bundle });
+    registerConvertToSymbol(server, { runner, bundle });
     registerInstallGreensock(server, { runner, bundle });
     registerExportScripts(server, { runner, bundle });
     registerEditTimeline(server, { runner, bundle });
@@ -78,6 +88,8 @@ async function main() {
     registerEditLibrary(server, { runner, bundle });
     registerApplyScripts(server, { runner, bundle });
     registerPublish(server, { runner, bundle });
+    registerReadOutput(server, { runner, bundle });
+    registerTestMovie(server, { runner, bundle });
     registerCaptureFrame(server, { runner, bundle });
 
     const transport = new StdioServerTransport();

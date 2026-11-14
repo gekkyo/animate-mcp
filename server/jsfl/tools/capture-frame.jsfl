@@ -1,13 +1,27 @@
-// Captures one frame from the active document's currently edited timeline.
+// Captures one frame or an inclusive range from the active document's currently edited timeline.
 (function () {
   var document = fl.getDocumentDOM();
   if (!document) throw new Error("No document open");
   if (document.type !== "Flash" && document.type !== "htmlcanvas") throw new Error("Unsupported document type: " + document.type);
 
-  var timeline = document.getTimeline();
-  var frame = __captureFrame === null ? timeline.currentFrame + 1 : __captureFrame;
-  if (frame < 1 || frame > timeline.frameCount) {
-    throw new Error("Frame " + frame + " does not exist (timeline has " + timeline.frameCount + " frames)");
+  var timeline = document.getTimeline(), frames = [], frame;
+  if (__captureRange !== null) {
+    var range = __captureRange, step = range.step === undefined ? 1 : range.step;
+    if (range.start < 1 || range.end < range.start || step < 1 || Math.floor(range.start) !== range.start ||
+      Math.floor(range.end) !== range.end || Math.floor(step) !== step) {
+      throw new Error("Invalid capture range");
+    }
+    if (Math.floor((range.end - range.start) / step) + 1 > 24) throw new Error("Capture range cannot exceed 24 frames");
+    if (range.end > timeline.frameCount) {
+      throw new Error("Frame " + range.end + " does not exist (timeline has " + timeline.frameCount + " frames)");
+    }
+    for (frame = range.start; frame <= range.end; frame += step) frames.push(frame);
+  } else {
+    frame = __captureFrame === null ? timeline.currentFrame + 1 : __captureFrame;
+    if (frame < 1 || frame > timeline.frameCount) {
+      throw new Error("Frame " + frame + " does not exist (timeline has " + timeline.frameCount + " frames)");
+    }
+    frames.push(frame);
   }
   if (Math.max(document.width, document.height) > 2048) {
     throw new Error("Stage size " + document.width + "x" + document.height + " exceeds 2048px; capture is not scaled");
@@ -36,19 +50,41 @@
       pad(date.getHours(), 2) + pad(date.getMinutes(), 2) + pad(date.getSeconds(), 2) + "-" + pad(date.getMilliseconds(), 3);
   }
 
+  var outputURIs = [];
   try {
-    if (__captureFrame !== null) timeline.currentFrame = frame - 1;
-    var date = new Date(), outputPath, outputURI;
-    do {
-      outputPath = outputDir + "/" + frame + "-" + timestamp(date) + ".png";
-      outputURI = FLfile.platformPathToURI(outputPath);
-      if (FLfile.exists(outputURI)) date.setTime(date.getTime() + 1);
-    } while (FLfile.exists(outputURI));
+    var captures = [];
+    for (var frameIndex = 0; frameIndex < frames.length; frameIndex++) {
+      frame = frames[frameIndex];
+      if (__captureRange !== null || __captureFrame !== null) timeline.currentFrame = frame - 1;
+      var date = new Date(), outputPath, outputURI;
+      do {
+        outputPath = outputDir + "/" + frame + "-" + timestamp(date) + ".png";
+        outputURI = FLfile.platformPathToURI(outputPath);
+        if (FLfile.exists(outputURI)) date.setTime(date.getTime() + 1);
+      } while (FLfile.exists(outputURI));
 
-    if (!document.exportPNG(outputURI, true, true) || !FLfile.exists(outputURI)) {
-      throw new Error("Capture export failed");
+      outputURIs.push(outputURI);
+      if (!document.exportPNG(outputURI, true, true) || !FLfile.exists(outputURI)) {
+        throw new Error("Capture export failed");
+      }
+      captures.push({ path: outputPath, frame: frame, timeline: timeline.name, width: document.width, height: document.height });
     }
-    return serialize({ path: outputPath, frame: frame, timeline: timeline.name, width: document.width, height: document.height });
+    return serialize(__captureRange === null ? captures[0] : { captures: captures });
+  } catch (error) {
+    var cleanupError = null;
+    for (var outputIndex = 0; outputIndex < outputURIs.length; outputIndex++) {
+      try {
+        if (FLfile.exists(outputURIs[outputIndex])) FLfile.remove(outputURIs[outputIndex]);
+        if (FLfile.exists(outputURIs[outputIndex])) cleanupError = new Error("Could not remove failed capture " + outputURIs[outputIndex]);
+      } catch (removeError) {
+        cleanupError = removeError;
+      }
+    }
+    if (cleanupError) {
+      throw new Error(String(error && error.message ? error.message : error) + "; capture cleanup failed: " +
+        String(cleanupError && cleanupError.message ? cleanupError.message : cleanupError));
+    }
+    throw error;
   } finally {
     timeline.currentFrame = originalFrame;
   }

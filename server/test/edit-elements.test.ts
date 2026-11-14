@@ -61,6 +61,222 @@ test("edit_elements updates instances and returns the values read back from Anim
     });
 });
 
+test("edit_elements adds a library item on a new layer at the stage center and extends to the requested frame", {
+    timeout: 30_000,
+}, async () => {
+    await withServer(
+        {
+            FAKE_RENAME_STATIC: "1",
+            FAKE_INITIAL_CURRENT_LAYER: "1",
+            FAKE_INITIAL_CURRENT_FRAME: "3",
+            FAKE_INITIAL_SELECTED_FRAMES: "[1,0,2]",
+        },
+        async (client, tempDir) => {
+            const result = await client.callTool({
+                name: "edit_elements",
+                arguments: {
+                    timeline: 0,
+                    ops: [
+                        { op: "add", item: "dir/Hero", layer: "static", frame: 7, set: { name: "newHero" } },
+                        { op: "add", item: "dir/Hero", layer: "static", frame: 7, set: { name: "secondHero" } },
+                        { layer: 0, frame: 1, element: 0, set: { x: 99 } },
+                    ],
+                },
+            });
+            assert.equal(result.isError, undefined, text(result));
+            assert.equal(result.structuredContent.applied, 3);
+            assert.deepEqual(
+                result.structuredContent.elements
+                    .slice(0, 2)
+                    .map((element) => [
+                        element.name,
+                        element.layer,
+                        element.frame,
+                        element.element,
+                        element.x,
+                        element.y,
+                    ]),
+                [
+                    ["newHero", "static_idn", 7, 0, 275, 200],
+                    ["secondHero", "static_idn", 7, 1, 275, 200],
+                ],
+            );
+            const layers = await layersLog(tempDir);
+            const placed = layers.at(-1)[0];
+            assert.equal(placed.name, "static_idn");
+            assert.equal(placed.parent, undefined);
+            assert.equal(placed.frames.at(-1).start, 6);
+            assert.deepEqual(
+                placed.frames.at(-1).elements.map((element) => element.name),
+                ["newHero", "secondHero"],
+            );
+            assert.equal(layers.at(-1).find((layer) => layer.name === "a/b").frames[0].elements[0].x, 99);
+            assert.deepEqual((await stateLog(tempDir)).at(-1), {
+                currentLayer: 2,
+                currentFrame: 3,
+                selectedFrames: [2, 0, 2],
+                selectedElements: 0,
+            });
+        },
+    );
+});
+
+test("edit_elements adds to an existing layer at supplied coordinates and applies instance properties", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({ FAKE_ADD_ITEM_OFFSET: "5" }, async (client, tempDir) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [
+                    {
+                        op: "add",
+                        item: "dir/Hero",
+                        layer: "a/b",
+                        frame: 1,
+                        x: 40,
+                        y: 60,
+                        set: { name: "placed", rotation: 15 },
+                    },
+                ],
+            },
+        });
+        assert.equal(result.isError, undefined, text(result));
+        const added = result.structuredContent.elements[0];
+        assert.equal(added.name, "placed");
+        assert.equal(added.libraryItem, "dir/Hero");
+        assert.equal(added.x, 40);
+        assert.equal(added.y, 60);
+        assert.equal(added.rotation, 15);
+        assert.equal(added.layer, "a/b");
+        assert.equal(added.frame, 1);
+        assert.equal(added.element, 1);
+        const layer = (await layersLog(tempDir)).at(-1).find((candidate) => candidate.name === "a/b");
+        assert.deepEqual(
+            layer.frames[0].elements.map((element) => element.name),
+            ["hero", "placed"],
+        );
+    });
+});
+
+test("edit_elements adds on a symbol timeline and rejects an invalid later add before any mutation", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({ FAKE_SYM_INSTANCE: "1" }, async (client, tempDir) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: "dir/Hero",
+                ops: [{ op: "add", item: "dir/Bitmap", layer: "symbolAdditions", frame: 3 }],
+            },
+        });
+        assert.equal(result.isError, undefined, text(result));
+        assert.equal(result.structuredContent.elements[0].libraryItem, "dir/Bitmap");
+        assert.equal(result.structuredContent.elements[0].layer, "symbolAdditions");
+        assert.equal(result.structuredContent.elements[0].frame, 3);
+        assert.equal(result.structuredContent.elements[0].x, 275);
+        assert.equal(result.structuredContent.elements[0].y, 200);
+        assert.deepEqual((await stateLog(tempDir)).at(-1), {
+            currentLayer: 0,
+            currentFrame: 0,
+            selectedFrames: [],
+            selectedElements: 0,
+        });
+
+        const invalid = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [
+                    { layer: "a/b", frame: 1, element: 0, set: { x: 99 } },
+                    { op: "add", item: "missing", layer: "mustNotBeCreated", frame: 1 },
+                ],
+            },
+        });
+        assert.equal(invalid.isError, true);
+        assert.match(text(invalid), /Library item not found/);
+        const sceneLayers = (await layersLog(tempDir)).at(-1);
+        assert.equal(
+            sceneLayers.some((layer) => layer.name === "mustNotBeCreated"),
+            false,
+        );
+        assert.equal(sceneLayers.find((layer) => layer.name === "a/b").frames[0].elements[0].x, 0);
+
+        const selfAdd = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: "dir/Hero",
+                ops: [{ op: "add", item: "dir/Hero", layer: "recursive", frame: 1 }],
+            },
+        });
+        assert.equal(selfAdd.isError, true);
+        assert.match(text(selfAdd), /own symbol timeline/);
+    });
+});
+
+test("edit_elements rejects tween keyframes and extension of a tween before mutation", {
+    timeout: 30_000,
+}, async () => {
+    for (const frame of [3, 7]) {
+        await withServer({ FAKE_TWEEN: "motion" }, async (client, tempDir) => {
+            const result = await client.callTool({
+                name: "edit_elements",
+                arguments: {
+                    timeline: 0,
+                    ops: [{ op: "add", item: "dir/Hero", layer: "a/b", frame }],
+                },
+            });
+            assert.equal(result.isError, true);
+            assert.match(text(result), /tween/i);
+            const layer = (await layersLog(tempDir)).at(-1).find((candidate) => candidate.name === "a/b");
+            assert.deepEqual(
+                layer.frames.map((keyframe) => [keyframe.start, keyframe.tween, keyframe.elements.length]),
+                [
+                    [0, "none", 1],
+                    [2, "motion", 1],
+                ],
+            );
+        });
+    }
+});
+
+test("edit_elements rejects non-visual Library items before any mutation", { timeout: 30_000 }, async () => {
+    await withServer({}, async (client, tempDir) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [
+                    { layer: "a/b", frame: 1, element: 0, set: { x: 99 } },
+                    { op: "add", item: "Font", layer: "mustNotBeCreated", frame: 1 },
+                ],
+            },
+        });
+        assert.equal(result.isError, true);
+        assert.match(text(result), /not a visual item/i);
+        const layers = (await layersLog(tempDir)).at(-1);
+        assert.equal(
+            layers.some((layer) => layer.name === "mustNotBeCreated"),
+            false,
+        );
+        assert.equal(layers.find((layer) => layer.name === "a/b").frames[0].elements[0].x, 0);
+    });
+});
+
+test("edit_elements preserves the existing update operation shape", { timeout: 30_000 }, async () => {
+    await withServer({}, async (client) => {
+        const result = await client.callTool({
+            name: "edit_elements",
+            arguments: {
+                timeline: 0,
+                ops: [{ op: "set", layer: 0, frame: 1, element: 0, set: { x: 1 } }],
+            },
+        });
+        assert.equal(result.isError, true);
+    });
+});
+
 test("edit_elements applies all color modes and clears filters", { timeout: 45_000 }, async () => {
     const cases = [
         { mode: "none" },

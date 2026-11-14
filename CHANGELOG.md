@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.8
+
+### Added
+
+- Added `open_document`, `save_document`, and `close_document` for explicitly targeted document operations; overwrite and discard require explicit confirmation.
+- Added `convert_to_symbol` to convert explicitly addressed elements on one frame into a named symbol; linkage remains a separate `edit_library` operation.
+- Added read-only `read_output` to return raw Output and Compiler Errors panel text with parsed compiler diagnostics when available; panel contents may be stale or mixed.
+- Added `test_movie` for saved AS3 documents; it leaves the Player open and returns compiler diagnostics plus one bounded Output-panel delta.
+- `edit_elements` can add a Library item to a named layer and frame (`{ op: "add", item, layer, frame, x?, y?, set? }`), creating the layer and extending the timeline if needed. Omitted coordinates default to the stage center.
+- `edit_library` gained `getLinkage` and `setLinkage` to read and update AS3 linkage (`exportForAS`, `className`, `baseClass`, `exportInFirstFrame`) on Flash/AS3 documents. HTML5 Canvas linkage is not supported.
+- `capture_frame` accepts `range: { start, end, step? }` to capture up to 24 frames as ordered PNG images, returned in `structuredContent.captures`.
+
+### Changed
+
+- `apply_scripts` detects linkage export/class-name changes after `export_scripts` and rejects stale exports. Existing exports created before this fingerprint change must be re-exported; preserve any unapplied script edits before using `force: true` (which discards them).
+- `publish` now reports `compilerOutput` as `verified`, `unavailable`, or `not_checked` (HTML5 Canvas); `ok: true` with unavailable or unchecked diagnostics does not confirm an error-free build.
+- `edit_elements` is no longer marked idempotent (`idempotentHint: false`), because `add` creates new elements on each call.
+
 ## 0.1.7
 
 ### Added
