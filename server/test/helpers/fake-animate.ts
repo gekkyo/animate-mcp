@@ -18,6 +18,7 @@ const src = readFileSync(process.argv[2], "utf8");
  */
 const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, message + "\\n");
 const logPublish = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".publish", message + "\\n");
+const logReadOutput = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".read-output", message + "\\n");
 const logCapture = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".capture", message + "\\n");
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
@@ -800,7 +801,7 @@ if (!src.includes("HANG")) runInNewContext(src, {
     createFolder: (path) => { mkdirSync(path, { recursive: true }); return true; },
     exists: (path) => existsSync(path),
     read: (path) => readFileSync(path, "utf8"),
-    remove: (path) => { if (existsSync(path)) { unlinkSync(path); logPublish("remove"); } },
+    remove: (path) => { if (existsSync(path)) { unlinkSync(path); if (src.includes("var __readOutputPath")) logReadOutput(path.endsWith("-output.txt") ? "outputPanel.remove" : "compilerErrors.remove"); else logPublish("remove"); } },
     /** Converts the fake document's file URI to its platform path.
      * @param uri Document URI
      * @returns The corresponding platform path
@@ -819,8 +820,17 @@ if (!src.includes("HANG")) runInNewContext(src, {
     documents: docs,
     setActiveWindow: (document) => { logPublish("activate"); activeDocument = document; },
     publishDocument: () => { logPublish("publish"); return !process.env.FAKE_PUBLISH_FALSE; },
+    outputPanel: {
+      save: (path) => { logReadOutput("outputPanel.save"); writeFileSync(path, process.env.FAKE_OUTPUT_PANEL ?? ""); },
+    },
     compilerErrors: {
       save: (path) => {
+        if (src.includes("var __readOutputPath")) {
+          logReadOutput("compilerErrors.save");
+          if (process.env.FAKE_COMPILER_PANEL_ERROR || process.env.FAKE_TYPE === "htmlcanvas") throw new Error("compiler panel unavailable");
+          writeFileSync(path, process.env.FAKE_COMPILER_PANEL ?? "");
+          return;
+        }
         logPublish("compilerErrors.save");
         if (process.env.FAKE_TYPE === "htmlcanvas") throw new Error("not supported on HTML5 Canvas");
         const outputs = process.env.FAKE_COMPILER_OUTPUTS && JSON.parse(process.env.FAKE_COMPILER_OUTPUTS);

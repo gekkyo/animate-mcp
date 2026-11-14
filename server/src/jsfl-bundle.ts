@@ -22,6 +22,7 @@ const JSFL_FILES: Record<string, { path: string; order: number }> = {
     publish: { path: "tools/publish.jsfl", order: 18 },
     "capture-frame": { path: "tools/capture-frame.jsfl", order: 19 },
     "edit-elements": { path: "tools/edit-elements.jsfl", order: 20 },
+    "read-output": { path: "tools/read-output.jsfl", order: 21 },
 };
 
 /**

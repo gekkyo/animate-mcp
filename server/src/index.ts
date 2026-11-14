@@ -18,6 +18,7 @@ import { registerGetDocumentInfo } from "./tools/get-document-info.js";
 import { registerInspectTimeline } from "./tools/inspect-timeline.js";
 import { registerInstallGreensock } from "./tools/install-greensock.js";
 import { registerPublish } from "./tools/publish.js";
+import { registerReadOutput } from "./tools/read-output.js";
 import { registerRunJsfl } from "./tools/run-jsfl.js";
 
 /** Version from package.json (the same relative path from src/ and dist/) */
@@ -47,7 +48,7 @@ Basic flow:
 Notes:
 - When several documents are open, document is required. get_document_info returns the name.
 - AS3 and HTML5 Canvas have different APIs. Check the document type before trying things with run_jsfl.
-- Runtime errors appear in Animate's Output panel. Run fl.outputPanel.save(FLfile.platformPathToURI("<native OS path>")) with run_jsfl and read the saved file (saving under ~/.animate-mcp/ is recommended; write the path in the usual form for the OS).
+- Use read_output to inspect the current Output and Compiler Errors panels; their contents may be stale or mixed because Animate does not identify their source document or run.
 - When a script fails with a null error, first check the layer's frame length and instance names with run_jsfl.
 - If you add debug traces, always remove them after checking and Apply again.
 - run_jsfl runs arbitrary code. Ask the user before any operation that modifies the document.`;
@@ -78,6 +79,7 @@ async function main() {
     registerEditLibrary(server, { runner, bundle });
     registerApplyScripts(server, { runner, bundle });
     registerPublish(server, { runner, bundle });
+    registerReadOutput(server, { runner, bundle });
     registerCaptureFrame(server, { runner, bundle });
 
     const transport = new StdioServerTransport();

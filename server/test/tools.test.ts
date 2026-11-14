@@ -47,6 +47,12 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
                 idempotentHint: true,
                 openWorldHint: false,
             },
+            read_output: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             capture_frame: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -80,6 +86,8 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
         assert.match(byName.get("publish")?.description ?? "", /overwrites outputs.*publish settings/i);
         assert.match(byName.get("publish")?.description ?? "", /compile errors are returned as a normal result/i);
         assert.match(byName.get("publish")?.description ?? "", /compilerOutput is "verified".*"unavailable"/i);
+        assert.match(byName.get("read_output")?.description ?? "", /stale or mixed/i);
+        assert.match(byName.get("read_output")?.description ?? "", /does not mean a clean compile/i);
         assert.match(
             byName.get("publish")?.description ?? "",
             /HTML5 Canvas compilerOutput is "not_checked"; compile errors are unverified and ok only means Publish ran/i,
