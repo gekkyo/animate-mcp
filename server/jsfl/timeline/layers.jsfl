@@ -46,14 +46,14 @@
       /** Deletes the selected layer.
        * @returns Nothing.
        */
-      withUnlockedLayers([layer], function () { timeline.deleteLayer(layerIndex); });
+      withEditUnlockedLayers([layer], function () { timeline.deleteLayer(layerIndex); });
       return;
     }
     if (op.op === 'renameLayer') {
       /** Renames the selected layer.
        * @returns Nothing.
        */
-      withUnlockedLayers([layer], function () { layer.name = op.name; });
+      withEditUnlockedLayers([layer], function () { layer.name = op.name; });
       return;
     }
     if (op.op === 'setLayerType') {
@@ -68,7 +68,7 @@
       /** Updates the selected layer's type and parent.
        * @returns Nothing.
        */
-      withUnlockedLayers([layer], function () {
+      withEditUnlockedLayers([layer], function () {
         layer.layerType = op.type;
         layer.parentLayer = parent;
       });
@@ -105,7 +105,7 @@
       /** Reorders the selected layer and optionally changes its parent.
        * @returns Nothing.
        */
-      withUnlockedLayers([layer], function () {
+      withEditUnlockedLayers([layer], function () {
         if (placementIndex !== layerIndex) timeline.reorderLayer(layerIndex, placementIndex, addAbove);
         if (op.parent !== undefined) layer.parentLayer = parent;
       });

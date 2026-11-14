@@ -1,9 +1,9 @@
 // Real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-edit-elements.mjs`.
 // Creates and closes a disposable document; Animate must be running.
 import assert from "node:assert/strict";
-import { registerEditElements } from "../dist/tools/edit-elements.js";
-import { registerEditTween } from "../dist/tools/edit-tween.js";
-import { registerInspectTimeline } from "../dist/tools/inspect-timeline.js";
+import { registerEditElements } from "../dist/tools/timeline/edit-elements.js";
+import { registerEditTween } from "../dist/tools/timeline/edit-tween.js";
+import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
 import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
 import { toolHandler } from "./smoke-lib.mjs";
 
@@ -19,26 +19,38 @@ const verifyTool = (result, description) => {
 const near = (actual, expected, description) => assert.ok(Math.abs(actual - expected) < 0.1, `${description}: ${actual}`);
 
 const setup = await runJsfl({
-    code: `var __smokeDoc = null;
+    code: `var __smokeDoc = null, __canvasDoc = null;
 try {
   fl.createDocument("timeline", 550, 400, 24);
   __smokeDoc = fl.getDocumentDOM();
   var __symbol = "EditElementsSmokeSymbol";
   __smokeDoc.library.addNewItem("movie clip", __symbol);
+  var __graphic = "EditElementsSmokeGraphic", __graphicTarget = "EditElementsSmokeGraphicTarget";
+  function __makeGraphic(__doc, __name) {
+    __doc.library.addNewItem("graphic", __name);
+    __doc.library.editItem(__name);
+    var __graphicTimeline = __doc.getTimeline();
+    __graphicTimeline.insertFrames(2, true, 0);
+    if (__graphicTimeline.frameCount < 3) throw new Error("Could not create the 3-frame graphic " + __name);
+    __doc.exitEditMode();
+  }
+  __makeGraphic(__smokeDoc, __graphic);
+  __makeGraphic(__smokeDoc, __graphicTarget);
   var __timeline = __smokeDoc.getTimeline();
   __timeline.insertFrames(4, true, 0);
   if (__timeline.frameCount < 5) throw new Error("Could not create the 5-frame smoke timeline");
-  function __addInstance(__layerName, __instanceName) {
+  function __addInstance(__layerName, __instanceName, __item) {
     var __layerIndex = __timeline.addNewLayer(__layerName, "normal", true);
     __timeline.currentLayer = __layerIndex;
     __timeline.currentFrame = 0;
-    __smokeDoc.library.addItemToDocument({ x: 50, y: 50 }, __symbol);
+    __smokeDoc.library.addItemToDocument({ x: 50, y: 50 }, __item || __symbol);
     __timeline.layers[__layerIndex].frames[0].elements[0].name = __instanceName;
     return __layerIndex;
   }
   __addInstance("effects", "staticInstance");
   __addInstance("classic", "classicInstance");
   __addInstance("motion", "motionInstance");
+  __addInstance("graphic", "graphicInstance", __graphic);
   var __lockedIndex = __addInstance("locked", "lockedInstance");
   __timeline.layers[__lockedIndex].locked = true;
   __smokeDoc.addNewScene();
@@ -51,16 +63,29 @@ try {
   __smokeDoc.library.addItemToDocument({ x: 50, y: 50 }, __symbol);
   __sceneTwoTimeline.layers[__sceneTwoLayer].frames[0].elements[0].name = "sceneTwoInstance";
   __smokeDoc.editScene(0);
+
+  fl.createDocument("htmlcanvas", 550, 400, 24);
+  __canvasDoc = fl.getDocumentDOM();
+  var __canvasGraphic = "EditElementsCanvasGraphic", __canvasGraphicTarget = "EditElementsCanvasGraphicTarget";
+  __makeGraphic(__canvasDoc, __canvasGraphic);
+  __makeGraphic(__canvasDoc, __canvasGraphicTarget);
+  var __canvasTimeline = __canvasDoc.getTimeline();
+  var __canvasLayer = __canvasTimeline.addNewLayer("graphic", "normal", true);
+  __canvasTimeline.currentLayer = __canvasLayer;
+  __canvasTimeline.currentFrame = 0;
+  __canvasDoc.library.addItemToDocument({ x: 50, y: 50 }, __canvasGraphic);
+  __canvasTimeline.layers[__canvasLayer].frames[0].elements[0].name = "graphicInstance";
   fl.setActiveWindow(__smokeDoc);
-  __smokeDoc.name;
+  __smokeDoc.name + "\\t" + __canvasDoc.name;
 } catch (__error) {
+  if (__canvasDoc && __canvasDoc !== __smokeDoc) __canvasDoc.close(false);
   if (__smokeDoc) __smokeDoc.close(false);
   throw __error;
 }`,
 });
 if (setup.isError) throw new Error(`Could not prepare Animate smoke document: ${message(setup)}`);
-const documentName = setup.structuredContent?.result;
-if (!documentName) throw new Error(`Setup did not return a document name: ${message(setup)}`);
+const [documentName, canvasDocumentName] = String(setup.structuredContent?.result ?? "").split("\t");
+if (!documentName || !canvasDocumentName) throw new Error(`Setup did not return both document names: ${message(setup)}`);
 
 try {
     const initialTimeline = verifyTool(
@@ -179,6 +204,51 @@ try {
     near(transformed.elements[0].x, 124, "position after scale and rotation");
     near(transformed.elements[0].y, 86, "vertical position after scale and rotation");
     console.log("position with scale and rotation: passed");
+
+    for (const [targetDocument, targetSymbol] of [
+        [documentName, "EditElementsSmokeGraphicTarget"],
+        [canvasDocumentName, "EditElementsCanvasGraphicTarget"],
+    ]) {
+        const graphicSet = verifyTool(
+            await editElements({
+                document: targetDocument,
+                timeline: 0,
+                ops: [{ layer: "graphic", frame: 1, element: "graphicInstance", set: { x: 124, y: 86, scaleX: 1.4, scaleY: 0.8, rotation: 35, loop: "single frame", firstFrame: 2 } }],
+            }),
+            `${targetDocument}: set graphic playback properties`,
+        );
+        assert.equal(graphicSet.elements[0].loop, "single frame");
+        assert.equal(graphicSet.elements[0].firstFrame, 2);
+        const invalidGraphicFrame = await editElements({
+            document: targetDocument,
+            timeline: 0,
+            ops: [{ layer: "graphic", frame: 1, element: "graphicInstance", set: { firstFrame: 3 } }],
+        });
+        assert.equal(invalidGraphicFrame.isError, true, "out-of-range graphic firstFrame was accepted");
+        const swappedGraphic = verifyTool(
+            await editElements({
+                document: targetDocument,
+                timeline: 0,
+                ops: [{ layer: "graphic", frame: 1, element: "graphicInstance", set: { swapSymbol: targetSymbol } }],
+            }),
+            `${targetDocument}: swap graphic symbol`,
+        ).elements[0];
+        assert.equal(swappedGraphic.libraryItem, targetSymbol);
+        assert.equal(swappedGraphic.loop, "single frame");
+        assert.equal(swappedGraphic.firstFrame, 2);
+        near(swappedGraphic.x, 124, `${targetDocument}: graphic x after swap`);
+        near(swappedGraphic.y, 86, `${targetDocument}: graphic y after swap`);
+        near(swappedGraphic.scaleX, 1.4, `${targetDocument}: graphic scaleX after swap`);
+        near(swappedGraphic.scaleY, 0.8, `${targetDocument}: graphic scaleY after swap`);
+        near(swappedGraphic.rotation, 35, `${targetDocument}: graphic rotation after swap`);
+        const inspectedGraphic = verifyTool(
+            await inspectTimeline({ document: targetDocument, timeline: 0, layers: ["graphic"], frame: 1 }),
+            `${targetDocument}: inspect swapped graphic`,
+        ).layers[0].elements[0];
+        assert.equal(inspectedGraphic.loop, "single frame");
+        assert.equal(inspectedGraphic.firstFrame, 2);
+        console.log(`${targetDocument}: graphic loop/firstFrame range and symbol swap preservation: passed`);
+    }
 
     const placed = verifyTool(
         await editElements({
@@ -323,9 +393,12 @@ try {
     console.log("invalid-operation rollback: passed");
 } finally {
     const closed = await runJsfl({
-        code: `var __name = ${JSON.stringify(documentName)}, __doc = null;
-for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __name) __doc = fl.documents[__index];
-if (__doc) __doc.close(false);
+        code: `var __names = [${JSON.stringify(documentName)}, ${JSON.stringify(canvasDocumentName)}];
+for (var __nameIndex = 0; __nameIndex < __names.length; __nameIndex++) {
+  var __doc = null;
+  for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __names[__nameIndex]) __doc = fl.documents[__index];
+  if (__doc) __doc.close(false);
+}
 'closed';`,
     });
     if (closed.isError) throw new Error(`Could not close the smoke document: ${message(closed)}`);

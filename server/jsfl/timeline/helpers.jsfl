@@ -38,26 +38,6 @@
     return -1;
   }
 
-  /** Temporarily unlocks target layers and restores their original lock states.
-   * @param layers The layers to unlock while the operation runs.
-   * @param callback The operation to run while the layers are unlocked.
-   * @returns The callback's result.
-   */
-  function withUnlockedLayers(layers, callback) {
-    var states = [];
-    for (var layerIndex = 0; layerIndex < layers.length; layerIndex++) {
-      states.push({ layer: layers[layerIndex], locked: layers[layerIndex].locked });
-      if (layers[layerIndex].locked) layers[layerIndex].locked = false;
-    }
-    try {
-      return callback();
-    } finally {
-      for (var stateIndex = 0; stateIndex < states.length; stateIndex++) {
-        states[stateIndex].layer.locked = states[stateIndex].locked;
-      }
-    }
-  }
-
   /** Verifies that the selected parent layer can contain the requested layer type.
    * @param name The parent layer name, when specified.
    * @param layerType The type of layer that will use the parent.

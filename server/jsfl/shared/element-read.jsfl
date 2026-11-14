@@ -22,6 +22,30 @@ function readFilter(filter) {
   return result;
 }
 
+/** Reads whole-field style values from a text element.
+ * @param element Animate text element.
+ * @returns Plain text style with null when lineType is unavailable for this text type.
+ */
+function readTextStyle(element) {
+  var runs = element.textRuns || [], attrs = runs.length ? runs[0].textAttrs || {} : {}, lineType = null;
+  try {
+    var value = element.lineType;
+    if (value !== undefined && value !== null) lineType = value;
+  } catch (error) {
+    lineType = null;
+  }
+  return {
+    face: attrs.face,
+    size: attrs.size,
+    fillColor: attrs.fillColor,
+    bold: attrs.bold,
+    italic: attrs.italic,
+    alignment: element.alignment,
+    textType: element.textType,
+    lineType: lineType
+  };
+}
+
 /** Reads one instance, shape, text, or bitmap element.
  * @param element Animate timeline element.
  * @returns A plain element description.
@@ -57,7 +81,7 @@ function readElement(element) {
   }
   if (point) transformationPoint = { x: Number(point.x || 0), y: Number(point.y || 0) };
   for (var filterIndex = 0; filterIndex < (element.filters || []).length; filterIndex++) filters.push(readFilter(element.filters[filterIndex]));
-  return {
+  var result = {
     type: libraryItem ? libraryItem.itemType : element.elementType,
     name: element.name || '',
     libraryItem: libraryItem ? libraryItem.name : '',
@@ -75,4 +99,9 @@ function readElement(element) {
     blendMode: element.blendMode || 'normal',
     visible: element.visible !== false
   };
+  if (element.symbolType === 'graphic') {
+    result.loop = element.loop;
+    result.firstFrame = element.firstFrame;
+  }
+  return result;
 }

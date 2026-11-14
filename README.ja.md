@@ -29,10 +29,12 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 
 - AI エージェントがシーンやライブラリシンボルのフレームスクリプトと構造をファイル経由で読み取り、編集したスクリプトを Animate に書き戻せます。
 - レイヤー、キーフレーム、インスタンス、トゥイーンの状態を確認できます。
+- テキストの追加・編集と、フォント・サイズ・色・揃えなどの設定ができます。
 - キーフレーム上のインスタンスの変形、色効果、フィルター、名前、ブレンドモード、表示状態を編集できます。
 - レイヤーやフレームの構造、ラベルを編集できます。
 - モーション／クラシックトゥイーンを作成し、プリセットやベジェ曲線によるカスタムイーズを設定できます。
 - ライブラリのフォルダやアイテムを整理し、未使用アイテムを確認できます。
+- 画像・音声の取り込み、直接の使用箇所の検索、シンボルの作成・複製、ステージ設定の変更ができます。
 - AS3 と HTML5 Canvas のドキュメントを Publish し、AS3 のコンパイルエラーと警告を受け取れます。
 - Animate の診断パネルを読み取り、AS3 の Test Movie を実行してランタイム出力を取得できます。
 - 1 フレームを PNG 画像として取得できます。
@@ -142,7 +144,7 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 
 | ツール | できること | 入力・注意点 |
 |--------|------------|--------------|
-| `get_document_info` | 開いているドキュメントの名前、サイズ、フレームレート、タイムライン名、ActionScript のバージョン、GreenSock の導入状況を確認します。 | 引数は不要です。 |
+| `get_document_info` | 開いているドキュメントの名前、サイズ、フレームレート、背景色、タイムライン名、ActionScript のバージョン、GreenSock の導入状況を確認します。 | 引数は不要です。 |
 | `open_document` | 既存の `.fla` を開くか、Animate の標準サイズ・フレームレートで AS3 / HTML5 Canvas ドキュメントを新規作成します。 | `path`（既存 `.fla`）か `type`（`timeline` / `htmlcanvas`）をどちらか一方指定します。ドキュメント名と保存済みならパスを返します。 |
 | `save_document` | 明示的に指定したドキュメントを現在のパスまたは新しいパスに保存します。 | `document`（正確な名前またはパス）が必要です。未保存文書には `path` が必要です。現在のファイルや別の既存ファイルの上書きには、ユーザーへの確認後に `confirm: true` を指定します。アクティブ文書を自動選択しません。 |
 | `close_document` | 明示的に指定したドキュメントを保存せず閉じます。 | `document`（正確な名前またはパス）と `discardUnsavedChanges: true` が必要で、未保存の編集は破棄されます。必要なら先に保存してください。アクティブ文書を自動選択せず、Test Movie Player も閉じません。 |
@@ -152,12 +154,15 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 | `test_movie` | 保存済み AS3 ドキュメントを現在メモリー上にある内容で Test Movie 実行します。コンパイルエラー時は Player の起動を中止し、コンパイラー診断と Output パネルの差分を返します。 | `.fla` は保存・Publish・クローズしません。起動した Player は開いたままなので手動で閉じてください。Output パネルは起動から2秒後に一度だけ取得するため、それ以降のメッセージは取得されず、同時出力が混在する場合があります。差分が空でもランタイムエラーがなかった証明にはなりません。 |
 | `publish` | AS3 または HTML5 Canvas ドキュメントを Publish し、Build result を返します。 | Publish 設定の出力を上書きします。未保存の編集も Publish されますが、`.fla` は保存しません。`compilerOutput` は解析済みの AS3 出力なら `verified`、空出力を1回再試行しても取得できなければ `unavailable`、Canvas なら `not_checked` です。取得不能・未確認の場合、`errors` が空でもエラーなしとは断定できません。サマリー行がある場合、位置やコードを解析できない診断もメッセージとして返します。Canvas のコンパイルエラーは未検証で、`ok: true` は Publish が実行されたことだけを示します。 |
 | `capture_frame` | アクティブなタイムライン（編集中のライブラリシンボルを含む）の1フレームまたは範囲を PNG 画像で返します。 | `frame`（1始まり、省略時は現在のフレーム）または `range: { start, end, step? }`（1始まり、昇順・終端を含む。`step` は省略時1、正の整数。最大24フレーム）のどちらかを指定します。範囲の結果はフレーム順の画像・メタデータの組で、`structuredContent.captures` にも含まれます。各画像を `~/.animate-mcp/captures/<ドキュメント名>/` または `dir` に保存します。未保存ドキュメントにも対応します。現在のフレームは復元しますが、変更すると選択が解除される場合があります。長辺が2048pxを超えるステージは縮小せずエラーにします。 |
-| `inspect_timeline` | シーンやライブラリシンボルのレイヤー、キーフレーム範囲、指定フレームのインスタンス・トゥイーンを読み取ります。 | `timeline` は 0 始まりのシーン番号かライブラリアイテムのパス。フレーム番号は 1 始まりで、レイヤーも絞り込めます。 |
-| `edit_elements` | キーフレーム上のシンボルインスタンスの変形・各種プロパティを設定するか、ライブラリアイテムをタイムラインに配置します。 | 更新操作ではレイヤー・要素を名前または 0 始まりの番号で指定します。`{ op: "add", item, layer, frame, x?, y?, set? }` は名前付きレイヤーの 1 始まりのフレームに配置し、レイヤーがなければ作成、フレームが足りなければ延長します。座標を省略するとステージ中央に配置します。インスタンス以外とトゥイーン途中は拒否され、全操作を事前検証します。`filters` は既存を置き換え、`[]` はすべてクリアします。読み戻しは `inspect_timeline` と共通の要素フィールドにレイヤー・フレーム・要素の参照を加えます。rotation と skew は同時に指定できません。`.fla` は保存されません。 |
+| `inspect_timeline` | シーンやライブラリシンボルのレイヤー、キーフレーム範囲、指定フレームのインスタンス・テキスト・トゥイーンを読み取ります。 | `timeline` は 0 始まりのシーン番号かライブラリアイテムのパス。フレーム番号は 1 始まりで、レイヤーも絞り込めます。テキストの文字列と全体スタイルも返します。 |
+| `edit_elements` | キーフレーム上のシンボルインスタンスを編集・配置します。 | 更新ではレイヤー・要素を名前または 0 始まりの番号で指定します。`{ op: "add", item, layer, frame, x?, y?, set? }` は名前付きレイヤーの 1 始まりのフレームに配置し、必要ならレイヤー・フレームを増やします。座標省略時はステージ中央です。`set.swapSymbol` は既存シンボルに置換し、`set.loop` と `set.firstFrame` はグラフィックのみ設定できます。変形、色効果、フィルター、名前、ブレンド、表示も設定可能です。インスタンス以外とトゥイーン途中は拒否し、書き込み前に全操作を検証します。`filters` は既存を置き換え、`[]` はクリアします。rotation と skew は同時指定できません。`.fla` は保存されません。 |
+| `edit_text` | シーンやシンボルのタイムラインにテキストを追加し、既存テキストを編集します。 | `timeline` を指定し、`ops` に `{ op: "add", layer, frame, rectangle: { left, top, right, bottom }, text, style? }` または `{ op: "set", layer, frame, element, text?, style? }` を渡します。`style` はフォント、サイズ、色、太字・斜体、揃え、種類、行形式を全体に設定します。Canvas は入力テキストと単一行を拒否します。文字単位の装飾や `.fla` の保存はしません。 |
+| `import_assets` | 画像・音声をステージに配置せずライブラリに取り込みます。 | `paths` に PNG/JPEG/GIF/WAV/MP3 の絶対ファイルパスを1つ以上渡します。同名のライブラリアイテム・入力内重複は取り込み前に拒否します。上書き・自動改名なし。`document` は省略可。`.fla` は保存しません。 |
+| `set_document_properties` | ステージの幅・高さ・フレームレート・背景色を変更します。 | `width` / `height`（整数 1〜3840px。3840pxは受け入れ確認済みで、本ツールの保守的な上限。Animate自体の最大値は未確認）、`frameRate`（0.01〜120）、`backgroundColor`（`#RRGGBB`）を1つ以上指定します。配置済みの内容は拡大・移動せず、`.fla` も保存しません。`document` は省略可。 |
 | `convert_to_symbol` | タイムラインの同一フレーム上にある指定要素を、ムービークリップ・ボタン・グラフィックのいずれかに変換します。 | シーンまたはライブラリのタイムライン、1 始まりのフレーム、要素参照、一意のシンボル名、必要に応じて基準点（既定は中央）を指定します。トゥイーン途中は拒否します。リンケージの設定や `.fla` の保存はせず、AS3 リンケージには別途 `edit_library` の `setLinkage` を使います。 |
 | `edit_timeline` | レイヤー・フレーム・キーフレーム・ラベルを編集し、インスタンスをレイヤーに分配します。操作は `ops` の順に実行します。 | `deleteLayer` と `removeFrames` は `confirm: true` が必要です。`shiftLayerFrames` はクリップボードを上書きし、失敗時に Undo が必要な場合があります。 |
 | `edit_tween` | モーション／クラシックトゥイーンの作成とイージングの変更を行います。プリセット、数値、4 つの数値によるカスタムイーズに対応します。 | 対象の名前付きインスタンスはレイヤー上で単独である必要があります。既存のトゥイーン範囲は置換しません。 |
-| `edit_library` | フォルダ作成、アイテムの移動・名前変更・削除、未使用アイテムの一覧取得、AS3 リンケージの読み書きを行います。 | `getLinkage` と `setLinkage` は Flash/AS3 ドキュメントのみ対応します。`setLinkage` は `exportForAS`、`className`、`baseClass`、`exportInFirstFrame` を受け付け、Animate からの読み戻し値を返します。Export が無効な場合のリンケージ各値は `{ exportForAS: false, className: "", baseClass: "", exportInFirstFrame: false }` で、結果にはアイテムの `name` も含まれます。class/base の設定や first-frame export の有効化には `exportForAS: true` が必要です。`setLinkage` でムービークリップ・グラフィック・ボタンの AS3 export または class name を変更した場合は、Export workspace の linked-class 情報を更新するため `export_scripts` を再実行してください。古いリンケージの Export に対する `apply_scripts` は拒否されます。削除は `confirm: true` が必要で、使用中のアイテムは削除できません。移動・名前変更でコード内の文字列参照は更新されません。 |
+| `edit_library` | フォルダ・シンボルの作成、アイテムの移動・名前変更・複製・削除、直接の使用箇所と未使用アイテムの確認、AS3 リンケージの読み書きを行います。 | `findUsages` はシーン・シンボル上の直接配置のみ返します（`timeline` はシーン番号またはシンボルパス、サウンドの使用は `element: null`）。`createSymbol` は一意の名前と種類、`duplicateItem` は `newName` が必要です。`getLinkage` と `setLinkage` は Flash/AS3 のみ対応します。`setLinkage` は `exportForAS`、`className`、`baseClass`、`exportInFirstFrame` を受け付けます。Export 無効時の値は `{ exportForAS: false, className: "", baseClass: "", exportInFirstFrame: false }`。class/base と first-frame export には `exportForAS: true` が必要です。リンケージを変更したら `export_scripts` を再実行してください。古い Export の `apply_scripts` は拒否されます。削除は `confirm: true` が必要で、使用中は削除できません。移動・名前変更でコード内の文字列参照は更新されません。 |
 | `install_greensock` | 保存済みの AS3 ドキュメントの隣に GreenSock-AS3 12.1.5 を GitHub から取得・配置します。 | [ライセンス](https://gsap.com/standard-license/)の確認後に `confirm: true` が必要です。`.fla` は変更・保存せず、AS2・HTML5 Canvas は対象外です。 |
 | `run_jsfl` | 任意の JSFL コードを Animate で実行して結果を返します。オブジェクトの返却値は文字列になります。 | ドキュメントやファイルを変更するコードも実行できます。変更操作の前にユーザーの確認が必要です。 |
 
@@ -198,6 +203,9 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 | `moveItem` | アイテムを別のフォルダへ移動する |
 | `renameItem` | アイテム名を変更する |
 | `deleteItem` | アイテムを削除する（`confirm: true` 必須。使用中は削除不可） |
+| `findUsages` | シーン・シンボルのタイムライン上でアイテムの直接配置を探す |
+| `createSymbol` | 一意の名前でムービークリップ・ボタン・グラフィックを作成する |
+| `duplicateItem` | `newName` を指定してアイテムを複製する |
 | `listUnused` | 未使用アイテムを一覧にする |
 | `getLinkage` | アイテムの AS3 リンケージ設定を読み取る（Flash/AS3 のみ） |
 | `setLinkage` | AS3 リンケージ設定を1つ以上更新し、読み戻し値を返す（Flash/AS3 のみ） |
@@ -233,7 +241,7 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 7. `capture_frame` を実行します。PNG 画像と保存先のパスが返ります。
 8. 未確認: モーダルダイアログが開いているときの挙動。
 
-手順 6〜7（と `edit_elements`）のスクリプト版: `npm run build` の後、対象ドキュメントを Animate でアクティブにして `node server/scripts/smoke-publish.mjs`、`smoke-capture-frame.mjs`、`smoke-edit-elements.mjs` を実行します。`node server/scripts/smoke-test-movie.mjs` は使い捨ての AS3 FLA を作成・クローズしますが、Test Movie Player は開いたままなので手動で閉じてください。`smoke-document-ops.mjs`（AS3）と `smoke-canvas.mjs`（HTML5 Canvas）は、使い捨ての保存済み FLA を作成して操作し、クローズします。
+手順 6〜7 と各ツールのスクリプト検証: `npm run build` の後、Animate を起動して `node server/scripts/smoke-publish.mjs`、`smoke-capture-frame.mjs`、`smoke-edit-elements.mjs`、`smoke-edit-library.mjs`、`smoke-edit-text.mjs`、`smoke-import-document-properties.mjs` を実行します。`node server/scripts/smoke-test-movie.mjs` は使い捨ての AS3 FLA を作成・クローズしますが、Test Movie Player は開いたままなので手動で閉じてください。`smoke-document-ops.mjs`（AS3）と `smoke-canvas.mjs`（HTML5 Canvas）は、使い捨ての保存済み FLA を作成して操作し、クローズします。
 
 ## ライセンス
 

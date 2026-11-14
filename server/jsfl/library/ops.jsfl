@@ -13,6 +13,111 @@
     return results;
   }
 
+  /** Returns direct placements of an item in scene and symbol keyframes.
+   * @param path Library item path.
+   * @returns Direct placement locations.
+   */
+  function findLibraryUsages(path) {
+    var item = findLibraryItem(path), usages = [];
+    if (!item) throw new Error("Library item not found: " + path);
+
+    function scanTimeline(timeline, timelineName) {
+      for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
+        var layer = timeline.layers[layerIndex];
+        if (layer.layerType === "folder") continue;
+        for (var frameIndex = 0; frameIndex < layer.frames.length; frameIndex++) {
+          var frame = layer.frames[frameIndex];
+          if (!frame || frame.startFrame !== frameIndex) continue;
+          if (frame.soundLibraryItem && frame.soundLibraryItem.name === path) {
+            usages.push({ timeline: timelineName, layer: layer.name, frame: frameIndex + 1, element: null });
+          }
+          var elements = frame.elements || [];
+          for (var elementIndex = 0; elementIndex < elements.length; elementIndex++) {
+            var element = elements[elementIndex];
+            if (element.libraryItem && element.libraryItem.name === path) {
+              usages.push({ timeline: timelineName, layer: layer.name, frame: frameIndex + 1, element: elementIndex });
+            }
+          }
+        }
+      }
+    }
+
+    for (var sceneIndex = 0; sceneIndex < document.timelines.length; sceneIndex++) {
+      var scene = document.timelines[sceneIndex];
+      scanTimeline(scene, sceneIndex);
+    }
+    var libraryItems = document.library.items;
+    for (var itemIndex = 0; itemIndex < libraryItems.length; itemIndex++) {
+      var symbol = libraryItems[itemIndex];
+      if (symbol.itemType !== "movie clip" && symbol.itemType !== "button" && symbol.itemType !== "graphic") continue;
+      libraryChanged = true;
+      document.library.editItem(symbol.name);
+      scanTimeline(document.getTimeline(), symbol.name);
+    }
+    return { item: path, usages: usages };
+  }
+
+  /** Creates an empty Library symbol after checking the plain name for collisions.
+   * @param op Symbol creation operation.
+   * @returns Created symbol details.
+   */
+  function createLibrarySymbol(op) {
+    var allowedTypes = ["movie clip", "button", "graphic"];
+    if (allowedTypes.indexOf(op.type) < 0) throw new Error("Unsupported symbol type: " + op.type);
+    if (typeof op.name !== "string" || !op.name || op.name.indexOf("/") >= 0) {
+      throw new Error("name must be a required plain Library name without a folder path");
+    }
+    if (document.library.itemExists(op.name)) throw new Error("Library item already exists: " + op.name);
+    libraryChanged = true;
+    document.library.selectNone(); // a selected folder would receive the new item
+    if (!document.library.addNewItem(op.type, op.name)) throw new Error("Library symbol creation failed: " + op.name);
+    var created = findLibraryItem(op.name);
+    if (!created) throw new Error("Library symbol creation failed: " + op.name);
+    return { name: created.name, type: created.itemType };
+  }
+
+  /** Duplicates a Library item and renames Animate's generated copy.
+   * @param op Item duplication operation.
+   * @returns The new Library item details.
+   */
+  function duplicateLibraryItem(op) {
+    var item = findLibraryItem(op.item);
+    if (!item) throw new Error("Library item not found: " + op.item);
+    if (item.itemType === "folder") throw new Error("Library folders cannot be duplicated: " + op.item);
+    if (typeof op.newName !== "string" || !op.newName || op.newName.indexOf("/") >= 0) {
+      throw new Error("newName must be a required plain Library name without a folder path");
+    }
+    var parent = libraryParent(op.item), targetPath = parent ? parent + "/" + op.newName : op.newName;
+    if (document.library.itemExists(targetPath)) throw new Error("Destination item already exists: " + targetPath);
+
+    var originalItems = document.library.items.slice();
+    libraryChanged = true;
+    if (!document.library.duplicateItem(op.item)) throw new Error("Library item duplication failed: " + op.item);
+    var copies = [];
+    for (var copyIndex = 0; copyIndex < document.library.items.length; copyIndex++) {
+      var candidate = document.library.items[copyIndex], existed = false;
+      for (var originalIndex = 0; originalIndex < originalItems.length; originalIndex++) {
+        if (originalItems[originalIndex] === candidate) existed = true;
+      }
+      if (!existed && candidate.itemType === item.itemType && libraryParent(candidate.name) === parent) copies.push(candidate);
+    }
+    if (copies.length !== 1) throw new Error("Could not identify the duplicated Library item: " + op.item);
+    try {
+      withSelectedLibraryItem(copies[0], function () {
+        document.library.renameItem(op.newName, copies[0].name);
+      });
+      if (!document.library.itemExists(targetPath)) throw new Error("Library item rename failed: " + targetPath);
+    } catch (error) {
+      throw new Error(
+        "Could not rename duplicated item; generated copy may remain as " +
+          copies[0].name +
+          ": " +
+          String(error && error.message ? error.message : error)
+      );
+    }
+    return { name: targetPath, itemType: item.itemType };
+  }
+
   /** Rejects deletion when an item or any non-folder descendant is in use.
    * @param path Library item path.
    * @param item The item at path.
@@ -154,6 +259,15 @@
     var item, targetPath, parent, linked;
     if (op.op === "listUnused") {
       return { items: listUnusedItems() };
+    }
+    if (op.op === "findUsages") {
+      return findLibraryUsages(op.item);
+    }
+    if (op.op === "createSymbol") {
+      return createLibrarySymbol(op);
+    }
+    if (op.op === "duplicateItem") {
+      return duplicateLibraryItem(op);
     }
     if (op.op === "getLinkage") {
       return applyLinkageOp(op, false);
