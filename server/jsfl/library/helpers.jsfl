@@ -41,11 +41,11 @@
     return !!(item.linkageExportForAS || item.linkageIdentifier || item.linkageClassName);
   }
 
-  /** Returns the warning for linkage-bearing items whose code references cannot be updated.
+  /** Returns the warning for linkage-bearing items whose code references are not updated by a library operation.
    * @returns The linkage warning text.
    */
   function libraryLinkageWarning() {
-    return "Code-string references (attachMovie, linkage IDs, and class names) cannot be detected or updated; linkage metadata is unchanged.";
+    return "Code-string references (attachMovie, linkage IDs, and class names) are not updated by this library operation; use getLinkage/setLinkage to inspect or edit AS3 linkage metadata.";
   }
 
   /** Tests whether a path appears in Animate's unusedItems list.

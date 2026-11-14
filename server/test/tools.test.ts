@@ -35,7 +35,7 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
             edit_elements: {
                 readOnlyHint: false,
                 destructiveHint: true,
-                idempotentHint: true,
+                idempotentHint: false,
                 openWorldHint: false,
             },
             edit_tween: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },

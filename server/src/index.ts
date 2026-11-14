@@ -42,7 +42,7 @@ Basic flow:
 - If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).
 - For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.
 - Use publish to publish AS3 or HTML5 Canvas documents and check the Build result; outputs at the document's publish settings are overwritten. Canvas compile errors cannot be detected.
-- Use capture_frame to inspect the active timeline as a PNG; it saves a new image under ~/.animate-mcp/captures/<document>/ and restores the current frame.
+- Use capture_frame to inspect the active timeline as PNG images; request one frame or an inclusive range of up to 24 frames. It saves new images under ~/.animate-mcp/captures/<document>/ and restores the current frame.
 
 Notes:
 - When several documents are open, document is required. get_document_info returns the name.

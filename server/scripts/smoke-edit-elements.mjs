@@ -110,6 +110,48 @@ try {
         console.log(`${kind} tween-interior rejection: passed`);
     }
 
+    for (const [layer, kind] of [
+        ["classic", "classic"],
+        ["motion", "motion"],
+    ]) {
+        const before = verifyTool(
+            await inspectTimeline({ document: documentName, timeline: 0, layers: [layer], frame: 1 }),
+            `inspect ${kind} tween start`,
+        );
+        const startRejected = await editElements({
+            document: documentName,
+            timeline: 0,
+            ops: [{ op: "add", item: "EditElementsSmokeSymbol", layer, frame: 1 }],
+        });
+        assert.equal(startRejected.isError, true, `${kind} tween start was accepted`);
+        assert.match(message(startRejected), /tween/i);
+        const after = verifyTool(
+            await inspectTimeline({ document: documentName, timeline: 0, layers: [layer], frame: 1 }),
+            `verify ${kind} tween start unchanged`,
+        );
+        assert.equal(after.layers[0].frameCount, before.layers[0].frameCount);
+        assert.equal(after.layers[0].elements.length, before.layers[0].elements.length);
+        console.log(`${kind} tween-start rejection: passed`);
+    }
+
+    const motionBeforeExtension = verifyTool(
+        await inspectTimeline({ document: documentName, timeline: 0, layers: ["motion"], frame: 1 }),
+        "inspect motion tween before extension rejection",
+    );
+    const extensionRejected = await editElements({
+        document: documentName,
+        timeline: 0,
+        ops: [{ op: "add", item: "EditElementsSmokeSymbol", layer: "motion", frame: 7 }],
+    });
+    assert.equal(extensionRejected.isError, true, "extension of a tween span was accepted");
+    assert.match(message(extensionRejected), /tween/i);
+    const motionAfterExtension = verifyTool(
+        await inspectTimeline({ document: documentName, timeline: 0, layers: ["motion"], frame: 1 }),
+        "verify motion tween unchanged after extension rejection",
+    );
+    assert.equal(motionAfterExtension.layers[0].frameCount, motionBeforeExtension.layers[0].frameCount);
+    console.log("motion tween timeline-extension rejection: passed");
+
     const locked = verifyTool(
         await editElements({
             document: documentName,
@@ -137,6 +179,38 @@ try {
     near(transformed.elements[0].x, 124, "position after scale and rotation");
     near(transformed.elements[0].y, 86, "vertical position after scale and rotation");
     console.log("position with scale and rotation: passed");
+
+    const placed = verifyTool(
+        await editElements({
+            document: documentName,
+            timeline: 0,
+            ops: [
+                { op: "add", item: "EditElementsSmokeSymbol", layer: "static", frame: 7, x: 123, y: 234.05, set: { name: "placedSmoke", scaleX: 1.25 } },
+                { op: "add", item: "EditElementsSmokeSymbol", layer: "static", frame: 7, x: 321, y: 123, set: { name: "secondPlacedSmoke" } },
+                { op: "add", item: "EditElementsSmokeSymbol", layer: "static", frame: 7, set: { name: "centerPlacedSmoke" } },
+            ],
+        }),
+        "place Library item on a new layer and extended frame",
+    );
+    assert.deepEqual(placed.elements.map((element) => [element.name, element.layer, element.frame]), [
+        ["placedSmoke", "static_idn", 7],
+        ["secondPlacedSmoke", "static_idn", 7],
+        ["centerPlacedSmoke", "static_idn", 7],
+    ]);
+    near(placed.elements[0].x, 123, "explicit placement x");
+    near(placed.elements[0].y, 234.05, "explicit placement y");
+    near(placed.elements[1].x, 321, "second explicit placement x");
+    near(placed.elements[1].y, 123, "second explicit placement y");
+    const placedInspect = verifyTool(
+        await inspectTimeline({ document: documentName, timeline: 0, layers: ["static_idn"], frame: 7 }),
+        "inspect placed Library item",
+    );
+    assert.deepEqual(placedInspect.layers[0].elements.map((element) => [element.name, element.x, element.y]), [
+        ["placedSmoke", 123, 234.05],
+        ["secondPlacedSmoke", 321, 123],
+        ["centerPlacedSmoke", 275, 200],
+    ]);
+    console.log("Library placement, layer creation, and timeline extension: passed");
 
     const filters = [{ name: "blurFilter", blurX: 8, blurY: 4, quality: "high", enabled: false }];
     verifyTool(

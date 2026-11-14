@@ -48,23 +48,34 @@ const EDIT_ELEMENT_SET = z
     .strict()
     .refine((set) => Object.keys(set).length > 0, "set requires at least one field");
 
+const EDIT_ELEMENT_OP = z.union([
+    z
+        .object({
+            op: z.literal("add"),
+            item: z.string().min(1),
+            layer: z.string().min(1),
+            frame: z.number().int().positive(),
+            x: z.number().finite().optional(),
+            y: z.number().finite().optional(),
+            set: EDIT_ELEMENT_SET.optional(),
+        })
+        .strict(),
+    z
+        .object({
+            layer: z.union([z.number().int().nonnegative(), z.string().min(1)]),
+            frame: z.number().int().positive(),
+            element: z.union([z.number().int().nonnegative(), z.string().min(1)]),
+            set: EDIT_ELEMENT_SET,
+        })
+        .strict(),
+]);
+
 const EDIT_ELEMENTS_INPUT = {
     timeline: z
         .union([z.number().int().nonnegative(), z.string().min(1)])
         .describe("Scene index (0-based number) or library item path (string)"),
     document: z.string().optional(),
-    ops: z
-        .array(
-            z
-                .object({
-                    layer: z.union([z.number().int().nonnegative(), z.string().min(1)]),
-                    frame: z.number().int().positive(),
-                    element: z.union([z.number().int().nonnegative(), z.string().min(1)]),
-                    set: EDIT_ELEMENT_SET,
-                })
-                .strict(),
-        )
-        .min(1),
+    ops: z.array(EDIT_ELEMENT_OP).min(1),
 };
 
 /** Registers the edit_elements tool.
@@ -103,8 +114,8 @@ export function registerEditElements(
         "edit_elements",
         {
             description:
-                "Set symbol-instance properties on 1-based keyframes in a scene or library-symbol timeline. Layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors and non-instance elements are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Supplying filters replaces all existing filters; [] clears them. Read-back element fields match inspect_timeline, plus layer/frame/element references. Animate may quantize transform values. Changes do not save the .fla; save it in Animate.",
-            annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+                "Set symbol-instance properties on 1-based keyframes in a scene or library-symbol timeline, or add a Library item to a named layer and frame. Add creates a missing layer and extends the timeline; omitted coordinates use the stage center. Existing layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors and non-instance elements are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Supplying filters replaces all existing filters; [] clears them. Read-back element fields match inspect_timeline, plus layer/frame/element references. Animate may quantize transform values. Changes do not save the .fla; save it in Animate.",
+            annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
             inputSchema: EDIT_ELEMENTS_INPUT,
         },
         handleEditElements,

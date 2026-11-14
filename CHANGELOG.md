@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `edit_elements` can add a Library item to a named layer and frame (`{ op: "add", item, layer, frame, x?, y?, set? }`), creating the layer and extending the timeline if needed. Omitted coordinates default to the stage center.
+- `edit_library` gained `getLinkage` and `setLinkage` to read and update AS3 linkage (`exportForAS`, `className`, `baseClass`, `exportInFirstFrame`) on Flash/AS3 documents. HTML5 Canvas linkage is not supported.
+- `capture_frame` accepts `range: { start, end, step? }` to capture up to 24 frames as ordered PNG images, returned in `structuredContent.captures`.
+
+### Changed
+
+- `edit_elements` is no longer marked idempotent (`idempotentHint: false`), because `add` creates new elements on each call.
+
 ## 0.1.7
 
 ### Added
