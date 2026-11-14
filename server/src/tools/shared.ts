@@ -1,6 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
-import type { createRunner } from "../runner.js";
+import type { createRunner } from "../runtime/runner.js";
 
 export type ToolDeps = {
     runner: Pick<ReturnType<typeof createRunner>, "execute">;

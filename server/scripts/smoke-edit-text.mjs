@@ -1,8 +1,8 @@
 // Real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-edit-text.mjs`.
 // Creates and closes disposable AS3 and HTML5 Canvas documents; Animate must be running.
 import assert from "node:assert/strict";
-import { registerEditText } from "../dist/tools/edit-text.js";
-import { registerInspectTimeline } from "../dist/tools/inspect-timeline.js";
+import { registerEditText } from "../dist/tools/timeline/edit-text.js";
+import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
 import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
 import { toolHandler } from "./smoke-lib.mjs";
 

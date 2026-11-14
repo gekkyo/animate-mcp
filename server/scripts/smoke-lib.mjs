@@ -1,9 +1,9 @@
 // Shared setup for real-Animate smoke scripts (not in CI). Run `npm run build` first.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { isAnimateRunning, launcher } from "../dist/animate-launcher.js";
-import { bundle } from "../dist/jsfl-bundle.js";
-import { createRunner } from "../dist/runner.js";
+import { isAnimateRunning, launcher } from "../dist/runtime/animate-launcher.js";
+import { bundle } from "../dist/runtime/jsfl-bundle.js";
+import { createRunner } from "../dist/runtime/runner.js";
 
 const execFileAsync = promisify(execFile);
 const MODAL_QUERY = `tell application "System Events"

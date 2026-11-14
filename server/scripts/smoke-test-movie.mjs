@@ -4,7 +4,7 @@ import { mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { registerTestMovie } from "../dist/tools/test-movie.js";
+import { registerTestMovie } from "../dist/tools/output/test-movie.js";
 import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "./smoke-lib.mjs";
 
