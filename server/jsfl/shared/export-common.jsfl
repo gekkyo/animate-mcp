@@ -112,9 +112,11 @@ function structureFingerprint(timeline) {
  * @returns The library fingerprint.
  */
 function libraryFingerprint(library) {
-  var items = [], libraryItems = library.items;
+  var items = [], libraryItems = library.items, item, linked;
   for (var itemIndex = 0; itemIndex < libraryItems.length; itemIndex++) {
-    items.push(String(libraryItems[itemIndex].itemType || "") + "|" + String(libraryItems[itemIndex].name || ""));
+    item = libraryItems[itemIndex];
+    linked = item.linkageExportForAS === true;
+    items.push(String(item.itemType || "") + "|" + String(item.name || "") + "|" + String(linked) + "|" + (linked ? String(item.linkageClassName || "") : ""));
   }
   items.sort();
   return fnv1a32(serialize(items));

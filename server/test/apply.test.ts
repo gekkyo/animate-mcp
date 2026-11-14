@@ -290,6 +290,29 @@ test(
         }),
 );
 
+test("apply_scripts refuses edits after AS3 linkage changes since Export", { timeout: 30_000 }, async () => {
+    for (const linkageChange of ["class", "disabled"]) {
+        await withServer({ FAKE_LINKAGE_CONFLICT: linkageChange }, async (client, tempDir) => {
+            const exportDir = join(tempDir, "out");
+            await client.callTool({ name: "export_scripts", arguments: { dir: exportDir } });
+            await writeFile(join(exportDir, SCENE_FILE), "scene change");
+            const libraryFile = "library/dir/Hero/L/1.as";
+            await writeFile(join(exportDir, libraryFile), "symbol change");
+
+            const result = await client.callTool({ name: "apply_scripts", arguments: { dir: exportDir } });
+            const summary = result.structuredContent as {
+                applied: string[];
+                failed: { file: string; error: string }[];
+            };
+            assert.deepEqual(summary.applied, []);
+            assert.deepEqual(summary.failed.map((failure) => failure.file).sort(), [SCENE_FILE, libraryFile].sort());
+            assert.ok(
+                summary.failed.every((failure) => failure.error === "Library changed since Export; export again"),
+            );
+        });
+    }
+});
+
 test("apply_scripts accepts hand-placed files in known layers and warns for unknown layers", { timeout: 30_000 }, () =>
     withServer({ FAKE_SECOND_LAYER: "Other" }, async (client, tempDir) => {
         const exportDir = join(tempDir, "out");

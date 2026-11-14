@@ -10,6 +10,8 @@
 
 ### Changed
 
+- `apply_scripts` detects linkage export/class-name changes after `export_scripts` and rejects stale exports. Existing exports created before this fingerprint change must be re-exported; preserve any unapplied script edits before using `force: true` (which discards them).
+- `publish` now reports `compilerOutput` as `verified`, `unavailable`, or `not_checked` (HTML5 Canvas); `ok: true` with unavailable or unchecked diagnostics does not confirm an error-free build.
 - `edit_elements` is no longer marked idempotent (`idempotentHint: false`), because `add` creates new elements on each call.
 
 ## 0.1.7

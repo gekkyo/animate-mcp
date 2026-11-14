@@ -784,6 +784,11 @@ if (process.env.FAKE_CONFLICT_NEW && src.includes("var __newScripts")) {
   const newFrame = Object.assign({}, oldFrame, { startFrame: 3, duration: end - 3, actionScript: "changed in Animate" });
   for (let index = 3; index < end; index++) { targetLayer.frames[index] = newFrame; }
 }
+if (process.env.FAKE_LINKAGE_CONFLICT && src.includes("var __newScripts")) {
+  const hero = docs[0].library.items.find((item) => item.name === "dir/Hero");
+  if (process.env.FAKE_LINKAGE_CONFLICT === "class") hero.linkageClassName = "com.RenamedHero";
+  else if (process.env.FAKE_LINKAGE_CONFLICT === "disabled") hero.linkageExportForAS = false;
+}
 if (!src.includes("HANG")) runInNewContext(src, {
   FLfile: {
     /**
