@@ -233,7 +233,7 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 7. `capture_frame` を実行します。PNG 画像と保存先のパスが返ります。
 8. 未確認: モーダルダイアログが開いているときの挙動。
 
-手順 6〜7（と `edit_elements`）のスクリプト版: `npm run build` の後、対象ドキュメントを Animate でアクティブにして `node server/scripts/smoke-publish.mjs`、`smoke-capture-frame.mjs`、`smoke-edit-elements.mjs` を実行します。`node server/scripts/smoke-test-movie.mjs` は使い捨ての AS3 FLA を作成・クローズしますが、Test Movie Player は開いたままなので手動で閉じてください。
+手順 6〜7（と `edit_elements`）のスクリプト版: `npm run build` の後、対象ドキュメントを Animate でアクティブにして `node server/scripts/smoke-publish.mjs`、`smoke-capture-frame.mjs`、`smoke-edit-elements.mjs` を実行します。`node server/scripts/smoke-test-movie.mjs` は使い捨ての AS3 FLA を作成・クローズしますが、Test Movie Player は開いたままなので手動で閉じてください。`smoke-document-ops.mjs`（AS3）と `smoke-canvas.mjs`（HTML5 Canvas）は、使い捨ての保存済み FLA を作成して操作し、クローズします。
 
 ## ライセンス
 

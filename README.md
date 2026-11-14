@@ -233,7 +233,7 @@ Client config: `node /path/to/animate-mcp/server/dist/index.js` (stdio).
 7. Run `capture_frame`. It returns a PNG image and its saved path.
 8. Unverified: behavior while a modal dialog is open.
 
-Scripted versions of steps 6–7 (and `edit_elements`): `node server/scripts/smoke-publish.mjs`, `smoke-capture-frame.mjs`, `smoke-edit-elements.mjs` after `npm run build`, with the target document active in Animate. `node server/scripts/smoke-test-movie.mjs` creates and closes a disposable AS3 FLA; it leaves the Test Movie Player open for you to close manually.
+Scripted versions of steps 6–7 (and `edit_elements`): `node server/scripts/smoke-publish.mjs`, `smoke-capture-frame.mjs`, `smoke-edit-elements.mjs` after `npm run build`, with the target document active in Animate. `node server/scripts/smoke-test-movie.mjs` creates and closes a disposable AS3 FLA; it leaves the Test Movie Player open for you to close manually. `smoke-document-ops.mjs` (AS3) and `smoke-canvas.mjs` (HTML5 Canvas) each create, exercise and close a disposable saved FLA.
 
 ## License
 
