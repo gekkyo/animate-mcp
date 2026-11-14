@@ -1,9 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { createRunner } from "../runner.js";
-import { failure } from "./shared.js";
-
-type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "./shared.js";
 
 const RUN_JSFL_INPUT = {
     code: z
@@ -13,38 +10,23 @@ const RUN_JSFL_INPUT = {
         ),
 };
 
-/**
- * Registers the run_jsfl tool.
- * @param server MCP server to register the tool with
- * @param deps Dependencies used to execute JSFL
- * @returns Nothing
- */
-export function registerRunJsfl(server: McpServer, deps: { runner: Runner }): void {
-    const { runner } = deps;
-    /** Executes arbitrary JSFL and returns its result.
-     * @param code JSFL source to execute
-     * @returns Tool result containing the JSFL value, or an MCP error result
-     */
-    const handleRunJsfl: ToolCallback<typeof RUN_JSFL_INPUT> = async ({ code }) => {
-        try {
-            const result = await runner.execute(code);
-            return {
-                content: [{ type: "text", text: JSON.stringify(result) ?? "null" }],
-                structuredContent: { result },
-            };
-        } catch (error) {
-            return failure(error);
-        }
-    };
+export const runJsflTool: ToolDefinition<typeof RUN_JSFL_INPUT> = {
+    name: "run_jsfl",
+    description:
+        "Execute arbitrary code as JSFL inside Adobe Animate; it may modify documents or files. Prefer dedicated tools for document, timeline, tween, library, and script operations, and use run_jsfl only as a last resort when they cannot accomplish the task.",
+    inputSchema: RUN_JSFL_INPUT,
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+    guidance: {
+        notes: "- When a script fails with a null error, first check the layer's frame length and instance names with run_jsfl.\n- If you add debug traces, always remove them after checking and Apply again.\n- run_jsfl runs arbitrary code. Ask the user before any operation that modifies the document.",
+    },
+    run: async ({ code }: Parameters<ToolCallback<typeof RUN_JSFL_INPUT>>[0], deps: ToolDeps) => {
+        const { runner } = deps;
 
-    server.registerTool(
-        "run_jsfl",
-        {
-            description:
-                "Execute arbitrary code as JSFL inside Adobe Animate; it may modify documents or files. Prefer dedicated tools for document, timeline, tween, library, and script operations, and use run_jsfl only as a last resort when they cannot accomplish the task.",
-            inputSchema: RUN_JSFL_INPUT,
-            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-        },
-        handleRunJsfl,
-    );
+        const result = await runner.execute(code);
+        return { data: { result }, text: JSON.stringify(result) ?? "null" };
+    },
+};
+
+export function registerRunJsfl(server: McpServer, deps: Pick<ToolDeps, "runner">): void {
+    registerToolDefinition(server, runJsflTool, { ...deps, bundle: () => "" });
 }

@@ -9,92 +9,68 @@ import {
     isGreensockInstalled,
 } from "../greensock/greensock.js";
 import { jsflRun } from "../jsfl-bundle.js";
-import type { createRunner } from "../runner.js";
-import { failure } from "./shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "./shared.js";
 
-type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
 const INSTALL_GREENSOCK_INPUT = { confirm: z.boolean().optional(), document: z.string().optional() };
 
-/** Registers the install_greensock tool.
- * @param server MCP server to register the tool with
- * @param deps Runner and JSFL bundle dependencies
- * @returns Nothing
- */
-export function registerInstallGreensock(
-    server: McpServer,
-    deps: { runner: Runner; bundle: (...names: string[]) => string },
-): void {
-    const { runner, bundle } = deps;
-    /** Installs GreenSock-AS3 beside the selected saved ActionScript 3 document.
-     * @param confirm Whether the user confirmed the licensed download
-     * @param document Optional document name to select
-     * @returns Tool result with installation status or an MCP error
-     */
-    const handleInstallGreensock: ToolCallback<typeof INSTALL_GREENSOCK_INPUT> = async ({ confirm, document }) => {
-        try {
-            const code = `${jsflRun(
-                ["select-document", "export-common", "document-runtime-info"],
-                { __docName: document ?? "" },
-                bundle,
-            )}\nserialize(documentRuntimeInfo(selectDocument()))`;
-            const info = JSON.parse(String(await runner.execute(code))) as {
-                folder: string | null;
-                kind: "as3" | "as2" | "canvas" | "other";
-                name: string;
-            };
-            if (!info.folder) {
-                throw new Error("Save the document first");
-            }
-            const destination = join(info.folder, "com", "greensock");
-            if (info.kind === "canvas") {
-                throw new Error("For HTML5 Canvas, use createjs.Tween instead; GSAP is not supported for Canvas.");
-            }
-            if (info.kind === "as2") {
-                throw new Error("GreenSock-AS3 can only be installed in AS3 documents; this is an AS2 document.");
-            }
-            if (info.kind !== "as3") {
-                throw new Error("GreenSock-AS3 can only be installed in ActionScript 3 documents.");
-            }
-            if (confirm !== true) {
-                throw new Error(
-                    `GreenSock will be installed to ${destination}. Review the GreenSock Standard License at ${GREEN_SOCK_LICENSE_URL}, then pass confirm: true to continue.`,
-                );
-            }
-            if (isGreensockInstalled(info.folder)) {
-                return {
-                    content: [
-                        { type: "text", text: `GreenSock already installed: ${join(destination, "TweenLite.as")}` },
-                    ],
-                    structuredContent: { installed: true, path: join(destination, "TweenLite.as") },
-                };
-            }
-            if (existsSync(destination)) {
-                throw new Error("Folder com/greensock exists but is incomplete; remove it and retry");
-            }
+export const installGreensockTool: ToolDefinition<typeof INSTALL_GREENSOCK_INPUT> = {
+    name: "install_greensock",
+    description:
+        "Download GreenSock-AS3 12.1.5 into com/greensock beside a saved AS3 document. Requires confirm: true after reviewing https://gsap.com/standard-license/; does not modify or save the .fla. Not supported for AS2 or HTML5 Canvas.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: true },
+    inputSchema: INSTALL_GREENSOCK_INPUT,
+    guidance: {
+        basic: "- If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).\n- For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.",
+    },
+    run: async ({ confirm, document }: Parameters<ToolCallback<typeof INSTALL_GREENSOCK_INPUT>>[0], deps: ToolDeps) => {
+        const { runner, bundle } = deps;
 
-            await installGreensock(info.folder);
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Installed GreenSock-AS3 ${GREEN_SOCK_VERSION} at ${destination}. GreenSock Standard License, ${GREEN_SOCK_LICENSE_URL} — fetched from GitHub on your request, not bundled. The .fla was not modified or saved; the AS3 default classpath (the FLA folder) picks it up.`,
-                    },
-                ],
-                structuredContent: { installed: true, path: destination, version: GREEN_SOCK_VERSION },
-            };
-        } catch (error) {
-            return failure(error);
+        const code = `${jsflRun(
+            ["select-document", "export-common", "document-runtime-info"],
+            { __docName: document ?? "" },
+            bundle,
+        )}\nserialize(documentRuntimeInfo(selectDocument()))`;
+        const info = JSON.parse(String(await runner.execute(code))) as {
+            folder: string | null;
+            kind: "as3" | "as2" | "canvas" | "other";
+            name: string;
+        };
+        if (!info.folder) {
+            throw new Error("Save the document first");
         }
-    };
+        const destination = join(info.folder, "com", "greensock");
+        if (info.kind === "canvas") {
+            throw new Error("For HTML5 Canvas, use createjs.Tween instead; GSAP is not supported for Canvas.");
+        }
+        if (info.kind === "as2") {
+            throw new Error("GreenSock-AS3 can only be installed in AS3 documents; this is an AS2 document.");
+        }
+        if (info.kind !== "as3") {
+            throw new Error("GreenSock-AS3 can only be installed in ActionScript 3 documents.");
+        }
+        if (confirm !== true) {
+            throw new Error(
+                `GreenSock will be installed to ${destination}. Review the GreenSock Standard License at ${GREEN_SOCK_LICENSE_URL}, then pass confirm: true to continue.`,
+            );
+        }
+        if (isGreensockInstalled(info.folder)) {
+            return {
+                data: { installed: true, path: join(destination, "TweenLite.as") },
+                text: `GreenSock already installed: ${join(destination, "TweenLite.as")}`,
+            };
+        }
+        if (existsSync(destination)) {
+            throw new Error("Folder com/greensock exists but is incomplete; remove it and retry");
+        }
 
-    server.registerTool(
-        "install_greensock",
-        {
-            description:
-                "Download GreenSock-AS3 12.1.5 into com/greensock beside a saved AS3 document. Requires confirm: true after reviewing https://gsap.com/standard-license/; does not modify or save the .fla. Not supported for AS2 or HTML5 Canvas.",
-            annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: true },
-            inputSchema: INSTALL_GREENSOCK_INPUT,
-        },
-        handleInstallGreensock,
-    );
+        await installGreensock(info.folder);
+        return {
+            data: { installed: true, path: destination, version: GREEN_SOCK_VERSION },
+            text: `Installed GreenSock-AS3 ${GREEN_SOCK_VERSION} at ${destination}. GreenSock Standard License, ${GREEN_SOCK_LICENSE_URL} — fetched from GitHub on your request, not bundled. The .fla was not modified or saved; the AS3 default classpath (the FLA folder) picks it up.`,
+        };
+    },
+};
+
+export function registerInstallGreensock(server: McpServer, deps: ToolDeps): void {
+    registerToolDefinition(server, installGreensockTool, deps);
 }

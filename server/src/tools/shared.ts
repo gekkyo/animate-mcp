@@ -1,3 +1,29 @@
+import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import type { createRunner } from "../runner.js";
+
+export type ToolDeps = {
+    runner: Pick<ReturnType<typeof createRunner>, "execute">;
+    bundle: (...names: string[]) => string;
+};
+
+export type ToolExtra = Parameters<ToolCallback>[0];
+
+export type ToolRunResult = {
+    data: Record<string, unknown>;
+    text?: string;
+    content?: CallToolResult["content"];
+};
+
+export type ToolDefinition<S = unknown> = {
+    name: string;
+    description: string;
+    annotations?: ToolAnnotations;
+    inputSchema?: S;
+    guidance: { basic?: string; notes?: string };
+    run: (args: never, deps: ToolDeps, extra: ToolExtra) => Promise<ToolRunResult>;
+};
+
 /**
  * Converts a tool exception into an MCP error result.
  * @param error The caught value
@@ -7,6 +33,35 @@ export const failure = (error: unknown) => ({
     content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
     isError: true,
 });
+
+/** Registers a tool definition and converts its result to the MCP response envelope. */
+export function registerToolDefinition(server: McpServer, tool: ToolDefinition, deps: ToolDeps): void {
+    const invoke = async (args: unknown, extra: ToolExtra) => {
+        try {
+            const { data, text, content } = await tool.run(args as never, deps, extra);
+            return {
+                content: content ?? [{ type: "text" as const, text: text ?? JSON.stringify(data) ?? "null" }],
+                structuredContent: data,
+            };
+        } catch (error) {
+            return failure(error);
+        }
+    };
+    const handler =
+        tool.inputSchema === undefined
+            ? (extra: ToolExtra) => invoke({}, extra)
+            : (args: unknown, extra: ToolExtra) => invoke(args, extra);
+
+    server.registerTool(
+        tool.name,
+        {
+            description: tool.description,
+            ...(tool.annotations ? { annotations: tool.annotations } : {}),
+            ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}),
+        } as never,
+        handler as never,
+    );
+}
 
 /** Timelines handled per Run (to avoid timeouts) */
 export const TIMELINES_PER_RUN = 10;

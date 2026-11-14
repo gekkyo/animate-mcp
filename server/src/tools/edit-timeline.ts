@@ -1,10 +1,8 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../jsfl-bundle.js";
-import type { createRunner } from "../runner.js";
-import { failure } from "./shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "./shared.js";
 
-type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
 const EDIT_TIMELINE_OP = z.discriminatedUnion("op", [
     z.object({
         op: z.literal("addLayer"),
@@ -105,54 +103,37 @@ const EDIT_TIMELINE_INPUT = {
     document: z.string().optional(),
 };
 
-/**
- * Registers the edit_timeline tool.
- * @param server MCP server to register the tool with
- * @param deps Runner and JSFL bundle dependencies
- * @returns Nothing
- */
-export function registerEditTimeline(
-    server: McpServer,
-    deps: { runner: Runner; bundle: (...names: string[]) => string },
-): void {
-    const { runner, bundle } = deps;
-    /** Edits one timeline's layer and frame structure, then requires a fresh Export.
-     * @param timeline Scene index (zero-based number) or library item path (string)
-     * @param ops Ordered layer and frame operations
-     * @param document Optional document name to select
-     * @returns Tool result containing applied, failed, skipped, warning, and layer details
-     */
-    const handleEditTimeline: ToolCallback<typeof EDIT_TIMELINE_INPUT> = async ({ timeline, ops, document }) => {
-        try {
-            const code = jsflRun(
-                "timeline-index",
-                { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
-                bundle,
-            );
-            const result = JSON.parse(String(await runner.execute(code))) as {
-                applied: ((typeof ops)[number] & { createdLayers?: string[] })[];
-                failed: { op: (typeof ops)[number]; error: string } | null;
-                skipped: typeof ops;
-                warnings: string[];
-                layers: { name: string; type: string; parent?: string; locked: boolean }[];
-            };
-            return {
-                content: [{ type: "text", text: `Export again before apply_scripts.\n${JSON.stringify(result)}` }],
-                structuredContent: result,
-            };
-        } catch (error) {
-            return failure(error);
-        }
-    };
+export const editTimelineTool: ToolDefinition<typeof EDIT_TIMELINE_INPUT> = {
+    name: "edit_timeline",
+    description:
+        "Edit layers (addLayer, deleteLayer, moveLayer, renameLayer, setLayerType, distributeToLayers) and frames (insertFrames, removeFrames, insertKeyframe, clearKeyframe, setLabel, setSpanLength, shiftLayerFrames) in order. Layer references use a name and optional zero-based index; frame numbers are 1-based. distributeToLayers splits a single-span layer of symbol instances into one layer per instance. shiftLayerFrames moves one layer's full content later without shifting other layers; it uses cut/paste (overwrites the clipboard, and if it fails midway the layer may be left changed: undo in Animate). Stops at the first failed op. deleteLayer and removeFrames require confirm: true. Tween interiors reject frame insertion/removal/keyframe changes. Always run export_scripts again before editing or applying scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    inputSchema: EDIT_TIMELINE_INPUT,
+    guidance: {
+        basic: "- Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.",
+    },
+    run: async (
+        { timeline, ops, document }: Parameters<ToolCallback<typeof EDIT_TIMELINE_INPUT>>[0],
+        deps: ToolDeps,
+    ) => {
+        const { runner, bundle } = deps;
 
-    server.registerTool(
-        "edit_timeline",
-        {
-            description:
-                "Edit layers (addLayer, deleteLayer, moveLayer, renameLayer, setLayerType, distributeToLayers) and frames (insertFrames, removeFrames, insertKeyframe, clearKeyframe, setLabel, setSpanLength, shiftLayerFrames) in order. Layer references use a name and optional zero-based index; frame numbers are 1-based. distributeToLayers splits a single-span layer of symbol instances into one layer per instance. shiftLayerFrames moves one layer's full content later without shifting other layers; it uses cut/paste (overwrites the clipboard, and if it fails midway the layer may be left changed: undo in Animate). Stops at the first failed op. deleteLayer and removeFrames require confirm: true. Tween interiors reject frame insertion/removal/keyframe changes. Always run export_scripts again before editing or applying scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
-            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-            inputSchema: EDIT_TIMELINE_INPUT,
-        },
-        handleEditTimeline,
-    );
+        const code = jsflRun(
+            "timeline-index",
+            { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
+            bundle,
+        );
+        const result = JSON.parse(String(await runner.execute(code))) as {
+            applied: ((typeof ops)[number] & { createdLayers?: string[] })[];
+            failed: { op: (typeof ops)[number]; error: string } | null;
+            skipped: typeof ops;
+            warnings: string[];
+            layers: { name: string; type: string; parent?: string; locked: boolean }[];
+        };
+        return { data: result, text: `Export again before apply_scripts.\n${JSON.stringify(result)}` };
+    },
+};
+
+export function registerEditTimeline(server: McpServer, deps: ToolDeps): void {
+    registerToolDefinition(server, editTimelineTool, deps);
 }

@@ -1,10 +1,8 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../jsfl-bundle.js";
-import type { createRunner } from "../runner.js";
-import { failure } from "./shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "./shared.js";
 
-type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
 const EASE_PRESETS = [
     "linear",
     "quadIn",
@@ -125,54 +123,30 @@ const EDIT_TWEEN_INPUT = {
     document: z.string().optional(),
 };
 
-/**
- * Registers the edit_tween tool.
- * @param server MCP server to register the tool with
- * @param deps Runner and JSFL bundle dependencies
- * @returns Nothing
- */
-export function registerEditTween(
-    server: McpServer,
-    deps: { runner: Runner; bundle: (...names: string[]) => string },
-): void {
-    const { runner, bundle } = deps;
-    /** Applies instance-tween operations to a scene or library-item timeline.
-     * @param timeline Scene index (zero-based number) or library item path (string)
-     * @param ops Ordered tween operations
-     * @param document Optional document name to select
-     * @returns Tool result containing applied, failed, skipped, warning, and layer details
-     */
-    const handleEditTween: ToolCallback<typeof EDIT_TWEEN_INPUT> = async ({ timeline, ops, document }) => {
-        try {
-            const code = jsflRun(
-                "tween-index",
-                { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
-                bundle,
-            );
-            const result = JSON.parse(String(await runner.execute(code))) as {
-                applied: typeof ops;
-                failed: { op: (typeof ops)[number]; error: string } | null;
-                skipped: typeof ops;
-                warnings: string[];
-                layers: { name: string; type: string; parent?: string; locked: boolean }[];
-            };
-            return {
-                content: [{ type: "text", text: `Export again before apply_scripts.\n${JSON.stringify(result)}` }],
-                structuredContent: result,
-            };
-        } catch (error) {
-            return failure(error);
-        }
-    };
+export const editTweenTool: ToolDefinition<typeof EDIT_TWEEN_INPUT> = {
+    name: "edit_tween",
+    description:
+        "Create motion (default) or classic tweens for a named instance with createTween, or change easing on an existing tween with setEase. Frames are 1-based; layer references use a name and optional zero-based index. The instance must be the only element on its layer; existing tween spans are not replaced. Alpha, brightness, and tint are mutually exclusive Animate color modes. Ease presets include quad, cubic, quart, quint, sine, expo, circ, back In/Out/InOut and linear. Stops at the first failed op. Always run export_scripts again before editing or applying scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    inputSchema: EDIT_TWEEN_INPUT,
+    guidance: {
+        basic: "- Use edit_tween to animate instances; motion is the default and ease presets include quad, cubic, quart, quint, sine, expo, circ and back.",
+    },
+    run: async ({ timeline, ops, document }: Parameters<ToolCallback<typeof EDIT_TWEEN_INPUT>>[0], deps: ToolDeps) => {
+        const { runner, bundle } = deps;
 
-    server.registerTool(
-        "edit_tween",
-        {
-            description:
-                "Create motion (default) or classic tweens for a named instance with createTween, or change easing on an existing tween with setEase. Frames are 1-based; layer references use a name and optional zero-based index. The instance must be the only element on its layer; existing tween spans are not replaced. Alpha, brightness, and tint are mutually exclusive Animate color modes. Ease presets include quad, cubic, quart, quint, sine, expo, circ, back In/Out/InOut and linear. Stops at the first failed op. Always run export_scripts again before editing or applying scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
-            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-            inputSchema: EDIT_TWEEN_INPUT,
-        },
-        handleEditTween,
-    );
+        const code = jsflRun("tween-index", { __docName: document ?? "", __timelineRef: timeline, __ops: ops }, bundle);
+        const result = JSON.parse(String(await runner.execute(code))) as {
+            applied: typeof ops;
+            failed: { op: (typeof ops)[number]; error: string } | null;
+            skipped: typeof ops;
+            warnings: string[];
+            layers: { name: string; type: string; parent?: string; locked: boolean }[];
+        };
+        return { data: result, text: `Export again before apply_scripts.\n${JSON.stringify(result)}` };
+    },
+};
+
+export function registerEditTween(server: McpServer, deps: ToolDeps): void {
+    registerToolDefinition(server, editTweenTool, deps);
 }

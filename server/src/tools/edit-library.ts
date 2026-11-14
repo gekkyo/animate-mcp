@@ -1,10 +1,7 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../jsfl-bundle.js";
-import type { createRunner } from "../runner.js";
-import { failure } from "./shared.js";
-
-type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "./shared.js";
 
 const LIBRARY_PATH = z.string().regex(/^[^/]+(?:\/[^/]+)*$/);
 const EDIT_LIBRARY_OP = z.discriminatedUnion("op", [
@@ -66,53 +63,33 @@ const EDIT_LIBRARY_INPUT = {
     document: z.string().optional(),
 };
 
-/** Registers the edit_library tool.
- * @param server MCP server to register the tool with.
- * @param deps Runner and JSFL bundle dependencies.
- * @returns Nothing.
- */
-export function registerEditLibrary(
-    server: McpServer,
-    deps: { runner: Runner; bundle: (...names: string[]) => string },
-): void {
-    const { runner, bundle } = deps;
-    /** Applies ordered library operations to the selected document.
-     * @param ops Library operations to apply.
-     * @param document Optional document name to select.
-     * @returns Tool result with per-operation results, failure, skipped operations, and warnings.
-     */
-    const handleEditLibrary: ToolCallback<typeof EDIT_LIBRARY_INPUT> = async ({ ops, document }) => {
-        try {
-            const code = jsflRun("library-index", { __docName: document ?? "", __ops: ops }, bundle);
-            const result = JSON.parse(String(await runner.execute(code))) as {
-                applied: typeof ops;
-                results: { op: (typeof ops)[number]; result: unknown }[];
-                failed: { op: (typeof ops)[number]; error: string } | null;
-                skipped: typeof ops;
-                warnings: string[];
-            };
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `If library structure changed, run export_scripts again before apply_scripts.\n${JSON.stringify(result)}`,
-                    },
-                ],
-                structuredContent: result,
-            };
-        } catch (error) {
-            return failure(error);
-        }
-    };
+export const editLibraryTool: ToolDefinition<typeof EDIT_LIBRARY_INPUT> = {
+    name: "edit_library",
+    description:
+        "Create folders and symbols, move, rename, duplicate, or delete library items, find direct timeline usages, list unused items, and inspect or update AS3 linkage with getLinkage/setLinkage (Flash/AS3 documents only). Operations stop at the first failure; collisions are refused. Moving, renaming, or duplicating items does not update code-string references. deleteItem requires confirm: true and refuses items in use. If setLinkage changes a movie clip, graphic, or button's AS3 export or class name, run export_scripts again to refresh linked-class metadata in the export workspace. After reorganizing the library, run export_scripts again before apply_scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    inputSchema: EDIT_LIBRARY_INPUT,
+    guidance: {
+        basic: "- Use edit_library to organize library folders and items. Re-export with export_scripts before apply_scripts; deleteItem requires confirm: true and refuses items in use.\n- edit_library can also create/duplicate symbols and find direct usages; edit_elements can swap a symbol and set graphic loop/firstFrame.",
+    },
+    run: async ({ ops, document }: Parameters<ToolCallback<typeof EDIT_LIBRARY_INPUT>>[0], deps: ToolDeps) => {
+        const { runner, bundle } = deps;
 
-    server.registerTool(
-        "edit_library",
-        {
-            description:
-                "Create folders and symbols, move, rename, duplicate, or delete library items, find direct timeline usages, list unused items, and inspect or update AS3 linkage with getLinkage/setLinkage (Flash/AS3 documents only). Operations stop at the first failure; collisions are refused. Moving, renaming, or duplicating items does not update code-string references. deleteItem requires confirm: true and refuses items in use. If setLinkage changes a movie clip, graphic, or button's AS3 export or class name, run export_scripts again to refresh linked-class metadata in the export workspace. After reorganizing the library, run export_scripts again before apply_scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
-            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-            inputSchema: EDIT_LIBRARY_INPUT,
-        },
-        handleEditLibrary,
-    );
+        const code = jsflRun("library-index", { __docName: document ?? "", __ops: ops }, bundle);
+        const result = JSON.parse(String(await runner.execute(code))) as {
+            applied: typeof ops;
+            results: { op: (typeof ops)[number]; result: unknown }[];
+            failed: { op: (typeof ops)[number]; error: string } | null;
+            skipped: typeof ops;
+            warnings: string[];
+        };
+        return {
+            data: result,
+            text: `If library structure changed, run export_scripts again before apply_scripts.\n${JSON.stringify(result)}`,
+        };
+    },
+};
+
+export function registerEditLibrary(server: McpServer, deps: ToolDeps): void {
+    registerToolDefinition(server, editLibraryTool, deps);
 }

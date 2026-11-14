@@ -1,10 +1,7 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../jsfl-bundle.js";
-import type { createRunner } from "../runner.js";
-import { failure } from "./shared.js";
-
-type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "./shared.js";
 
 const TEXT_STYLE = z
     .object({
@@ -86,51 +83,28 @@ const EDIT_TEXT_INPUT = {
     ops: z.array(EDIT_TEXT_OP).min(1),
 };
 
-/** Registers the edit_text tool.
- * @param server MCP server to register the tool with
- * @param deps Runner and JSFL bundle dependencies
- * @returns Nothing
- */
-export function registerEditText(
-    server: McpServer,
-    deps: { runner: Runner; bundle: (...names: string[]) => string },
-): void {
-    const { runner, bundle } = deps;
-    /** Adds text or updates an existing text element.
-     * @param timeline Scene index or library item path
-     * @param document Optional document name to select
-     * @param ops Ordered text operations
-     * @returns Applied count and text read-back values
-     */
-    const handleEditText: ToolCallback<typeof EDIT_TEXT_INPUT> = async ({ timeline, document, ops }) => {
-        try {
-            const code = jsflRun(
-                "edit-text",
-                { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
-                bundle,
-            );
-            const result = JSON.parse(String(await runner.execute(code))) as {
-                applied: number;
-                elements: Record<string, unknown>[];
-                warning?: string;
-            };
-            return {
-                content: [{ type: "text", text: JSON.stringify(result) }],
-                structuredContent: result,
-            };
-        } catch (error) {
-            return failure(error);
-        }
-    };
+export const editTextTool: ToolDefinition<typeof EDIT_TEXT_INPUT> = {
+    name: "edit_text",
+    description:
+        "Add text to a 1-based keyframe using a left/top/right/bottom rectangle, or set the string and whole-field style of an existing text element. Add creates missing layers, extends the timeline, and makes a keyframe when needed; tween spans and non-text elements are refused. lineType is supported only for dynamic/input text; Canvas also refuses input text and single-line text. Layer locks, selection, and the current frame are restored. Changes do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    inputSchema: EDIT_TEXT_INPUT,
+    guidance: {
+        basic: "- Use edit_text to add or update whole text fields; Canvas does not support input or single-line text. Use import_assets for images/audio and set_document_properties for stage settings; neither saves the .fla.",
+    },
+    run: async ({ timeline, document, ops }: Parameters<ToolCallback<typeof EDIT_TEXT_INPUT>>[0], deps: ToolDeps) => {
+        const { runner, bundle } = deps;
 
-    server.registerTool(
-        "edit_text",
-        {
-            description:
-                "Add text to a 1-based keyframe using a left/top/right/bottom rectangle, or set the string and whole-field style of an existing text element. Add creates missing layers, extends the timeline, and makes a keyframe when needed; tween spans and non-text elements are refused. lineType is supported only for dynamic/input text; Canvas also refuses input text and single-line text. Layer locks, selection, and the current frame are restored. Changes do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
-            annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-            inputSchema: EDIT_TEXT_INPUT,
-        },
-        handleEditText,
-    );
+        const code = jsflRun("edit-text", { __docName: document ?? "", __timelineRef: timeline, __ops: ops }, bundle);
+        const result = JSON.parse(String(await runner.execute(code))) as {
+            applied: number;
+            elements: Record<string, unknown>[];
+            warning?: string;
+        };
+        return { data: result };
+    },
+};
+
+export function registerEditText(server: McpServer, deps: ToolDeps): void {
+    registerToolDefinition(server, editTextTool, deps);
 }

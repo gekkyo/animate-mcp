@@ -1,10 +1,7 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../jsfl-bundle.js";
-import type { createRunner } from "../runner.js";
-import { failure } from "./shared.js";
-
-type Runner = Pick<ReturnType<typeof createRunner>, "execute">;
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "./shared.js";
 
 const COLOR_EFFECT = z.discriminatedUnion("mode", [
     z.object({ mode: z.literal("none") }).strict(),
@@ -82,50 +79,34 @@ const EDIT_ELEMENTS_INPUT = {
     ops: z.array(EDIT_ELEMENT_OP).min(1),
 };
 
-/** Registers the edit_elements tool.
- * @param server MCP server to register the tool with
- * @param deps Runner and JSFL bundle dependencies
- * @returns Nothing
- */
-export function registerEditElements(
-    server: McpServer,
-    deps: { runner: Runner; bundle: (...names: string[]) => string },
-): void {
-    const { runner, bundle } = deps;
-    /** Sets instance properties on keyframes after validating every operation.
-     * @param timeline Scene index or library item path
-     * @param document Optional document name to select
-     * @param ops Ordered element updates
-     * @returns Applied count and actual values read back from Animate
-     */
-    const handleEditElements: ToolCallback<typeof EDIT_ELEMENTS_INPUT> = async ({ timeline, document, ops }) => {
-        try {
-            const code = jsflRun(
-                "edit-elements",
-                { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
-                bundle,
-            );
-            const result = JSON.parse(String(await runner.execute(code))) as {
-                applied: number;
-                elements: Record<string, unknown>[];
-            };
-            return {
-                content: [{ type: "text", text: JSON.stringify(result) }],
-                structuredContent: result,
-            };
-        } catch (error) {
-            return failure(error);
-        }
-    };
+export const editElementsTool: ToolDefinition<typeof EDIT_ELEMENTS_INPUT> = {
+    name: "edit_elements",
+    description:
+        "Set symbol-instance properties on 1-based keyframes in a scene or library-symbol timeline, or add a Library item to a named layer and frame. Add creates a missing layer and extends the timeline; omitted coordinates use the stage center. Graphic instances support loop and firstFrame; swapSymbol replaces the selected instance's Library symbol. Existing layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors and non-instance elements are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Supplying filters replaces all existing filters; [] clears them. Read-back element fields match inspect_timeline, plus layer/frame/element references. Animate may quantize transform values. Changes do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    inputSchema: EDIT_ELEMENTS_INPUT,
+    guidance: {
+        basic: "- Use edit_elements to set instance properties on keyframes; tween interiors are refused, and the .fla is not saved.",
+    },
+    run: async (
+        { timeline, document, ops }: Parameters<ToolCallback<typeof EDIT_ELEMENTS_INPUT>>[0],
+        deps: ToolDeps,
+    ) => {
+        const { runner, bundle } = deps;
 
-    server.registerTool(
-        "edit_elements",
-        {
-            description:
-                "Set symbol-instance properties on 1-based keyframes in a scene or library-symbol timeline, or add a Library item to a named layer and frame. Add creates a missing layer and extends the timeline; omitted coordinates use the stage center. Graphic instances support loop and firstFrame; swapSymbol replaces the selected instance's Library symbol. Existing layer and element references are names or zero-based indexes; all operations are validated before any write, tween interiors and non-instance elements are refused, and temporary layer unlocks, selection, and the current frame are restored. Rotation and skew cannot be set together in one operation. Supplying filters replaces all existing filters; [] clears them. Read-back element fields match inspect_timeline, plus layer/frame/element references. Animate may quantize transform values. Changes do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
-            annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-            inputSchema: EDIT_ELEMENTS_INPUT,
-        },
-        handleEditElements,
-    );
+        const code = jsflRun(
+            "edit-elements",
+            { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
+            bundle,
+        );
+        const result = JSON.parse(String(await runner.execute(code))) as {
+            applied: number;
+            elements: Record<string, unknown>[];
+        };
+        return { data: result };
+    },
+};
+
+export function registerEditElements(server: McpServer, deps: ToolDeps): void {
+    registerToolDefinition(server, editElementsTool, deps);
 }
