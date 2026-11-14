@@ -34,6 +34,7 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 - Create motion and classic tweens with preset or custom Bézier easing.
 - Organize library folders and items and find unused items.
 - Publish AS3 and HTML5 Canvas documents and get AS3 compile errors and warnings back.
+- Read Animate's diagnostic panels and run an AS3 Test Movie to capture runtime output.
 - Capture a single frame as a PNG image.
 - Install GreenSock-AS3 with a prompt.
 - Work with ActionScript 3 and HTML5 Canvas, and run arbitrary JSFL.
@@ -134,7 +135,7 @@ Install GreenSock-AS3 for the open document
 - Re-exporting is refused when unapplied edits exist. Use `force: true` only if you are willing to discard them.
 - After changing the timeline, tweens, or library, re-export before editing or applying scripts.
 - Deleting a layer, frames, or a library item requires `confirm: true`. Library items in use cannot be deleted.
-- Save manually in Animate. Use `edit_library`'s `getLinkage` and `setLinkage` operations to inspect or edit AS3 linkage; renaming or moving an item still does not automatically update linkage names or string references in code.
+- Save with `save_document` after confirming any overwrite, or save in Animate. Use `edit_library`'s `getLinkage` and `setLinkage` operations to inspect or edit AS3 linkage; renaming or moving an item still does not automatically update linkage names or string references in code.
 - `edit_elements` rejects tween interiors and validates all operations before writing; it does not save the `.fla`.
 
 ## Tools
@@ -142,6 +143,9 @@ Install GreenSock-AS3 for the open document
 | Tool | What it does | Inputs and caveats |
 |------|--------------|--------------------|
 | `get_document_info` | Reports the open document's name, dimensions, frame rate, timeline names, ActionScript version, and GreenSock status. | Takes no arguments. |
+| `open_document` | Opens an existing `.fla` or creates a new AS3 or HTML5 Canvas document with Animate's default size and frame rate. | Supply exactly one of `path` (existing `.fla`) or `type` (`timeline` or `htmlcanvas`). Returns the opened document name and path, if saved. |
+| `save_document` | Saves an explicitly named open document to its current path or a new path. | Requires `document` (exact name or path); unsaved documents require `path`. Overwriting the current file or another existing file requires `confirm: true` after asking the user. Never defaults to the active document. |
+| `close_document` | Closes an explicitly named open document without saving. | Requires `document` (exact name or path) and `discardUnsavedChanges: true`; any unsaved edits are discarded. Save first if needed. Never defaults to the active document or closes Test Movie Players. |
 | `export_scripts` | Exports scene and library-symbol structure and frame scripts, plus `index.md` and each timeline's `structure.md`. | Defaults to `~/.animate-mcp/exports/<document name>/`. Refuses to re-export over unapplied edits; `force: true` discards them. |
 | `apply_scripts` | Applies edits to exported scripts in Animate. An empty script file deletes that frame's script. | Pass the export directory as `dir`. Frames changed in Animate are not overwritten. Does not save the `.fla`. |
 | `read_output` | Reads the current Output and Compiler Errors panels as raw text and parses compiler diagnostics. | Read-only; contents may be stale or mixed because Animate does not identify their source document or run. `compilerDiagnostics.status: "unavailable"` means the panel is empty, incomplete, or unsupported; it does not prove a clean compile. |
@@ -150,6 +154,7 @@ Install GreenSock-AS3 for the open document
 | `capture_frame` | Returns PNG images of one frame or an inclusive range from the active timeline, including a library symbol being edited. | Specify either `frame` (1-based, defaults to the current frame) or `range: { start, end, step? }` (1-based, ascending and inclusive; `step` defaults to 1, must be a positive integer, and at most 24 frames are captured). Range results return ordered image/metadata pairs and `structuredContent.captures`. Saves each image under `~/.animate-mcp/captures/<document>/` or `dir`; unsaved documents are supported. The current frame is restored, but changing frames may clear the selection. Stages larger than 2048px on either side are refused, without scaling. |
 | `inspect_timeline` | Reads layers, keyframe ranges, and instances and tweens at a specified frame of a scene or library symbol. | `timeline` is a zero-based scene index or library-item path. Frame numbers are one-based; layers can be filtered. |
 | `edit_elements` | Sets symbol-instance transforms, names, color effects, filters, blend modes, and visibility, or adds a Library item to a timeline. | Set operations use layer and element names or zero-based indexes; `{ op: "add", item, layer, frame, x?, y?, set? }` places a Library item on a named layer at a 1-based frame, creating the layer and extending the timeline if needed. Omitted coordinates default to the stage center. Non-instances and tween interiors are refused, and all operations are validated before any write. Supplying `filters` replaces all existing filters; `[]` clears them. Read-back element fields match `inspect_timeline` with added layer/frame/element references. Rotation and skew cannot be set together in one operation. Does not save the `.fla`. |
+| `convert_to_symbol` | Converts explicitly addressed elements on one timeline frame into a movie clip, button, or graphic. | Supply a scene or Library timeline, one-based frame, element references, unique symbol name, and optional registration point (center by default). Refuses tween interiors; does not set linkage or save the `.fla`. Use `edit_library`'s `setLinkage` separately for AS3 linkage. |
 | `edit_timeline` | Edits layers, frames, keyframes, and labels, and distributes instances across layers. Runs operations in `ops` order. | `deleteLayer` and `removeFrames` require `confirm: true`. `shiftLayerFrames` overwrites the clipboard and may require Undo if it fails partway through. |
 | `edit_tween` | Creates motion or classic tweens and changes easing. Supports presets, numeric easing, and four-number custom easing. | The named instance must be alone on its layer. Existing tween spans are not replaced. |
 | `edit_library` | Creates folders, moves, renames, and deletes items, lists unused items, and reads or updates AS3 linkage. | `getLinkage` and `setLinkage` support Flash/AS3 documents only. `setLinkage` accepts `exportForAS`, `className`, `baseClass`, and `exportInFirstFrame`, and returns Animate's read-back values. With export disabled, the linkage fields are `{ exportForAS: false, className: "", baseClass: "", exportInFirstFrame: false }`; results also include the item `name`. Setting class/base or enabling first-frame export requires `exportForAS: true`. If `setLinkage` changes a movie clip, graphic, or button's AS3 export or class name, rerun `export_scripts` to refresh linked-class metadata in the export workspace; `apply_scripts` rejects exports with stale linkage. Deletion requires `confirm: true` and refuses items in use. Moving or renaming does not update code-string references. |
@@ -228,7 +233,7 @@ Client config: `node /path/to/animate-mcp/server/dist/index.js` (stdio).
 7. Run `capture_frame`. It returns a PNG image and its saved path.
 8. Unverified: behavior while a modal dialog is open.
 
-Scripted versions of steps 6–7 (and `edit_elements`): `node server/scripts/smoke-publish.mjs`, `smoke-capture-frame.mjs`, `smoke-edit-elements.mjs` after `npm run build`, with the target document active in Animate.
+Scripted versions of steps 6–7 (and `edit_elements`): `node server/scripts/smoke-publish.mjs`, `smoke-capture-frame.mjs`, `smoke-edit-elements.mjs` after `npm run build`, with the target document active in Animate. `node server/scripts/smoke-test-movie.mjs` creates and closes a disposable AS3 FLA; it leaves the Test Movie Player open for you to close manually.
 
 ## License
 

@@ -24,6 +24,11 @@ const JSFL_FILES: Record<string, { path: string; order: number }> = {
     "edit-elements": { path: "tools/edit-elements.jsfl", order: 20 },
     "read-output": { path: "tools/read-output.jsfl", order: 21 },
     "test-movie": { path: "tools/test-movie.jsfl", order: 22 },
+    "document-target": { path: "shared/document-target.jsfl", order: 23 },
+    "open-document": { path: "tools/open-document.jsfl", order: 24 },
+    "convert-to-symbol": { path: "tools/convert-to-symbol.jsfl", order: 25 },
+    "close-document": { path: "tools/close-document.jsfl", order: 26 },
+    "save-document": { path: "tools/save-document.jsfl", order: 27 },
 };
 
 /**

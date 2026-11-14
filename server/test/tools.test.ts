@@ -71,6 +71,30 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
                 openWorldHint: true,
                 idempotentHint: true,
             },
+            open_document: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            save_document: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            close_document: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            convert_to_symbol: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             run_jsfl: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
         };
 
@@ -87,7 +111,7 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
         assert.match(runJsfl?.description ?? "", /^Execute arbitrary code as JSFL.*last resort/i);
         assert.match(JSON.stringify(runJsfl?.inputSchema.properties?.code), /dedicated tools/i);
         for (const name of ["edit_timeline", "edit_elements", "edit_tween", "edit_library"]) {
-            assert.match(byName.get(name)?.description ?? "", /do not save the \.fla; save it in Animate/i, name);
+            assert.match(byName.get(name)?.description ?? "", /do not save the \.fla; use save_document/i, name);
         }
         assert.match(byName.get("publish")?.description ?? "", /overwrites outputs.*publish settings/i);
         assert.match(byName.get("publish")?.description ?? "", /compile errors are returned as a normal result/i);

@@ -164,7 +164,7 @@ export function registerEditTween(
         "edit_tween",
         {
             description:
-                "Create motion (default) or classic tweens for a named instance with createTween, or change easing on an existing tween with setEase. Frames are 1-based; layer references use a name and optional zero-based index. The instance must be the only element on its layer; existing tween spans are not replaced. Alpha, brightness, and tint are mutually exclusive Animate color modes. Ease presets include quad, cubic, quart, quint, sine, expo, circ, back In/Out/InOut and linear. Stops at the first failed op. Always run export_scripts again before editing or applying scripts. Changes apply to the open document but do not save the .fla; save it in Animate.",
+                "Create motion (default) or classic tweens for a named instance with createTween, or change easing on an existing tween with setEase. Frames are 1-based; layer references use a name and optional zero-based index. The instance must be the only element on its layer; existing tween spans are not replaced. Alpha, brightness, and tint are mutually exclusive Animate color modes. Ease presets include quad, cubic, quart, quint, sine, expo, circ, back In/Out/InOut and linear. Stops at the first failed op. Always run export_scripts again before editing or applying scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
             annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
             inputSchema: EDIT_TWEEN_INPUT,
         },

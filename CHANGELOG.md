@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.8
 
 ### Added
 
+- Added `open_document`, `save_document`, and `close_document` for explicitly targeted document operations; overwrite and discard require explicit confirmation.
+- Added `convert_to_symbol` to convert explicitly addressed elements on one frame into a named symbol; linkage remains a separate `edit_library` operation.
 - Added read-only `read_output` to return raw Output and Compiler Errors panel text with parsed compiler diagnostics when available; panel contents may be stale or mixed.
 - Added `test_movie` for saved AS3 documents; it leaves the Player open and returns compiler diagnostics plus one bounded Output-panel delta.
 - `edit_elements` can add a Library item to a named layer and frame (`{ op: "add", item, layer, frame, x?, y?, set? }`), creating the layer and extending the timeline if needed. Omitted coordinates default to the stage center.

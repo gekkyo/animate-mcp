@@ -87,7 +87,7 @@ export function registerEditLibrary(
         "edit_library",
         {
             description:
-                "Create folders, move, rename, or delete library items, list unused items, and inspect or update AS3 linkage with getLinkage/setLinkage (Flash/AS3 documents only). Operations stop at the first failure; collisions are refused. Moving or renaming items does not update code-string references. deleteItem requires confirm: true and refuses items in use. If setLinkage changes a movie clip, graphic, or button's AS3 export or class name, run export_scripts again to refresh linked-class metadata in the export workspace. After reorganizing the library, run export_scripts again before apply_scripts. Changes apply to the open document but do not save the .fla; save it in Animate.",
+                "Create folders, move, rename, or delete library items, list unused items, and inspect or update AS3 linkage with getLinkage/setLinkage (Flash/AS3 documents only). Operations stop at the first failure; collisions are refused. Moving or renaming items does not update code-string references. deleteItem requires confirm: true and refuses items in use. If setLinkage changes a movie clip, graphic, or button's AS3 export or class name, run export_scripts again to refresh linked-class metadata in the export workspace. After reorganizing the library, run export_scripts again before apply_scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
             annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
             inputSchema: EDIT_LIBRARY_INPUT,
         },
