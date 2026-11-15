@@ -83,6 +83,7 @@ async function removeStaleFiles(dir: string) {
 
 /**
  * Creates a Runner that runs JSFL in Animate. Runs are serialized, with a timeout and cleanup.
+ * @param options Runner configuration
  * @param options.dir Directory for Run files / Result files (set to mode 0700)
  * @param options.launch Launcher that opens a Run file in Animate
  * @param options.isRunning Function that tells whether Animate is running
@@ -102,11 +103,32 @@ export function createRunner(options: {
     /**
      * One Run: writes and launches the Run file, polls the Result file and returns the result (both files are deleted at the end).
      * @param code JSFL source to run
+     * @param timeoutMs Maximum Run duration in milliseconds
+     * @param deadline Absolute deadline in milliseconds, including any queue wait
+     * @param onLaunch Called immediately before launching the Run file
      * @returns Promise<unknown> with the evaluation result of code; rejects when Animate is not running, JSFL throws, or the Run times out
      */
-    async function run(code: string): Promise<unknown> {
+    async function run(
+        code: string,
+        timeoutMs = options.timeoutMs,
+        deadline = Date.now() + timeoutMs,
+        onLaunch: () => void = () => {},
+    ): Promise<unknown> {
+        /** Creates the timeout error for a Run that Animate did not finish in time.
+         * @returns Timeout error
+         */
+        const timedOut = () =>
+            new Error(
+                `Run timed out after ${timeoutMs} ms (Animate did not run the .jsfl; on Windows check that .jsfl files are associated with Animate, or set ANIMATE_MCP_LAUNCH_COMMAND)`,
+            );
+        if (Date.now() >= deadline) {
+            throw timedOut();
+        }
         if (!(await options.isRunning())) {
             throw new Error("Animate not running: start Adobe Animate and try again");
+        }
+        if (Date.now() >= deadline) {
+            throw timedOut();
         }
         await mkdir(options.dir, { recursive: true, mode: 0o700 });
         // mkdir's mode has no effect on an existing directory
@@ -115,18 +137,17 @@ export function createRunner(options: {
         const runId = randomUUID();
         const runFile = join(options.dir, `${runId}.jsfl`);
         const resultFile = join(options.dir, `${runId}.result.json`);
-        const deadline = Date.now() + options.timeoutMs;
-        /** Creates the timeout error for a Run that Animate did not finish in time.
-         * @returns Timeout error
-         */
-        const timedOut = () =>
-            new Error(
-                `Run timed out after ${options.timeoutMs} ms (Animate did not run the .jsfl; on Windows check that .jsfl files are associated with Animate, or set ANIMATE_MCP_LAUNCH_COMMAND)`,
-            );
         try {
+            if (Date.now() >= deadline) {
+                throw timedOut();
+            }
             await writeFile(runFile, runFileSource(code, resultFile), { mode: 0o600 });
+            if (Date.now() >= deadline) {
+                throw timedOut();
+            }
             let timer: NodeJS.Timeout | undefined;
             try {
+                onLaunch();
                 await Promise.race([
                     options.launch(runFile),
                     new Promise<never>(
@@ -140,7 +161,7 @@ export function createRunner(options: {
                                  * @returns Timer handle
                                  */
                                 () => reject(timedOut()),
-                                options.timeoutMs,
+                                Math.max(0, deadline - Date.now()),
                             );
                         },
                     ),
@@ -182,14 +203,22 @@ export function createRunner(options: {
         /**
          * Runs code and returns the result. Animate handles launched files one at a time, so Runs are serialized.
          * @param code JSFL source to run
+         * @param timeoutMs Optional timeout in milliseconds, including queue wait
          * @returns Promise<unknown> with the same result as run (the next Run still executes if the previous one failed)
          */
-        execute(code: string): Promise<unknown> {
+        execute(code: string, timeoutMs?: number): Promise<unknown> {
+            // Explicit per-call timeouts include time spent waiting behind earlier Runs.
+            const deadline = timeoutMs === undefined ? undefined : Date.now() + timeoutMs;
+            let launched = false;
             const next = queue.then(
                 /** Runs this request after the previous queued Run settles.
                  * @returns Result of this Run
                  */
-                () => run(code),
+                () => {
+                    return run(code, timeoutMs, deadline, () => {
+                        launched = true;
+                    });
+                },
             );
             queue = next.catch(
                 /** Keeps the queue usable after a failed Run.
@@ -197,7 +226,18 @@ export function createRunner(options: {
                  */
                 () => undefined,
             );
-            return next;
+            if (timeoutMs === undefined) {
+                return next;
+            }
+            let timer: NodeJS.Timeout;
+            const deadlineResult = new Promise<never>((_, reject) => {
+                timer = setTimeout(() => {
+                    if (!launched) {
+                        reject(new Error(`Run timed out after ${timeoutMs} ms`));
+                    }
+                }, timeoutMs);
+            });
+            return Promise.race([next, deadlineResult]).finally(() => clearTimeout(timer));
         },
     };
 }

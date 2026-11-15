@@ -1,9 +1,11 @@
+(function () {
   var document = selectDocument(), restore = saveEditState(document), originalTimeline = document.getTimeline();
   var originalLayer = originalTimeline.layers[originalTimeline.currentLayer], originalFrame = originalTimeline.currentFrame;
   var originalSelectedFrames = originalTimeline.getSelectedFrames ? originalTimeline.getSelectedFrames() : null;
   var originalSelection = document.selection ? document.selection.slice() : [];
   var originalLibrarySelection = document.library.getSelectedItems();
-  var applied = [], results = [], failed = null, skipped = [], warnings = [], libraryChanged = false;
+  var applied = [], results = [], failed = null, skipped = [], warnings = [];
+  var ctx = { document: document, warnings: warnings, libraryChanged: false };
 
   /** Checks whether an element reference still belongs to a timeline.
    * @param timeline Timeline to scan.
@@ -62,7 +64,7 @@
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
       var op = __ops[opIndex];
       try {
-        var result = applyLibraryOp(op);
+        var result = applyLibraryOp(ctx, op);
         applied.push(op);
         results.push({ op: op, result: result });
       } catch (error) {
@@ -72,7 +74,7 @@
       }
     }
   } finally {
-    if (libraryChanged) {
+    if (ctx.libraryChanged) {
       var warning = restore();
       if (warning) warnings.push(warning);
       try {

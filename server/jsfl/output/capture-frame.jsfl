@@ -80,7 +80,11 @@
       if (!document.exportPNG(outputURI, true, true) || !FLfile.exists(outputURI)) {
         throw new Error("Capture export failed");
       }
-      captures.push({ path: outputPath, frame: frame, timeline: timeline.name, width: document.width, height: document.height });
+      var capture = { path: outputPath, frame: frame, timeline: timeline.name, width: document.width, height: document.height };
+      if (typeof __captureIncludeDocumentURI !== "undefined" && __captureIncludeDocumentURI) {
+        capture.pathURI = document.pathURI;
+      }
+      captures.push(capture);
     }
     return serialize(__captureRange === null ? captures[0] : { captures: captures });
   } catch (error) {

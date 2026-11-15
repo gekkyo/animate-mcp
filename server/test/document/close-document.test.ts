@@ -18,6 +18,7 @@ const closeJSFL = readFileSync(new URL("../../jsfl/document/close-document.jsfl"
 /**
  * Captures the close-document tool and records the JSFL bundle requested.
  * @param runner Executes bundled JSFL against the test's fake Animate globals
+ * @param runner.execute Runs the supplied JSFL code in the fake application
  * @returns Registered tool and bundle-call history
  */
 function register(runner: { execute: (code: string) => Promise<unknown> }) {
@@ -133,14 +134,23 @@ test("close_document refuses missing and ambiguous document targets", async () =
         },
         fl: { documents },
     };
-    const { tool } = register({ execute: async (code) => runInNewContext(code, globals) });
+    const { tool } = register({
+        execute: async (code) => runInNewContext(code, globals),
+    });
     const input = { document: "scene.fla", discardUnsavedChanges: true };
 
     const missing = (await tool.handler(input)) as { isError: boolean; content: { text: string }[] };
     assert.equal(missing.isError, true);
     assert.match(missing.content[0].text, /matched 0 open documents/);
-
-    const duplicate = (name: string): FakeDocument => ({ name, close: () => assert.fail("must not close") });
+    /**
+     * Creates a fake document for the ambiguous-target case.
+     * @param name Document name shared by the duplicate fixtures
+     * @returns A fake document that fails if closed
+     */
+    const duplicate = (name: string): FakeDocument => ({
+        name,
+        close: () => assert.fail("must not close"),
+    });
     documents.push(duplicate("scene.fla"), duplicate("scene.fla"));
     const ambiguous = (await tool.handler(input)) as { isError: boolean; content: { text: string }[] };
     assert.equal(ambiguous.isError, true);

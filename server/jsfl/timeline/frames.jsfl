@@ -1,10 +1,11 @@
   /** Moves a layer's full frame sequence while preserving its original keyframe spans.
+   * @param ctx Document, timeline, and warnings state.
    * @param layerIndex The layer's zero-based index.
    * @param layer The layer whose frames to move.
    * @param offset The number of frames to shift the layer forward.
    * @returns Nothing.
    */
-  function shiftLayerFrames(layerIndex, layer, offset) {
+  function shiftLayerFrames(ctx, layerIndex, layer, offset) {
     if (offset < 1) throw new Error('offset must be at least 1');
     if (!layer.frames || layer.frames.length === 0) throw new Error('Layer has no frames');
     var originalLength = layer.frames.length, keyframes = [], frame, keyframeIndex;
@@ -19,21 +20,31 @@
      * @returns Nothing.
      */
     withEditUnlockedLayers([layer], function () {
-      timeline.setSelectedLayers(layerIndex);
-      timeline.setSelectedFrames(0, originalLength, true);
-      timeline.cutFrames();
-      timeline.setSelectedLayers(layerIndex);
-      timeline.setSelectedFrames(offset, offset, true);
-      timeline.pasteFrames(offset);
+      ctx.timeline.setSelectedLayers(layerIndex);
+      ctx.timeline.setSelectedFrames(0, originalLength, true);
+      ctx.timeline.cutFrames();
+      ctx.timeline.setSelectedLayers(layerIndex);
+      ctx.timeline.setSelectedFrames(offset, offset, true);
+      ctx.timeline.pasteFrames(offset);
       // pasteFrames may extend the last span to the timeline-wide length.
       for (keyframeIndex = keyframes.length - 1; keyframeIndex >= 0; keyframeIndex--) {
         var keyframe = keyframes[keyframeIndex], shiftedStart = keyframe.startFrame + offset;
         frame = layer.frames[shiftedStart];
         if (!frame || frame.startFrame !== shiftedStart) throw new Error('Shifted keyframe no longer exists');
         if (frame.duration > keyframe.duration) {
-          timeline.currentLayer = layerIndex;
-          timeline.removeFrames(shiftedStart + keyframe.duration, shiftedStart + frame.duration);
+          ctx.timeline.currentLayer = layerIndex;
+          ctx.timeline.removeFrames(shiftedStart + keyframe.duration, shiftedStart + frame.duration);
         }
+      }
+      var expectedLength = originalLength + offset, trailingFramesAreEmpty = layer.frames.length > expectedLength;
+      for (var trailingIndex = expectedLength; trailingFramesAreEmpty && trailingIndex < layer.frames.length; trailingIndex++) {
+        frame = layer.frames[trailingIndex];
+        trailingFramesAreEmpty = !!frame && frame.isEmpty === true && !!frame.elements &&
+          frame.elements.length === 0 && !frame.actionScript && !frame.name && !frame.soundLibraryItem;
+      }
+      if (trailingFramesAreEmpty) {
+        ctx.timeline.currentLayer = layerIndex;
+        ctx.timeline.removeFrames(expectedLength, layer.frames.length);
       }
     });
     var contentKeyframeCount = 0;
@@ -49,23 +60,24 @@
         throw new Error('Shifted keyframe span does not match its original duration');
       }
     }
-    warnings.push('Only layer ' + layer.name + ' shifted; other layers were not shifted.');
+    ctx.warnings.push('Only layer ' + layer.name + ' shifted; other layers were not shifted.');
   }
   /** Applies a frame operation.
+   * @param ctx Document, timeline, and warnings state.
    * @param op The frame operation to apply.
    * @returns Nothing.
    */
-  function applyFrameOp(op) {
-    var layerIndex = findLayerIndex(op.layer, op.index), layer = timeline.layers[layerIndex];
+  function applyFrameOp(ctx, op) {
+    var layerIndex = findLayerIndex(ctx.timeline, op.layer, op.index), layer = ctx.timeline.layers[layerIndex];
     var frameIndex = op.frame - 1, count, layers, layerIndexToEdit, spanStart, spanLength, spanEnd, delta;
     if (op.op === 'shiftLayerFrames') {
-      shiftLayerFrames(layerIndex, layer, op.offset);
+      shiftLayerFrames(ctx, layerIndex, layer, op.offset);
       return;
     }
     if (op.op === 'insertFrames' || op.op === 'removeFrames') {
       if (op.op === 'removeFrames' && op.confirm !== true) throw new Error('confirm required');
       count = op.count;
-      layers = affectedLayers(layerIndex, op.ripple === true);
+      layers = affectedLayers(ctx.timeline, layerIndex, op.ripple === true);
       if (frameIndex < 0 || frameIndex > layer.frames.length || (op.op === 'removeFrames' && frameIndex + count > layer.frames.length)) {
         throw new Error('Frame beyond timeline length');
       }
@@ -84,17 +96,17 @@
        */
       withEditUnlockedLayers(layers, function () {
         if (op.op === 'insertFrames') {
-          timeline.currentLayer = layerIndex;
+          ctx.timeline.currentLayer = layerIndex;
           // Animate's ripple flag shifts all non-folder layers; false confines the edit to the selected layer.
-          timeline.insertFrames(count, op.ripple === true, frameIndex);
+          ctx.timeline.insertFrames(count, op.ripple === true, frameIndex);
         } else {
           for (layerIndexToEdit = 0; layerIndexToEdit < layers.length; layerIndexToEdit++) {
-            timeline.currentLayer = op.ripple === true ? layerPosition(layers[layerIndexToEdit]) : layerIndex;
-            timeline.removeFrames(frameIndex, frameIndex + count);
+            ctx.timeline.currentLayer = op.ripple === true ? layerPosition(ctx.timeline, layers[layerIndexToEdit]) : layerIndex;
+            ctx.timeline.removeFrames(frameIndex, frameIndex + count);
           }
         }
       });
-      if (op.ripple !== true) warnings.push('Only layer ' + layer.name + ' shifted; other layers were not shifted.');
+      if (op.ripple !== true) ctx.warnings.push('Only layer ' + layer.name + ' shifted; other layers were not shifted.');
       return;
     }
     if (frameIndex < 0 || frameIndex >= layer.frames.length) throw new Error('Frame beyond timeline length');
@@ -105,8 +117,8 @@
        * @returns Nothing.
        */
       withEditUnlockedLayers([layer], function () {
-        timeline.currentLayer = layerIndex;
-        timeline.convertToKeyframes(frameIndex);
+        ctx.timeline.currentLayer = layerIndex;
+        ctx.timeline.convertToKeyframes(frameIndex);
       });
       return;
     }
@@ -117,8 +129,8 @@
        * @returns Nothing.
        */
       withEditUnlockedLayers([layer], function () {
-        timeline.currentLayer = layerIndex;
-        timeline.clearKeyframes(frameIndex);
+        ctx.timeline.currentLayer = layerIndex;
+        ctx.timeline.clearKeyframes(frameIndex);
       });
       return;
     }
@@ -127,8 +139,8 @@
        * @returns Nothing.
        */
       withEditUnlockedLayers([layer], function () {
-        timeline.currentLayer = layerIndex;
-        timeline.setFrameProperty('name', op.label, frameIndex, frameIndex + 1);
+        ctx.timeline.currentLayer = layerIndex;
+        ctx.timeline.setFrameProperty('name', op.label, frameIndex, frameIndex + 1);
       });
       return;
     }
@@ -142,7 +154,7 @@
       if (spanLength !== op.length) {
         count = Math.abs(op.length - spanLength);
         delta = spanStart + spanLength;
-        layers = affectedLayers(layerIndex, op.ripple === true);
+        layers = affectedLayers(ctx.timeline, layerIndex, op.ripple === true);
         for (var resizeLayerIndex = 0; resizeLayerIndex < layers.length; resizeLayerIndex++) {
           if (layers[resizeLayerIndex].frames.length < spanEnd) throw new Error('Frame beyond timeline length');
         }
@@ -151,16 +163,16 @@
          */
         withEditUnlockedLayers(layers, function () {
           if (op.length > spanLength) {
-            timeline.currentLayer = layerIndex;
-            timeline.insertFrames(count, op.ripple === true, Math.max(spanStart, delta - 1));
+            ctx.timeline.currentLayer = layerIndex;
+            ctx.timeline.insertFrames(count, op.ripple === true, Math.max(spanStart, delta - 1));
           } else {
             for (layerIndexToEdit = 0; layerIndexToEdit < layers.length; layerIndexToEdit++) {
-              timeline.currentLayer = op.ripple === true ? layerPosition(layers[layerIndexToEdit]) : layerIndex;
-              timeline.removeFrames(spanStart + op.length, spanEnd);
+              ctx.timeline.currentLayer = op.ripple === true ? layerPosition(ctx.timeline, layers[layerIndexToEdit]) : layerIndex;
+              ctx.timeline.removeFrames(spanStart + op.length, spanEnd);
             }
           }
         });
-        if (op.ripple !== true) warnings.push('Only layer ' + layer.name + ' shifted; other layers were not shifted.');
+        if (op.ripple !== true) ctx.warnings.push('Only layer ' + layer.name + ' shifted; other layers were not shifted.');
       }
     }
   }

@@ -55,7 +55,9 @@ function registerTool(
         },
     };
     register(server as unknown as McpServer, {
-        runner: { execute: async (code) => runInNewContext(code, globals) },
+        runner: {
+            execute: async (code) => runInNewContext(code, globals),
+        },
         bundle: (...names) => names.map((name) => jsflParts[name as keyof typeof jsflParts]).join("\n"),
     });
     assert.equal(registered?.name, expectedName);
@@ -148,7 +150,12 @@ test("get_document_info includes the document background color", async () => {
     const document = makeDocument("sample.fla");
     const tool = registerTool(
         registerGetDocumentInfo,
-        { fl: { documents: [document], getDocumentDOM: () => document } },
+        {
+            fl: {
+                documents: [document],
+                getDocumentDOM: () => document,
+            },
+        },
         "get_document_info",
     );
     const result = (await tool?.handler({})) as { structuredContent: Record<string, unknown> };

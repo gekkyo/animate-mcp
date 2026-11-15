@@ -26,6 +26,108 @@ test("edit_tween creates a motion tween and reports the applied operation", { ti
     }),
 );
 
+test("edit_tween creates shape spans with default ease and blend", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SHAPE_TWEEN: "1" }, async (client, tempDir) => {
+        const result = await editTween(client, 0, [{ op: "createShapeTween", layer: "a/b", from: 1, to: 3 }]);
+        const summary = result.structuredContent as { applied: unknown[]; failed: unknown };
+        assert.equal(result.isError, undefined, text(result));
+        assert.equal(summary.applied.length, 1);
+        assert.equal(summary.failed, null);
+        const frame = (await layersLog(tempDir)).at(-1)[0].frames[0];
+        assert.equal(frame.tween, "shape");
+        assert.equal(frame.tweenEasing, 0);
+    }),
+);
+
+test("edit_tween rejects an intermediate shape-tween keyframe", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SHAPE_TWEEN: "1", FAKE_SHAPE_TWEEN_INTERMEDIATE: "1" }, async (client) => {
+        const result = await editTween(client, 0, [{ op: "createShapeTween", layer: "a/b", from: 1, to: 3 }]);
+        assert.match(
+            (result.structuredContent as { failed: { error: string } }).failed.error,
+            /cannot contain intermediate keyframes/,
+        );
+    }),
+);
+
+test("edit_tween allows adjacent shape tweens to share a destination keyframe", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SHAPE_TWEEN: "1", FAKE_SHAPE_TWEEN_CHAIN: "1" }, async (client, tempDir) => {
+        const result = await editTween(client, 0, [
+            { op: "createShapeTween", layer: "a/b", from: 3, to: 5 },
+            { op: "createShapeTween", layer: "a/b", from: 1, to: 3 },
+        ]);
+        const summary = result.structuredContent as { applied: unknown[]; failed: unknown };
+        assert.equal(result.isError, undefined, text(result));
+        assert.equal(summary.applied.length, 2);
+        assert.equal(summary.failed, null);
+        const frames = (await layersLog(tempDir)).at(-1)[0].frames;
+        assert.equal(frames.find((frame: { start: number }) => frame.start === 0).tween, "shape");
+        assert.equal(frames.find((frame: { start: number }) => frame.start === 2).tween, "shape");
+    }),
+);
+
+test("edit_tween setEase updates the ease on an existing shape span", { timeout: 30_000 }, () =>
+    withServer({ FAKE_SHAPE_TWEEN_INSPECT: "1" }, async (client, tempDir) => {
+        const result = await editTween(client, 0, [{ op: "setEase", layer: "a/b", frame: 2, ease: -50 }]);
+        assert.equal((result.structuredContent as { failed: unknown }).failed, null);
+        const frame = (await layersLog(tempDir)).at(-1)[0].frames[0];
+        assert.equal(frame.tween, "shape");
+        assert.equal(frame.tweenEasing, -50);
+    }),
+);
+
+test("edit_tween rejects invalid shape tween settings and invalid keyframe ranges", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_SHAPE_TWEEN: "1" }, async (client) => {
+        for (const op of [
+            { op: "createShapeTween", layer: "a/b", from: 1, to: 3, ease: -101 },
+            { op: "createShapeTween", layer: "a/b", from: 1, to: 3, blend: "radial" },
+        ]) {
+            const invalid = await editTween(client, 0, [op]);
+            assert.equal(invalid.isError, true);
+        }
+
+        for (const [from, to, message] of [
+            [2, 3, "existing keyframe"],
+            [1, 2, "existing keyframe"],
+            [3, 3, "from must be less than to"],
+            [4, 1, "from must be less than to"],
+        ]) {
+            const invalid = await editTween(client, 0, [{ op: "createShapeTween", layer: "a/b", from, to }]);
+            assert.match(
+                (invalid.structuredContent as { failed: { error: string } }).failed.error,
+                new RegExp(message),
+            );
+        }
+    });
+});
+
+test("edit_tween rejects non-shape keyframes and existing tween spans for shape tweens", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({ FAKE_SHAPE_TWEEN: "1", FAKE_SHAPE_TWEEN_BAD_ELEMENT: "2" }, async (client) => {
+        const nonShape = await editTween(client, 0, [{ op: "createShapeTween", layer: "a/b", from: 1, to: 3 }]);
+        assert.match((nonShape.structuredContent as { failed: { error: string } }).failed.error, /only raw shapes/);
+    });
+
+    for (const env of [
+        { FAKE_SHAPE_TWEEN: "1", FAKE_SHAPE_TWEEN_GROUP: "2" },
+        { FAKE_SHAPE_TWEEN: "1", FAKE_SHAPE_TWEEN_DRAWING: "2" },
+        { FAKE_SHAPE_TWEEN: "1", FAKE_SHAPE_TWEEN_EMPTY: "2" },
+    ]) {
+        await withServer(env, async (client) => {
+            const invalid = await editTween(client, 0, [{ op: "createShapeTween", layer: "a/b", from: 1, to: 3 }]);
+            assert.match((invalid.structuredContent as { failed: { error: string } }).failed.error, /raw shapes/);
+        });
+    }
+
+    await withServer({ FAKE_SHAPE_TWEEN: "1", FAKE_SHAPE_TWEEN_EXISTING: "1" }, async (client) => {
+        const overlap = await editTween(client, 0, [{ op: "createShapeTween", layer: "a/b", from: 1, to: 3 }]);
+        assert.match(
+            (overlap.structuredContent as { failed: { error: string } }).failed.error,
+            /Span already has a tween/,
+        );
+    });
+});
+
 test(
     "edit_tween creates classic spans, applies strength easing, and setEase targets the arriving keyframe",
     {

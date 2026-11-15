@@ -1,27 +1,17 @@
 import { open, readFile, realpath, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PNG } from "pngjs";
 import { z } from "zod";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { comparePixels, decodePng, isInside } from "./image-diff.js";
 
 const INPUT = {
     before: z.string().min(1).describe("Absolute path to the earlier Capture PNG"),
     after: z.string().min(1).describe("Absolute path to the later Capture PNG"),
     tolerance: z.number().int().min(0).max(255).default(8).describe("Per-channel difference threshold (0–255)"),
 };
-
-/**
- * Checks whether a path is a strict descendant of the capture root.
- * @param root Canonical capture directory.
- * @param path Canonical path to check.
- * @returns Whether the path is inside the root but not the root itself.
- */
-function isInside(root: string, path: string): boolean {
-    const rel = relative(root, path);
-    return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
-}
 
 /**
  * Validates and resolves a Capture PNG path within the capture directory.
@@ -40,20 +30,6 @@ async function capturePath(path: string, root: string): Promise<string> {
         throw new Error(`Capture path must be inside ${root}: ${path}`);
     }
     return resolved;
-}
-
-/**
- * Decodes PNG bytes and associates malformed-image errors with their path.
- * @param path Source image path for error reporting.
- * @param bytes PNG file contents.
- * @returns The decoded PNG.
- */
-function decode(path: string, bytes: Buffer): PNG {
-    try {
-        return PNG.sync.read(bytes);
-    } catch {
-        throw new Error(`Invalid PNG: ${path}`);
-    }
 }
 
 export const diffCapturesTool: ToolDefinition<typeof INPUT> = {
@@ -79,38 +55,15 @@ export const diffCapturesTool: ToolDefinition<typeof INPUT> = {
         const beforePath = await capturePath(before, root);
         const afterPath = await capturePath(after, root);
         const [beforeBytes, afterBytes] = await Promise.all([readFile(beforePath), readFile(afterPath)]);
-        const left = decode(beforePath, beforeBytes);
-        const right = decode(afterPath, afterBytes);
+        const left = decodePng(beforePath, beforeBytes);
+        const right = decodePng(afterPath, afterBytes);
         if (left.width !== right.width || left.height !== right.height) {
             throw new Error(
                 `Capture dimensions differ: ${left.width}x${left.height} vs ${right.width}x${right.height}`,
             );
         }
 
-        const diff = new PNG({ width: left.width, height: left.height });
-        let changedPixels = 0;
-        let minX = left.width;
-        let minY = left.height;
-        let maxX = -1;
-        let maxY = -1;
-        for (let y = 0; y < left.height; y++) {
-            for (let x = 0; x < left.width; x++) {
-                const offset = (y * left.width + x) * 4;
-                // A pixel changes when any RGBA channel exceeds the configured threshold.
-                const changed = [0, 1, 2, 3].some(
-                    (channel) => Math.abs(left.data[offset + channel] - right.data[offset + channel]) > tolerance,
-                );
-                if (changed) {
-                    changedPixels++;
-                    minX = Math.min(minX, x);
-                    minY = Math.min(minY, y);
-                    maxX = Math.max(maxX, x);
-                    maxY = Math.max(maxY, y);
-                    diff.data[offset] = 255;
-                    diff.data[offset + 3] = 255;
-                }
-            }
-        }
+        const { diff, changedPixels, changedPercent, boundingBox } = comparePixels(left, right, tolerance);
 
         const directory = dirname(beforePath);
         const stem = `${basename(beforePath, ".png")}-diff`;
@@ -144,9 +97,8 @@ export const diffCapturesTool: ToolDefinition<typeof INPUT> = {
             width: left.width,
             height: left.height,
             changedPixels,
-            changedPercentage: (changedPixels / (left.width * left.height)) * 100,
-            boundingBox:
-                changedPixels === 0 ? null : { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 },
+            changedPercentage: changedPercent,
+            boundingBox,
         };
         return {
             data,

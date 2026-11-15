@@ -1,16 +1,21 @@
 <div align="center">
 
+<img src="assets/logo.svg" alt="animate-mcp" width="140">
+
 # animate-mcp
 
-An MCP server for operating Adobe Animate from AI agents.
+An MCP server for operating Adobe Animate from AI agents
 
 English | [日本語](README.ja.md)
 
 [Changelog](CHANGELOG.md)
 
+---
+
 [![CI](https://github.com/gekkyo/animate-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/gekkyo/animate-mcp/actions/workflows/ci.yml)
 [![MCP compatible](https://img.shields.io/badge/MCP-compatible-blue)](https://modelcontextprotocol.io)
 [![npm](https://img.shields.io/npm/v/animate-mcp)](https://www.npmjs.com/package/animate-mcp)
+[![npm downloads](https://img.shields.io/npm/dw/animate-mcp)](https://www.npmjs.com/package/animate-mcp)
 [![license MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
 </div>
@@ -32,7 +37,7 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 - Add and edit whole text fields, including font, size, color, alignment, and text type.
 - Edit instance transforms, color effects, filters, names, blend modes, and visibility on keyframes.
 - Edit layer and frame structure and labels.
-- Create motion and classic tweens with preset or custom Bézier easing.
+- Create motion and classic tweens with preset or custom Bézier easing, and shape tweens between raw shapes.
 - Organize library folders and items and find unused items.
 - Import images and audio, find direct Library usages, create or duplicate symbols, and change stage properties.
 - Publish AS3 and HTML5 Canvas documents and get AS3 compile errors and warnings back.
@@ -193,6 +198,7 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 | Area | Tool | What it does |
 |------|------|--------------|
 | Document | `get_document_info` | Show name, size, frame rate, and AS version |
+|  | `get_status` | Check Animate response and list open documents |
 |  | `open_document` | Open a `.fla` or create a new document |
 |  | `save_document` | Save a document |
 |  | `close_document` | Close a document without saving |
@@ -200,7 +206,7 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 |  | `audit_document` | List unused Library items and empty keyframes |
 | Scripts | `export_scripts` | Export frame scripts and structure to files |
 |  | `apply_scripts` | Apply edited scripts back to Animate |
-| Timeline and elements | `inspect_timeline` | Read layers, keyframes, instances, and tweens |
+| Timeline and elements | `inspect_timeline` | Read layers, keyframes, instances, tweens, and optional geometry |
 |  | `edit_timeline` | Edit layers, frames, keyframes, and labels |
 |  | `edit_tween` | Create tweens and change easing |
 |  | `edit_elements` | Edit or place symbol instances |
@@ -209,11 +215,13 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 | Library | `edit_library` | Organize items, find usages, edit AS3 linkage |
 |  | `import_assets` | Import images and audio into the Library |
 | Output and verification | `publish` | Publish and return the Build result |
+|  | `preflight_publish` | Check publish readiness without publishing |
 |  | `read_output` | Read the Output and Compiler Errors panels |
 |  | `test_movie` | Run an AS3 Test Movie and capture compile diagnostics and early output |
 |  | `verify_canvas_output` | Open Canvas output in Chrome and check for errors |
 |  | `capture_frame` | Capture a frame or range as PNG |
 |  | `diff_captures` | Compare two captured PNGs |
+|  | `visual_regression` | Save and compare named frame baselines |
 | Other | `install_greensock` | Install GreenSock-AS3 (saved AS3 only; license review required) |
 |  | `run_jsfl` | Run arbitrary JSFL |
 
@@ -233,7 +241,7 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 flowchart TB
   Agent(["AI agent<br/>Claude Code / Codex"])
   subgraph Server["animate-mcp (Node.js)"]
-    Tools["MCP tools ×24"]
+    Tools["MCP tools ×27"]
     Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
     Runner["Runner<br/>serial + timeout"]
   end

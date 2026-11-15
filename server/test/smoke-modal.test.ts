@@ -12,8 +12,10 @@ function makeHandler(callback: (...args: unknown[]) => unknown, checkModal: () =
     return (...args: unknown[]) => wrapped(...args);
 }
 
-/** Extracts the first text block from a tool result.
+/**
+ * Extracts the first text block from a tool result.
  * @param result Result whose content may contain text
+ * @param result.content Optional content blocks to search
  * @returns First text block, or an empty string when absent
  */
 const message = (result: { content?: Array<{ type: string; text?: string }> }) =>
@@ -23,6 +25,10 @@ const timeoutMessage =
 
 test("smoke tool callbacks check timeout failures only and preserve original errors", async () => {
     let checks = 0;
+    /**
+     * Returns a modal diagnostic result and records that it was checked.
+     * @returns The fake modal state
+     */
     const checkModal = async () => {
         checks += 1;
         return { state: "modal" };

@@ -66,7 +66,9 @@ function setup(initial: FakeDocument[] = [], files: Record<string, "valid" | "in
     } as unknown as McpServer;
     registerOpenDocument(server, {
         // Execute the actual JSFL in a VM while keeping all Animate APIs in this fixture.
-        runner: { execute: async (code: string) => runInNewContext(code, globals) },
+        runner: {
+            execute: async (code: string) => runInNewContext(code, globals),
+        },
         bundle: (...names: string[]) =>
             names.map((name) => (name === "document-target" ? targetJSFL : openJSFL)).join("\n"),
     });

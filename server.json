@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.gekkyo/animate-mcp",
-  "description": "Inspect Adobe Animate documents and edit frame scripts, timelines, tweens, and library items.",
+  "description": "MCP server for Adobe Animate: edit scripts, timelines and library, then publish and verify.",
   "repository": {
     "url": "https://github.com/gekkyo/animate-mcp",
     "source": "github"
   },
-  "version": "0.2.0",
+  "version": "0.3.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "animate-mcp",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "transport": {
         "type": "stdio"
       }

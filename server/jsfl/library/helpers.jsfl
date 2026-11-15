@@ -1,12 +1,10 @@
-  /** Runs ordered library operations and returns their serialized results.
-   * @returns The serialized operation result.
-   */
-  (function () {
-  /** Finds a library item by its full path.
+
+/** Finds a library item by its full path.
+   * @param document Document whose library is inspected.
    * @param path Full library item path.
    * @returns The matching item, or null when it does not exist.
    */
-  function findLibraryItem(path) {
+  function findLibraryItem(document, path) {
     var items = document.library.items;
     for (var itemIndex = 0; itemIndex < items.length; itemIndex++) {
       if (items[itemIndex].name === path) {
@@ -49,10 +47,11 @@
   }
 
   /** Tests whether a path appears in Animate's unusedItems list.
+   * @param document Document whose library is inspected.
    * @param path Full library item path.
    * @returns Whether the item is unused.
    */
-  function isLibraryItemUnused(path) {
+  function isLibraryItemUnused(document, path) {
     var unusedItems = document.library.unusedItems || [];
     for (var itemIndex = 0; itemIndex < unusedItems.length; itemIndex++) {
       if (unusedItems[itemIndex].name === path) {
@@ -63,11 +62,12 @@
   }
 
   /** Returns linkage warnings for an item or any non-folder item inside a folder.
+   * @param document Document whose library is inspected.
    * @param path Library item path to inspect.
    * @param item The item at path.
    * @returns Whether a linkage warning is required.
    */
-  function containsLibraryLinkage(path, item) {
+  function containsLibraryLinkage(document, path, item) {
     if (hasLibraryLinkage(item)) {
       return true;
     }

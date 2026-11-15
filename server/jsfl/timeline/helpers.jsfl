@@ -1,13 +1,13 @@
 // `var __timelineRef` (scene index or library item path) and `var __ops` are injected before this file.
 /** Defines shared layer and frame helpers for the timeline bundle.
  */
-(function () {
   /** Finds a uniquely named layer and optionally verifies its index.
-   * @param name The layer name to find.
+   * @param timeline Timeline whose layers are inspected.
+   * @param name Layer name to find.
    * @param requestedIndex The expected zero-based layer index, when specified.
    * @returns The matching zero-based layer index.
    */
-  function findLayerIndex(name, requestedIndex) {
+  function findLayerIndex(timeline, name, requestedIndex) {
     var found = -1, matches = 0;
     for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
       if (timeline.layers[layerIndex].name === name) {
@@ -27,10 +27,11 @@
   }
 
   /** Finds a layer's current zero-based position by object identity.
+   * @param timeline Timeline whose layers are inspected.
    * @param targetLayer The layer object to locate.
    * @returns The layer's zero-based index, or -1 when it is not present.
    */
-  function layerPosition(targetLayer) {
+  function layerPosition(timeline, targetLayer) {
     for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
       if (timeline.layers[layerIndex] === targetLayer) return layerIndex;
     }
@@ -38,35 +39,38 @@
   }
 
   /** Verifies that the selected parent layer can contain the requested layer type.
-   * @param name The parent layer name, when specified.
+   * @param timeline Timeline whose layers are inspected.
+   * @param name Layer name to find.
    * @param layerType The type of layer that will use the parent.
    * @returns The matching parent layer, or null when no parent is specified.
    */
-  function parentFor(name, layerType) {
+  function parentFor(timeline, name, layerType) {
     if (name === undefined) return null;
-    var parentIndex = findLayerIndex(name, undefined), parent = timeline.layers[parentIndex];
+    var parentIndex = findLayerIndex(timeline, name, undefined), parent = timeline.layers[parentIndex];
     var expectedType = layerType === 'masked' ? 'mask' : 'folder';
     if (parent.layerType !== expectedType) throw new Error('Parent must be a ' + expectedType + ' layer');
     return parent;
   }
 
   /** Verifies that relative placement does not put a child before its parent.
-   * @param layerIndex The child's zero-based layer index.
+   * @param timeline Timeline whose layers are inspected.
+   * @param layerIndex Zero-based layer index.
    * @param parentLayer The parent layer to validate.
    * @returns Nothing.
    */
-  function validateParentPosition(layerIndex, parentLayer) {
+  function validateParentPosition(timeline, layerIndex, parentLayer) {
     if (!parentLayer) return;
-    var parentIndex = layerPosition(parentLayer);
+    var parentIndex = layerPosition(timeline, parentLayer);
     if (parentIndex < 0 || parentIndex >= layerIndex) throw new Error('Parent must appear above the layer');
   }
 
   /** Returns the layers affected by a frame operation.
-   * @param layerIndex The target layer's zero-based index.
+   * @param timeline Timeline whose layers are inspected.
+   * @param layerIndex Zero-based layer index.
    * @param ripple Whether the operation affects all non-folder layers.
    * @returns The layers affected by the operation.
    */
-  function affectedLayers(layerIndex, ripple) {
+  function affectedLayers(timeline, layerIndex, ripple) {
     var layers = [];
     if (ripple) {
       for (var index = 0; index < timeline.layers.length; index++) {
@@ -93,7 +97,7 @@
   }
 
   /** Rejects any tween interiors affected by removing a range.
-   * @param layers The layers affected by the removal.
+   * @param layers Layers affected by the removal.
    * @param frameIndex The zero-based start of the range.
    * @param count The number of frames in the range.
    * @returns Nothing.

@@ -270,6 +270,50 @@ test("edit_timeline shiftLayerFrames offsets content without changing span lengt
     });
 });
 
+test("edit_timeline shiftLayerFrames removes Animate's extra empty trailing pasted span", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({ FAKE_FRAME_COUNT: "30", FAKE_PASTE_TRAILING_EMPTY: "1" }, async (client, tempDir) => {
+        const edited = await editTimeline(client, 0, [
+            { op: "insertKeyframe", layer: "a/b", frame: 5 },
+            { op: "insertFrames", layer: "a/b", frame: 12, count: 2 },
+            { op: "setSpanLength", layer: "a/b", frame: 1, length: 3 },
+        ]);
+        assert.equal((edited.structuredContent as { failed: unknown }).failed, null, text(edited));
+
+        const shifted = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "a/b", offset: 2 }]);
+        assert.equal(shifted.isError, undefined, text(shifted));
+        assert.equal((shifted.structuredContent as { failed: unknown }).failed, null, text(shifted));
+
+        const layers = (await layersLog(tempDir)).at(-1);
+        const frameList = layers.find((entry: { name: string }) => entry.name === "a/b").frames;
+        assert.equal(
+            frameList.reduce((length: number, frame: { duration: number }) => length + frame.duration, 0),
+            32,
+        );
+        assert.deepEqual(
+            frameList.map((frame: { start: number; duration: number }) => [frame.start, frame.duration]),
+            [
+                [0, 2],
+                [2, 2],
+                [4, 28],
+            ],
+        );
+    });
+});
+
+test("edit_timeline shiftLayerFrames keeps a non-empty trailing span and fails", {
+    timeout: 30_000,
+}, async () => {
+    await withServer({ FAKE_FRAME_COUNT: "30", FAKE_PASTE_TRAILING_EMPTY: "labeled" }, async (client) => {
+        const shifted = await editTimeline(client, 0, [{ op: "shiftLayerFrames", layer: "a/b", offset: 2 }]);
+        assert.match(
+            (shifted.structuredContent as { failed: { error: string } }).failed.error,
+            /Shifted (keyframe count|layer has an unexpected length)/,
+        );
+    });
+});
+
 test("edit_timeline reverses bottom-to-top elements into layer order and preserves instance properties", {
     timeout: 30_000,
 }, async () => {

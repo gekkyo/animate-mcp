@@ -12,6 +12,10 @@ const EDIT_STATE_SOURCE = fileURLToPath(new URL("../jsfl/shared/edit-state.jsfl"
  * @returns A minimal Animate document fixture.
  */
 function documentWithSelection(throwOnRestore = false) {
+    /**
+     * Builds a fake timeline with a selection that can be restored.
+     * @returns A minimal fake timeline
+     */
     const makeTimeline = () => ({
         layers: [{}, {}],
         currentLayer: 0,

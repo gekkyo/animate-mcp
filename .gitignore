@@ -4,6 +4,10 @@ server/dist/
 .DS_Store
 *.log
 .scratch/
-docs/
+docs/*
+!docs/animate-quirks.md
 AGENTS.md
 GLOSSARY.md
+reports/
+research_notes/
+*.ai

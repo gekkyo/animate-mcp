@@ -7,8 +7,12 @@ import { z } from "zod";
 import { registerEditText } from "../../src/tools/timeline/edit-text.js";
 
 /**
- * Create an Animate JSFL VM context with configurable document and layer state.
+ * Creates an Animate JSFL VM context with configurable document and layer state.
  * @param options Fixture variations for document type, lock, tween, and selection.
+ * @param options.type Optional document type.
+ * @param options.locked Whether the fixture layer starts locked.
+ * @param options.tween Optional frame tween type.
+ * @param options.text Whether the initial selection is a text element.
  * @returns The VM context containing the fake document.
  */
 const fakeDocument = (options: { type?: string; locked?: boolean; tween?: string; text?: boolean } = {}) => {
@@ -52,9 +56,13 @@ var fl = { documents: [__doc], trace: function () {} };`,
 };
 
 /**
- * Register and call edit_text against a generated in-memory Animate fixture.
+ * Registers and calls edit_text against an in-memory Animate fixture.
  * @param input Tool arguments to validate and execute.
  * @param options Fixture variations passed to {@link fakeDocument}.
+ * @param options.type Optional document type.
+ * @param options.locked Whether the fixture layer starts locked.
+ * @param options.tween Optional frame tween type.
+ * @param options.text Whether the initial selection is a text element.
  * @returns The tool result and VM context for state assertions.
  */
 const callEditText = async (
@@ -76,6 +84,11 @@ const callEditText = async (
         "element-read": "server/jsfl/shared/element-read.jsfl",
         "edit-text": "server/jsfl/timeline/edit-text.jsfl",
     };
+    /**
+     * Loads requested JSFL source files for the fixture.
+     * @param names Requested bundle names.
+     * @returns Concatenated JSFL source.
+     */
     const bundle = (...names: string[]) =>
         names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
     registerEditText(
@@ -85,7 +98,10 @@ const callEditText = async (
                 handler = callback as (input: never) => Promise<unknown>;
             },
         } as never,
-        { runner: { execute: async (code) => runInContext(code, context) }, bundle },
+        {
+            runner: { execute: async (code) => runInContext(code, context) },
+            bundle,
+        },
     );
     const parsed = z.object(inputSchema).safeParse(input);
     if (!parsed.success) {

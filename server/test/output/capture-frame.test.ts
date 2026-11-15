@@ -37,6 +37,7 @@ test("capture_frame returns PNG and metadata, uses the default directory, and re
                 width: number;
                 height: number;
             };
+            assert.equal("pathURI" in structured, false);
             assert.equal(structured.frame, 3);
             assert.equal(structured.timeline, "Scene 1");
             assert.equal(structured.width, 550);
@@ -79,6 +80,7 @@ test("capture_frame accepts unsaved HTML5 Canvas documents and a directory overr
         const dir = join(tempDir, "capture override");
         const result = await client.callTool({ name: "capture_frame", arguments: { frame: 1, dir } });
         assert.equal(result.isError, undefined, text(result));
+        assert.equal("pathURI" in (result.structuredContent as Record<string, unknown>), false);
         assert.equal((result.structuredContent as { frame: number }).frame, 1);
         assert.ok((result.structuredContent as { path: string }).path.startsWith(`${dir}/`));
         assert.deepEqual(await readFile((result.structuredContent as { path: string }).path), PNG);

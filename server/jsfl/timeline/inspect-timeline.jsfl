@@ -1,4 +1,4 @@
-// `var __docName`, `var __timelineRef`, `var __layers`, and `var __frame` are injected before this file.
+// `var __docName`, `var __timelineRef`, `var __layers`, `var __frame`, and `var __geometry` are injected before this file.
 /** Inspects selected timeline layers and serializes their structure.
  * @returns The serialized timeline inspection.
  */
@@ -45,15 +45,28 @@
   function normalizedTweenType(tweenType) {
     if (tweenType === 'motion object') return 'motion';
     if (tweenType === 'motion') return 'classic';
+    if (tweenType === 'shape') return 'shape';
     return 'none';
   }
 
   /** Reads an element and includes text content and style when applicable.
    * @param element Timeline element to read.
+   * @param interpolated Whether the element comes from a tween interior.
    * @returns Normalized element data.
    */
-  function readTimelineElement(element) {
+  function readTimelineElement(element, interpolated) {
     var result = readElement(element);
+    if (__geometry) {
+      result.bounds = { left: element.left, top: element.top, right: element.right, bottom: element.bottom };
+      if (element.instanceType !== undefined && element.instanceType !== null) result.instanceType = element.instanceType;
+      if (element.libraryItem && element.libraryItem.timeline && element.libraryItem.timeline.frameCount !== undefined) {
+        result.symbolFrameCount = element.libraryItem.timeline.frameCount;
+      }
+      if (interpolated) {
+        result.interpolated = true;
+        delete result.matrix;
+      }
+    }
     if (element.elementType === 'text') {
       result.text = element.getTextString ? element.getTextString() : '';
       result.style = readTextStyle(element);
@@ -115,6 +128,10 @@
         tweenType: tweenType
       };
       if (frame.name) span.label = frame.name;
+      if (tweenType === 'shape') {
+        span.ease = frame.tweenEasing;
+        span.blend = frame.shapeTweenBlend;
+      }
       spans.push(span);
       if (tweenType === 'motion') {
         timeline.currentLayer = layerIndex;
@@ -124,9 +141,14 @@
     }
     if (requestedFrame < layer.frames.length) {
       var currentFrame = layer.frames[requestedFrame], currentSpan = currentFrame && layer.frames[currentFrame.startFrame];
-      var elementFrame = currentSpan && currentSpan.tweenType && currentSpan.tweenType !== 'none' ? currentSpan : currentFrame;
+      var currentTweenType = currentSpan ? normalizedTweenType(currentSpan.tweenType) : 'none';
+      var interpolated = !!(__geometry && (currentTweenType === 'classic' || currentTweenType === 'motion') &&
+        requestedFrame > currentSpan.startFrame && requestedFrame < currentSpan.startFrame + currentSpan.duration);
+      if (interpolated) timeline.currentFrame = requestedFrame;
+      var elementFrame = interpolated ? layer.frames[requestedFrame] :
+        currentTweenType !== 'none' ? currentSpan : currentFrame;
       for (var elementIndex = 0; elementIndex < ((elementFrame && elementFrame.elements) || []).length; elementIndex++) {
-        frameElements.push(readTimelineElement(elementFrame.elements[elementIndex]));
+        frameElements.push(readTimelineElement(elementFrame.elements[elementIndex], interpolated));
       }
     }
     var result = {
@@ -150,11 +172,15 @@
      * @param targetTimeline Timeline selected for inspection.
      * @returns The inspected layer data.
      */
-    function (targetTimeline) {
+     function (targetTimeline) {
     timeline = targetTimeline;
-    var indexes = requestedLayerIndexes(), frameIndex = __frame - 1;
-    for (var requestIndex = 0; requestIndex < indexes.length; requestIndex++) resultLayers.push(inspectLayer(indexes[requestIndex], frameIndex));
-    targetSelectedFramesAfter = timeline.getSelectedFrames ? timeline.getSelectedFrames() : null;
+    var indexes = requestedLayerIndexes(), frameIndex = __frame - 1, targetOriginalFrame = timeline.currentFrame;
+    try {
+      for (var requestIndex = 0; requestIndex < indexes.length; requestIndex++) resultLayers.push(inspectLayer(indexes[requestIndex], frameIndex));
+      targetSelectedFramesAfter = timeline.getSelectedFrames ? timeline.getSelectedFrames() : null;
+    } finally {
+       if (timeline.currentFrame !== targetOriginalFrame) timeline.currentFrame = targetOriginalFrame;
+    }
     return resultLayers;
     });
   } finally {
@@ -164,7 +190,7 @@
     var restoredLayerIndex = editLayerPosition(restoredTimeline, originalLayer);
     if (restoredLayerIndex >= 0) restoredTimeline.currentLayer = restoredLayerIndex;
     else if (restoredTimeline.layers.length) restoredTimeline.currentLayer = Math.max(0, Math.min(originalLayerIndex, restoredTimeline.layers.length - 1));
-    restoredTimeline.currentFrame = originalFrame;
+     if (restoredTimeline.currentFrame !== originalFrame) restoredTimeline.currentFrame = originalFrame;
   }
   if (timeline !== originalTimeline && targetSelectedFramesAfter && timeline.setSelectedFrames) timeline.setSelectedFrames(targetSelectedFramesAfter);
   restoreWarning = session.warnings.join('; ');

@@ -409,6 +409,10 @@ test(
                 FAKE_INITIAL_SELECTED_FRAMES: "[0,0,1]",
             },
             async (client, tempDir) => {
+                /**
+                 * Reads linkage values for the test Library item.
+                 * @returns The getLinkage tool result
+                 */
                 const read = async () =>
                     client.callTool({
                         name: "edit_library",

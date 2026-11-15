@@ -1,3 +1,4 @@
+(function () {
   var document = selectDocument(), timeline = null;
   var originalTimeline = document.getTimeline(), originalLayerIndex = originalTimeline.currentLayer;
   var originalLayer = originalTimeline.layers[originalLayerIndex];
@@ -28,14 +29,15 @@
      */
     function (targetTimeline) {
       timeline = targetTimeline;
+      var ctx = { document: document, timeline: timeline, warnings: warnings };
 
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
       var op = __ops[opIndex];
       try {
         if (op.op === 'addLayer' || op.op === 'deleteLayer' || op.op === 'moveLayer' || op.op === 'renameLayer' || op.op === 'setLayerType' || op.op === 'distributeToLayers') {
-          applyLayerOp(op);
+          applyLayerOp(ctx, op);
         } else {
-          applyFrameOp(op);
+          applyFrameOp(ctx, op);
         }
         applied.push(op);
       } catch (error) {
