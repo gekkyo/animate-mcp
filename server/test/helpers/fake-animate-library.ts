@@ -38,7 +38,11 @@ export const libraryRuntime = `  const libraryItems = [
   }
   let selectedLibraryItems = (process.env.FAKE_SELECTED_LIBRARY_ITEMS ?? "").split(",").filter(Boolean)
     .map((name) => libraryItems.find((item) => item.name === name)).filter(Boolean);
-  const logLibrarySelection = () => process.env.FAKE_LOG && appendFileSync(
+    /**
+     * Appends the current selected Library paths to the fake-runtime log.
+     * @returns False when logging is disabled, otherwise the number of bytes appended
+     */
+    const logLibrarySelection = () => process.env.FAKE_LOG && appendFileSync(
     process.env.FAKE_LOG + ".library-selection",
     JSON.stringify(selectedLibraryItems.map((item) => item.name)) + "\\n",
   );

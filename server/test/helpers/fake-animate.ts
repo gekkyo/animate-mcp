@@ -21,9 +21,25 @@ const src = readFileSync(process.argv[2], "utf8");
  * @param message Message to append to the fake-runtime log
  */
 const log = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, message + "\\n");
+/**
+ * Logs a publish-operation event when fake-runtime logging is enabled.
+ * @param message Event to append
+ */
 const logPublish = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".publish", message + "\\n");
+/**
+ * Logs an output-panel event when fake-runtime logging is enabled.
+ * @param message Event to append
+ */
 const logReadOutput = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".read-output", message + "\\n");
+/**
+ * Logs a Test Movie invocation when fake-runtime logging is enabled.
+ * @param message Invocation details to append
+ */
 const logTestMovie = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".test-movie", message + "\\n");
+/**
+ * Logs a frame-capture invocation when fake-runtime logging is enabled.
+ * @param message Invocation details to append
+ */
 const logCapture = (message) => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG + ".capture", message + "\\n");
 log("start");
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
@@ -71,10 +87,24 @@ export async function withServer(
 
 /**
  * Extracts the first text item from an MCP tool result.
- * @param result MCP tool result with optional content
+ * @param result MCP tool result
  * @returns The first text item, or an empty string
  */
-export const text = (result: { content?: unknown }) => (result.content as Array<{ text: string }>)[0]?.text ?? "";
+export const text = (result: unknown): string => {
+    if (typeof result !== "object" || result === null) {
+        throw new TypeError("Invalid MCP tool result");
+    }
+    if ("toolResult" in result) {
+        return "";
+    }
+    if (!("content" in result) || !Array.isArray(result.content)) {
+        throw new TypeError("Invalid MCP tool result");
+    }
+    const first = result.content[0];
+    return typeof first === "object" && first !== null && "text" in first && typeof first.text === "string"
+        ? first.text
+        : "";
+};
 /**
  * Reads and parses the fake runtime's script-write log.
  * @param tempDir Directory containing the fake-runtime logs
@@ -95,7 +125,11 @@ export const layersLog = async (tempDir: string) =>
         .trim()
         .split("\n")
         .map((logLine) => JSON.parse(logLine));
-/** Reads the fake runtime's final timeline selection state. */
+/**
+ * Reads and parses the fake runtime's final timeline selection state.
+ * @param tempDir Directory containing the fake-runtime logs
+ * @returns Parsed timeline-state entries
+ */
 export const stateLog = async (tempDir: string) =>
     (await readFile(join(tempDir, "log.state"), "utf8"))
         .trim()

@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerEditLibrary } from "../../src/tools/library/edit-library.js";
 import { text, withServer } from "../helpers/fake-animate.js";
 
@@ -17,11 +17,16 @@ const libraryJsflParts = {
     "library-index": readFileSync(new URL("../../jsfl/library/index.jsfl", import.meta.url), "utf8"),
 };
 
+/**
+ * Registers edit_library against a minimal fake document.
+ * @param document Fake document exposed to the JSFL runner
+ * @returns Captured tool handler
+ */
 function libraryToolFor(document: Record<string, unknown>) {
     let handler: ((input: unknown) => Promise<unknown>) | undefined;
     registerEditLibrary(
         {
-            registerTool(_name, _options, callback) {
+            registerTool(_name: string, _options: unknown, callback: ToolCallback) {
                 handler = callback as (input: unknown) => Promise<unknown>;
             },
         } as unknown as McpServer,
@@ -37,6 +42,12 @@ function libraryToolFor(document: Record<string, unknown>) {
     return handler;
 }
 
+/**
+ * Builds a minimal fake document with Library selection and mutation support.
+ * @param items Initial Library items
+ * @param frame Properties for the current keyframe
+ * @returns Fake document fixture
+ */
 function makeLibraryDocument(items: { name: string; itemType: string }[], frame: Record<string, unknown>) {
     const selectedItems: { name: string; itemType: string }[] = [];
     const layer = { name: "Audio", layerType: "normal", frames: [{ startFrame: 0, elements: [], ...frame }] };
@@ -227,6 +238,7 @@ test("edit_library finds uses inside nested symbol timelines", { timeout: 30_000
 );
 
 test("edit_library reports direct sound usages without an element index", async () => {
+    // Sound references belong to keyframes, so the usage has no element index.
     const sound = { name: "Theme", itemType: "sound" };
     const handler = libraryToolFor(makeLibraryDocument([sound], { soundLibraryItem: sound }));
     const result = (await handler({ ops: [{ op: "findUsages", item: "Theme" }] })) as {
@@ -454,7 +466,13 @@ test(
                 assert.deepEqual(updatedResults[3].result, updatedResults[2].result);
                 assert.deepEqual(updatedResults[4].result, updatedResults[2].result);
                 assert.deepEqual(updatedResults[5].result, updatedResults[2].result);
-                const linkageWrites = JSON.parse((await readFile(join(tempDir, "log.linkage-writes"), "utf8")).trim());
+                const linkageWrites = JSON.parse(
+                    (await readFile(join(tempDir, "log.linkage-writes"), "utf8")).trim(),
+                ) as {
+                    item: string;
+                    property: string;
+                    value: boolean;
+                }[];
                 assert.deepEqual(
                     linkageWrites.filter((write) => write.property === "linkageExportForAS"),
                     [{ item: "dir/Hero", property: "linkageExportForAS", value: false }],
@@ -517,7 +535,7 @@ test("edit_library validates linkage operations before writing and rejects unsup
         });
         assert.equal(emptyClassName.isError, true);
     });
-    for (const env of [{ FAKE_TYPE: "htmlcanvas" }, { FAKE_AS_VERSION: "AS2" }]) {
+    for (const env of [{ FAKE_TYPE: "htmlcanvas" }, { FAKE_AS_VERSION: "AS2" }] as Record<string, string>[]) {
         await withServer(env, async (client) => {
             const unsupported = await client.callTool({
                 name: "edit_library",

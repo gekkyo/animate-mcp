@@ -4,7 +4,16 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { stateLog, text, withServer } from "../helpers/fake-animate.js";
+
+/** Narrows an MCP result before accessing its content blocks.
+ * @param result Value returned by the MCP client
+ * @returns Whether the value is a call-tool result
+ */
+function isCallToolResult(result: unknown): result is CallToolResult {
+    return typeof result === "object" && result !== null && "content" in result && Array.isArray(result.content);
+}
 
 const PNG = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jHqkAAAAASUVORK5CYII=",
@@ -14,6 +23,7 @@ const PNG = Buffer.from(
 test("capture_frame returns PNG and metadata, uses the default directory, and restores the current frame", {
     timeout: 30_000,
 }, async () => {
+    // An isolated HOME makes the default capture path deterministic without touching the user's files.
     const home = join(tmpdir(), `animate-mcp-capture-home-${randomUUID()}`);
     try {
         await withServer({ HOME: home, FAKE_INITIAL_CURRENT_FRAME: "2" }, async (client, tempDir) => {
@@ -31,6 +41,7 @@ test("capture_frame returns PNG and metadata, uses the default directory, and re
             assert.equal(structured.timeline, "Scene 1");
             assert.equal(structured.width, 550);
             assert.equal(structured.height, 400);
+            assert.ok(isCallToolResult(first));
             const image = first.content.find((item) => item.type === "image");
             assert.equal(image?.type, "image");
             if (image?.type !== "image") {
@@ -90,6 +101,7 @@ test("capture_frame returns ordered PNGs and metadata for an inclusive range", {
             [1, 3, 5],
         );
         assert.ok(captures.every(({ path, timeline }) => path.startsWith(`${dir}/`) && timeline === "Scene 1"));
+        assert.ok(isCallToolResult(result));
         const content = result.content;
         assert.deepEqual(
             content.map(({ type }) => type),
@@ -168,6 +180,7 @@ test("capture_frame accepts exactly 24 captures", { timeout: 30_000 }, async () 
             captures.map(({ frame }) => frame),
             Array.from({ length: 24 }, (_, index) => index + 1),
         );
+        assert.ok(isCallToolResult(result));
         assert.equal(result.content.filter((item) => item.type === "image").length, 24);
         assert.equal(result.content.filter((item) => item.type === "text").length, 24);
         assert.equal((await readdir(dir)).filter((name) => name.endsWith(".png")).length, 24);
@@ -208,7 +221,7 @@ test("capture_frame reports missing documents, invalid frames, and oversized sta
 });
 
 test("capture_frame restores the frame when export fails", { timeout: 20_000 }, async () => {
-    for (const failure of [{ FAKE_EXPORT_FALSE: "1" }, { FAKE_EXPORT_MISSING: "1" }]) {
+    for (const failure of [{ FAKE_EXPORT_FALSE: "1" }, { FAKE_EXPORT_MISSING: "1" }] as Record<string, string>[]) {
         await withServer({ ...failure, FAKE_INITIAL_CURRENT_FRAME: "2" }, async (client, tempDir) => {
             const result = await client.callTool({ name: "capture_frame", arguments: { frame: 5 } });
             assert.equal(result.isError, true);

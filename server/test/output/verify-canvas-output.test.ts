@@ -2,15 +2,31 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type TestContext, test } from "node:test";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { text, withServer } from "../helpers/fake-animate.js";
 
-function skipIfChromeUnavailable(result: { isError?: boolean; content?: unknown }, context: TestContext): void {
+/** Narrows an MCP result before accessing its content blocks.
+ * @param result Value returned by the MCP client
+ * @returns Whether the value is a call-tool result
+ */
+function isCallToolResult(result: unknown): result is CallToolResult {
+    return typeof result === "object" && result !== null && "content" in result && Array.isArray(result.content);
+}
+
+/** Skips browser-dependent checks only when Chrome is unavailable on this host.
+ * @param result Result returned by the verification tool
+ * @param context Node test context used to mark the test skipped
+ * @returns Nothing
+ */
+function skipIfChromeUnavailable(result: unknown, context: TestContext): void {
     const message = text(result);
     if (
+        isCallToolResult(result) &&
         result.isError &&
         message.includes("Could not launch installed Chrome; install Chrome to use verify_canvas_output.") &&
         /(?:Chrome.*(?:not found|doesn't exist|not installed)|executable.*(?:not found|doesn't exist))/i.test(message)
     ) {
+        // Missing host Chrome is an environment limitation, not a product failure.
         context.skip("Installed Chrome is unavailable");
     }
 }
@@ -31,6 +47,7 @@ test("verify_canvas_output opens an explicit HTML fixture, reports browser error
             arguments: { publish: false, htmlPath, observeMs: 100 },
         });
         skipIfChromeUnavailable(result, context);
+        assert.ok(isCallToolResult(result));
         assert.equal(result.isError, undefined, text(result));
         const output = result.structuredContent?.browserOutput as {
             ok: boolean;
@@ -50,7 +67,7 @@ test("verify_canvas_output opens an explicit HTML fixture, reports browser error
         assert.match(output.note, /may be network-dependent/);
         assert.equal(output.observationWindowMs, 100);
         assert.equal(output.observationComplete, true);
-        assert.ok(result.content?.some((item) => item.type === "image" && item.mimeType === "image/png"));
+        assert.ok(result.content.some((item) => item.type === "image" && item.mimeType === "image/png"));
         const publishLog = await readFile(join(tempDir, "log.publish"), "utf8").catch(() => "");
         assert.ok(!publishLog.split("\n").includes("publish"), "publish:false invoked Publish");
     });
@@ -102,6 +119,7 @@ Promise.all([
             arguments: { publish: false, htmlPath, observeMs: 100 },
         });
         skipIfChromeUnavailable(result, context);
+        assert.ok(isCallToolResult(result));
         assert.equal(result.isError, undefined, text(result));
         const browserOutput = result.structuredContent?.browserOutput as {
             ok: boolean;
@@ -155,6 +173,7 @@ test("verify_canvas_output Publishes by default and reports the separate Build r
             arguments: { observeMs: 0 },
         });
         skipIfChromeUnavailable(result, context);
+        assert.ok(isCallToolResult(result));
         assert.equal(result.isError, undefined, text(result));
         assert.deepEqual(result.structuredContent?.buildResult, {
             ok: true,

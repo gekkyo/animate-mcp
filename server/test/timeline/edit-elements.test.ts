@@ -7,6 +7,12 @@ import { z } from "zod";
 import { registerEditElements } from "../../src/tools/timeline/edit-elements.js";
 import { layersLog, stateLog, text, withServer } from "../helpers/fake-animate.js";
 
+/**
+ * Execute edit_elements in a JSFL VM fixture with independent Library and instance symbol types.
+ * @param input Tool arguments to validate and execute.
+ * @param options Fixture Library type, instance symbol type, and optional timeline shape.
+ * @returns The tool result and VM context for state assertions.
+ */
 const callEditElementsWithSymbolType = async (
     input: Record<string, unknown>,
     options: {
@@ -48,7 +54,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
         names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
     registerEditElements(
         {
-            registerTool: (_name, config, callback) => {
+            registerTool: (_name: string, config: { inputSchema: unknown }, callback: (input: unknown) => unknown) => {
                 inputSchema = config.inputSchema as z.ZodRawShape;
                 handler = callback as (input: never) => Promise<unknown>;
             },
@@ -57,9 +63,10 @@ var fl = { documents: [__doc], trace: function () {} };`,
     );
     const parsed = z.object(inputSchema).safeParse(input);
     if (!parsed.success) {
+        // Preserve the normal tool-error shape for schema failures.
         return { isError: true, content: [{ type: "text", text: parsed.error.message }], context };
     }
-    return { ...((await handler?.(parsed.data as never)) as object), context };
+    return { ...((await handler?.(parsed.data as never)) as Record<string, unknown>), context };
 };
 
 test("edit_elements updates instances and returns the values read back from Animate", { timeout: 30_000 }, async () => {
@@ -144,9 +151,13 @@ test("edit_elements adds a library item on a new layer at the stage center and e
                 },
             });
             assert.equal(result.isError, undefined, text(result));
-            assert.equal(result.structuredContent.applied, 3);
+            const structured = result.structuredContent as {
+                applied: number;
+                elements: { name: string; layer: string; frame: number; element: number; x: number; y: number }[];
+            };
+            assert.equal(structured.applied, 3);
             assert.deepEqual(
-                result.structuredContent.elements
+                structured.elements
                     .slice(0, 2)
                     .map((element) => [
                         element.name,
@@ -167,10 +178,13 @@ test("edit_elements adds a library item on a new layer at the stage center and e
             assert.equal(placed.parent, undefined);
             assert.equal(placed.frames.at(-1).start, 6);
             assert.deepEqual(
-                placed.frames.at(-1).elements.map((element) => element.name),
+                placed.frames.at(-1).elements.map((element: { name: string }) => element.name),
                 ["newHero", "secondHero"],
             );
-            assert.equal(layers.at(-1).find((layer) => layer.name === "a/b").frames[0].elements[0].x, 99);
+            assert.equal(
+                layers.at(-1).find((layer: { name: string }) => layer.name === "a/b").frames[0].elements[0].x,
+                99,
+            );
             assert.deepEqual((await stateLog(tempDir)).at(-1), {
                 currentLayer: 2,
                 currentFrame: 3,
@@ -203,7 +217,7 @@ test("edit_elements adds to an existing layer at supplied coordinates and applie
             },
         });
         assert.equal(result.isError, undefined, text(result));
-        const added = result.structuredContent.elements[0];
+        const added = (result.structuredContent as { elements: Record<string, unknown>[] }).elements[0];
         assert.equal(added.name, "placed");
         assert.equal(added.libraryItem, "dir/Hero");
         assert.equal(added.x, 40);
@@ -212,9 +226,9 @@ test("edit_elements adds to an existing layer at supplied coordinates and applie
         assert.equal(added.layer, "a/b");
         assert.equal(added.frame, 1);
         assert.equal(added.element, 1);
-        const layer = (await layersLog(tempDir)).at(-1).find((candidate) => candidate.name === "a/b");
+        const layer = (await layersLog(tempDir)).at(-1).find((candidate: { name: string }) => candidate.name === "a/b");
         assert.deepEqual(
-            layer.frames[0].elements.map((element) => element.name),
+            layer.frames[0].elements.map((element: { name: string }) => element.name),
             ["hero", "placed"],
         );
     });
@@ -232,11 +246,12 @@ test("edit_elements adds on a symbol timeline and rejects an invalid later add b
             },
         });
         assert.equal(result.isError, undefined, text(result));
-        assert.equal(result.structuredContent.elements[0].libraryItem, "dir/Bitmap");
-        assert.equal(result.structuredContent.elements[0].layer, "symbolAdditions");
-        assert.equal(result.structuredContent.elements[0].frame, 3);
-        assert.equal(result.structuredContent.elements[0].x, 275);
-        assert.equal(result.structuredContent.elements[0].y, 200);
+        const added = (result.structuredContent as { elements: Record<string, unknown>[] }).elements[0];
+        assert.equal(added.libraryItem, "dir/Bitmap");
+        assert.equal(added.layer, "symbolAdditions");
+        assert.equal(added.frame, 3);
+        assert.equal(added.x, 275);
+        assert.equal(added.y, 200);
         assert.deepEqual((await stateLog(tempDir)).at(-1), {
             currentLayer: 0,
             currentFrame: 0,
@@ -258,10 +273,10 @@ test("edit_elements adds on a symbol timeline and rejects an invalid later add b
         assert.match(text(invalid), /Library item not found/);
         const sceneLayers = (await layersLog(tempDir)).at(-1);
         assert.equal(
-            sceneLayers.some((layer) => layer.name === "mustNotBeCreated"),
+            sceneLayers.some((layer: { name: string }) => layer.name === "mustNotBeCreated"),
             false,
         );
-        assert.equal(sceneLayers.find((layer) => layer.name === "a/b").frames[0].elements[0].x, 0);
+        assert.equal(sceneLayers.find((layer: { name: string }) => layer.name === "a/b").frames[0].elements[0].x, 0);
 
         const selfAdd = await client.callTool({
             name: "edit_elements",
@@ -289,9 +304,15 @@ test("edit_elements rejects tween keyframes and extension of a tween before muta
             });
             assert.equal(result.isError, true);
             assert.match(text(result), /tween/i);
-            const layer = (await layersLog(tempDir)).at(-1).find((candidate) => candidate.name === "a/b");
+            const layer = (await layersLog(tempDir))
+                .at(-1)
+                .find((candidate: { name: string }) => candidate.name === "a/b");
             assert.deepEqual(
-                layer.frames.map((keyframe) => [keyframe.start, keyframe.tween, keyframe.elements.length]),
+                layer.frames.map((keyframe: { start: number; tween: string; elements: unknown[] }) => [
+                    keyframe.start,
+                    keyframe.tween,
+                    keyframe.elements.length,
+                ]),
                 [
                     [0, "none", 1],
                     [2, "motion", 1],
@@ -317,10 +338,10 @@ test("edit_elements rejects non-visual Library items before any mutation", { tim
         assert.match(text(result), /not a visual item/i);
         const layers = (await layersLog(tempDir)).at(-1);
         assert.equal(
-            layers.some((layer) => layer.name === "mustNotBeCreated"),
+            layers.some((layer: { name: string }) => layer.name === "mustNotBeCreated"),
             false,
         );
-        assert.equal(layers.find((layer) => layer.name === "a/b").frames[0].elements[0].x, 0);
+        assert.equal(layers.find((layer: { name: string }) => layer.name === "a/b").frames[0].elements[0].x, 0);
     });
 });
 
@@ -593,7 +614,9 @@ test("edit_elements uses instance.symbolType for playback validation and readbac
         { libraryItemType: "movie clip", symbolType: "graphic" },
     );
     assert.equal(graphicInstance.isError, undefined, text(graphicInstance));
-    const graphicReadback = graphicInstance.structuredContent as {
+    const graphicReadback = (
+        "structuredContent" in graphicInstance ? graphicInstance.structuredContent : undefined
+    ) as {
         elements: { loop: string; firstFrame: number; type: string }[];
     };
     assert.equal(graphicReadback.elements[0].type, "movie clip");
@@ -618,7 +641,9 @@ test("edit_elements uses instance.symbolType for playback validation and readbac
         { timeline: 0, ops: [{ layer: "L", frame: 1, element: "hero", set: { x: 1 } }] },
         { libraryItemType: "graphic", symbolType: "movie clip" },
     );
-    const nonGraphicResult = nonGraphicReadback.structuredContent as { elements: Record<string, unknown>[] };
+    const nonGraphicResult = (
+        "structuredContent" in nonGraphicReadback ? nonGraphicReadback.structuredContent : undefined
+    ) as { elements: Record<string, unknown>[] };
     assert.equal("loop" in nonGraphicResult.elements[0], false);
     assert.equal("firstFrame" in nonGraphicResult.elements[0], false);
 });
@@ -647,7 +672,12 @@ test("edit_elements derives graphic frame count when frameCount is unavailable",
         { libraryItemType: "graphic", symbolType: "graphic", timeline: { layers: [{ frames: [0, 0, 0] }] } },
     );
     assert.equal(validZero.isError, undefined, text(validZero));
-    assert.equal((validZero.structuredContent as { elements: { firstFrame: number }[] }).elements[0].firstFrame, 0);
+    assert.equal(
+        "structuredContent" in validZero
+            ? (validZero.structuredContent as { elements: { firstFrame: number }[] }).elements[0].firstFrame
+            : undefined,
+        0,
+    );
 
     const addedValidZero = await callEditElementsWithSymbolType(
         {
@@ -658,7 +688,9 @@ test("edit_elements derives graphic frame count when frameCount is unavailable",
     );
     assert.equal(addedValidZero.isError, undefined, text(addedValidZero));
     assert.equal(
-        (addedValidZero.structuredContent as { elements: { firstFrame: number }[] }).elements[0].firstFrame,
+        "structuredContent" in addedValidZero
+            ? (addedValidZero.structuredContent as { elements: { firstFrame: number }[] }).elements[0].firstFrame
+            : undefined,
         0,
     );
 
@@ -716,9 +748,9 @@ test("edit_elements rejects swapSymbol in add.set before earlier writes", { time
         assert.equal(result.isError, true);
         assert.match(text(result), /swapSymbol.*add/i);
         const layers = (await layersLog(tempDir)).at(-1);
-        assert.equal(layers.find((layer) => layer.name === "a/b").frames[0].elements[0].x, 0);
+        assert.equal(layers.find((layer: { name: string }) => layer.name === "a/b").frames[0].elements[0].x, 0);
         assert.equal(
-            layers.some((layer) => layer.name === "mustNotBeAdded"),
+            layers.some((layer: { name: string }) => layer.name === "mustNotBeAdded"),
             false,
         );
     });

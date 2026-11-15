@@ -117,6 +117,7 @@ test("inspect_timeline supports selected layers, motion keyframe values and libr
 });
 
 test("inspect_timeline reports text content and whole-field style", async () => {
+    // Execute the real bundled JSFL against a small VM fixture to cover static-text getter failures.
     const context = createContext({});
     runInContext(
         `var __textAttrs = { face: "Arial", size: 18, fillColor: "#123456", bold: true, italic: false };
@@ -141,7 +142,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
         names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
     registerInspectTimeline(
         {
-            registerTool: (_name, _config, callback) => {
+            registerTool: (_name: string, _config: unknown, callback: (input: unknown) => unknown) => {
                 handler = callback as (input: never) => Promise<unknown>;
             },
         } as never,

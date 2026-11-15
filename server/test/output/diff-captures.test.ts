@@ -3,9 +3,24 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { PNG } from "pngjs";
 import { text, withServer } from "../helpers/fake-animate.js";
 
+/** Narrows an MCP result before accessing its content blocks.
+ * @param result Value returned by the MCP client
+ * @returns Whether the value is a call-tool result
+ */
+function isCallToolResult(result: unknown): result is CallToolResult {
+    return typeof result === "object" && result !== null && "content" in result && Array.isArray(result.content);
+}
+
+/** Encodes RGBA pixels as a PNG fixture.
+ * @param width Image width in pixels
+ * @param height Image height in pixels
+ * @param pixels RGBA values in row-major order
+ * @returns The encoded PNG bytes
+ */
 function png(width: number, height: number, pixels: Array<[number, number, number, number]>): Buffer {
     const image = new PNG({ width, height });
     for (let i = 0; i < pixels.length; i++) {
@@ -55,6 +70,7 @@ test("diff_captures compares real PNGs, applies channel tolerance, and returns a
             assert.ok(data.path.endsWith("/before-diff.png"));
             assert.deepEqual((await readdir(dir)).sort(), ["after.png", "before-diff.png", "before.png"]);
 
+            assert.ok(isCallToolResult(result));
             const image = result.content.find((item) => item.type === "image");
             assert.equal(image?.type, "image");
             if (image?.type === "image") {

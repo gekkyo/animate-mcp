@@ -6,6 +6,11 @@ import { createContext, runInContext } from "node:vm";
 import { z } from "zod";
 import { registerEditText } from "../../src/tools/timeline/edit-text.js";
 
+/**
+ * Create an Animate JSFL VM context with configurable document and layer state.
+ * @param options Fixture variations for document type, lock, tween, and selection.
+ * @returns The VM context containing the fake document.
+ */
 const fakeDocument = (options: { type?: string; locked?: boolean; tween?: string; text?: boolean } = {}) => {
     const context = createContext({});
     runInContext(
@@ -46,10 +51,21 @@ var fl = { documents: [__doc], trace: function () {} };`,
     return context;
 };
 
+/**
+ * Register and call edit_text against a generated in-memory Animate fixture.
+ * @param input Tool arguments to validate and execute.
+ * @param options Fixture variations passed to {@link fakeDocument}.
+ * @returns The tool result and VM context for state assertions.
+ */
 const callEditText = async (
     input: Record<string, unknown>,
     options: { type?: string; locked?: boolean; tween?: string; text?: boolean } = {},
-) => {
+): Promise<{
+    isError?: boolean;
+    content?: { type: string; text: string }[];
+    structuredContent?: unknown;
+    context: ReturnType<typeof createContext>;
+}> => {
     const context = fakeDocument(options);
     let handler: ((input: never) => Promise<unknown>) | undefined;
     let inputSchema: z.ZodRawShape = {};
@@ -64,7 +80,7 @@ const callEditText = async (
         names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
     registerEditText(
         {
-            registerTool: (_name, config, callback) => {
+            registerTool: (_name: string, config: { inputSchema: unknown }, callback: (input: unknown) => unknown) => {
                 inputSchema = config.inputSchema as z.ZodRawShape;
                 handler = callback as (input: never) => Promise<unknown>;
             },
@@ -73,9 +89,10 @@ const callEditText = async (
     );
     const parsed = z.object(inputSchema).safeParse(input);
     if (!parsed.success) {
+        // Return schema failures in the same shape as an MCP tool error.
         return { isError: true, content: [{ type: "text", text: parsed.error.message }], context };
     }
-    return { ...((await handler?.(parsed.data as never)) as object), context };
+    return { ...((await handler?.(parsed.data as never)) as Record<string, unknown>), context };
 };
 
 test("edit_text adds styled text to a locked layer and restores frame and selection", async () => {
@@ -100,6 +117,7 @@ test("edit_text adds styled text to a locked layer and restores frame and select
                 },
             ],
         },
+        // Animate must temporarily unlock the layer to add the text, then restore it.
         { locked: true },
     );
     assert.equal(result.isError, undefined, "edit_text add failed");

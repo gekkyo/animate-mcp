@@ -15,6 +15,11 @@ const jsflParts = {
     "import-assets": readFileSync(new URL("../../jsfl/library/import-assets.jsfl", import.meta.url), "utf8"),
 };
 
+/**
+ * Registers import_assets against a fake document and bundled JSFL runner.
+ * @param document Fake document exposed to JSFL
+ * @returns Tool-call helpers and requested bundle history
+ */
 function setup(document: object) {
     let registered:
         | {
@@ -52,6 +57,11 @@ function setup(document: object) {
     };
 }
 
+/**
+ * Creates a fake document that records imports and Library selection.
+ * @param existing Existing Library item paths
+ * @returns Fake document and observable import state
+ */
 function makeDocument(existing: string[] = []) {
     const libraryItems = existing.map((name) => ({ name, itemType: name.includes(".") ? "bitmap" : "folder" }));
     const stage = [{ name: "stage-content" }];

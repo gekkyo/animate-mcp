@@ -7,15 +7,30 @@ import ts from "typescript";
 
 const JSFL_ROOT = fileURLToPath(new URL("../jsfl/", import.meta.url));
 
+/**
+ * Find syntax constructs unsupported by Animate's ES3-era JSFL engine.
+ * @param source JavaScript source text to inspect.
+ * @param fileName Label included in reported locations.
+ * @returns Human-readable descriptions of unsupported syntax.
+ */
 function findEs3SyntaxIssues(source: string, fileName: string): string[] {
     const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     const issues: string[] = [];
 
+    /**
+     * Record one unsupported construct at its source location.
+     * @param node Syntax node to locate.
+     * @param syntax Short description of the unsupported syntax.
+     */
     function report(node: ts.Node, syntax: string): void {
         const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
         issues.push(`${fileName}:${line}: ${syntax}`);
     }
 
+    /**
+     * Walk the AST and report unsupported constructs.
+     * @param node Current syntax node.
+     */
     function visit(node: ts.Node): void {
         if (ts.isFunctionLike(node) && node.parameters.hasTrailingComma) {
             report(node, "trailing comma in function parameters");
@@ -47,6 +62,11 @@ function findEs3SyntaxIssues(source: string, fileName: string): string[] {
     return issues;
 }
 
+/**
+ * Recursively collect JSFL files below a directory.
+ * @param directory Directory to scan.
+ * @returns Absolute paths of discovered JSFL files.
+ */
 async function listJsflFiles(directory: string): Promise<string[]> {
     const entries = await readdir(directory, { withFileTypes: true });
     const descendants = await Promise.all(
@@ -81,6 +101,7 @@ test("detects JSFL syntax that Animate's ES3 engine does not support", async () 
         );
     }
 
+    // Syntax-like text inside comments, strings, and regex literals is not executable syntax.
     const ignored = [
         '// let const => `template`, trailing,\nvar text = "let const => `template`,";',
         "var pattern = /[,)]|let|const|=>|`/;",

@@ -1,5 +1,9 @@
 export const elementsRuntime = `const lib = { name: "Hero", itemType: "movie clip" };
-/** Simulates Animate's read-only color-effect properties. */
+/**
+ * Simulates Animate's read-only color-effect properties.
+ * @param element Fake instance whose color properties should be locked
+ * @returns Nothing
+ */
 const lockColorEffectProperties = (element) => {
   Object.defineProperties(element, {
     __fakeBrightness: { value: element.brightness, writable: true, configurable: true },
@@ -33,9 +37,17 @@ const makeInstance = (name, x, libraryItem = lib) => ({ elementType: "instance",
  * @returns The constructed keyframe
  */
 const makeKeyframe = (startFrame, duration, extra) => Object.assign({ startFrame, duration, name: "", tweenType: "none", actionScript: "", elements: [],
-  /** Stores fake classic custom-ease points. @param group Tween property group @param points Ease control points @returns Nothing */
-  setCustomEase(group, points) { this.customEases = this.customEases || {}; this.customEases[group] = points; },
-  /** Returns a minimal fake motion-object XML graph for tween tests. */
+   /**
+    * Stores fake classic custom-ease points.
+    * @param group Tween property group
+    * @param points Ease control points
+    * @returns Nothing
+    */
+   setCustomEase(group, points) { this.customEases = this.customEases || {}; this.customEases[group] = points; },
+   /**
+    * Returns a minimal fake motion-object XML graph for tween tests.
+    * @returns Motion-object XML, using supplied fixture XML when present
+    */
   getMotionObjectXML() {
     const timeline = this.__fakeTimeline;
     if (timeline) {
@@ -47,7 +59,11 @@ const makeKeyframe = (startFrame, duration, extra) => Object.assign({ startFrame
     }
     return this.motionXML || '<AnimationCore TimeScale="24000" Version="1" duration="5000"><PropertyContainer id="Basic_Motion"><Property id="Motion_X"><Keyframe anchor="0,0" next="0,0" previous="0,0" roving="0" timevalue="0"/></Property><Property id="Motion_Y"><Keyframe anchor="0,0" next="0,0" previous="0,0" roving="0" timevalue="0"/></Property><Property id="Rotation_Z"><Keyframe anchor="0,0" next="0,0" previous="0,0" roving="0" timevalue="0"/></Property></PropertyContainer><PropertyContainer id="Transformation"><Property id="Scale_X"><Keyframe anchor="0,100" next="0,100" previous="0,100" roving="0" timevalue="0"/></Property><Property id="Scale_Y"><Keyframe anchor="0,100" next="0,100" previous="0,100" roving="0" timevalue="0"/></Property></PropertyContainer><PropertyContainer id="Colors"><Property id="Alpha_Amount"><Keyframe anchor="0,100" next="0,100" previous="0,100" roving="0" timevalue="0"/></Property><Property id="Brightness_Amount"><Keyframe anchor="0,0" next="0,0" previous="0,0" roving="0" timevalue="0"/></Property></PropertyContainer></AnimationCore>';
   },
-  /** Stores a fake motion-object XML graph. @param xml XML graph to store */
+   /**
+    * Stores a fake motion-object XML graph.
+    * @param xml XML graph to store
+    * @returns Nothing
+    */
   setMotionObjectXML(xml) { this.motionXML = xml; }
 }, extra);
 `;
