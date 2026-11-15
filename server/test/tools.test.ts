@@ -4,8 +4,8 @@ import { INSTRUCTIONS, TOOLS } from "../src/index.js";
 import { text, withServer } from "./helpers/fake-animate.js";
 
 test("registry keeps all tools and the original client instructions", () => {
-    assert.equal(TOOLS.length, 24);
-    assert.equal(new Set(TOOLS.map((tool) => tool.name)).size, 24);
+    assert.equal(TOOLS.length, 27);
+    assert.equal(new Set(TOOLS.map((tool) => tool.name)).size, 27);
     assert.equal(
         INSTRUCTIONS,
         `Read and write Adobe Animate timeline scripts as files.
@@ -30,6 +30,8 @@ Basic flow:
 - Use diff_captures with absolute before/after paths returned by capture_frame. It creates a non-overwriting red-highlight PNG alongside the earlier Capture.
 - Use audit_document for read-only document hygiene suggestions. Review every finding before changing content; unused Library items may be intentional, especially when linkage is enabled.
 - Use verify_canvas_output to check a published HTML5 Canvas page in Chrome. By default Publish overwrites the document's configured outputs; use publish: false to avoid publishing or htmlPath to specify custom output. Page scripts run in Chrome.
+- Use preflight_publish to review known risks before Publish. Ambiguous output-file paths and compilation are not verified.
+- Save a named Baseline, then compare the same timeline and frames later. Saving over an existing Baseline requires overwrite: true.
 
 Notes:
 - When several documents are open, document is required. get_document_info returns the name.
@@ -69,6 +71,7 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
         const byName = new Map(tools.map((tool) => [tool.name, tool]));
         const annotations = {
             get_document_info: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+            get_status: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
             inspect_timeline: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
             export_scripts: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
             edit_timeline: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
@@ -120,6 +123,13 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
                 openWorldHint: false,
             },
             audit_document: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+            preflight_publish: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+            visual_regression: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             verify_canvas_output: {
                 readOnlyHint: false,
                 destructiveHint: true,

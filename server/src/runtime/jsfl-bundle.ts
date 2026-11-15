@@ -5,6 +5,7 @@ export const JSFL_FILES: Record<string, { path: string; deps: string[] }> = {
     "edit-state": { path: "shared/edit-state.jsfl", deps: [] },
     "export-common": { path: "shared/export-common.jsfl", deps: [] },
     "document-runtime-info": { path: "document/document-runtime-info.jsfl", deps: [] },
+    "get-status": { path: "document/get-status.jsfl", deps: ["export-common"] },
     "get-document-info": { path: "document/get-document-info.jsfl", deps: ["export-common", "document-runtime-info"] },
     "audit-document": {
         path: "document/audit-document.jsfl",
@@ -36,6 +37,7 @@ export const JSFL_FILES: Record<string, { path: string; deps: string[] }> = {
         deps: ["select-document", "edit-state", "export-common", "element-read"],
     },
     publish: { path: "output/publish.jsfl", deps: ["select-document"] },
+    "preflight-publish": { path: "output/preflight-publish.jsfl", deps: ["export-common"] },
     "capture-frame": { path: "output/capture-frame.jsfl", deps: ["export-common"] },
     "edit-elements": {
         path: "timeline/edit-elements.jsfl",

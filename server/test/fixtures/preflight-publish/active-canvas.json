@@ -1,0 +1,21 @@
+{
+    "document": {
+        "name": "animation.fla",
+        "pathURI": "file:///project/animation.fla",
+        "type": "htmlcanvas",
+        "profile": "<PublishProfile><html>1</html><flash>0</flash><htmlFileName>animation.html</htmlFileName><jsFileName>animation.js</jsFileName></PublishProfile>"
+    },
+    "existingOutputs": ["animation.html"],
+    "audit": {
+        "document": "animation.fla",
+        "findings": [
+            {
+                "category": "unusedLibraryItem",
+                "severity": "warning",
+                "location": "Library item \"unused\"",
+                "message": "Review before deleting."
+            }
+        ],
+        "warnings": []
+    }
+}

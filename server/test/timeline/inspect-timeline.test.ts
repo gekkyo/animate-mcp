@@ -138,6 +138,11 @@ var fl = { documents: [__doc], trace: function () {} };`,
         "element-read": "server/jsfl/shared/element-read.jsfl",
         "inspect-timeline": "server/jsfl/timeline/inspect-timeline.jsfl",
     };
+    /**
+     * Loads requested JSFL source files for the fixture.
+     * @param names Requested bundle names.
+     * @returns Concatenated JSFL source.
+     */
     const bundle = (...names: string[]) =>
         names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
     registerInspectTimeline(
@@ -183,4 +188,92 @@ var fl = { documents: [__doc], trace: function () {} };`,
         textType: "static",
         lineType: null,
     });
+});
+
+test("inspect_timeline adds opt-in tween geometry and restores the inspected frame", async () => {
+    const context = createContext({});
+    runInContext(
+        `var __startElement = { elementType: "shape", name: "start", x: 123, y: 2, width: 8, height: 6, left: 1, top: 2, right: 9, bottom: 8, scaleX: 1, scaleY: 1, rotation: 0, matrix: { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 } };
+var __tweenElement = { elementType: "instance", instanceType: "symbol", name: "interior", libraryItem: { name: "Graphic", itemType: "graphic", timeline: { frameCount: 3 } }, symbolType: "graphic", loop: "play once", firstFrame: 2, get x() { if (timeline.failRead && timeline.currentFrame === 1) throw new Error("geometry read failed"); return timeline.currentFrame * 10; }, y: 2, width: 8, height: 6, left: 1, top: 2, right: 9, bottom: 8, scaleX: 1, scaleY: 1, rotation: 0, matrix: { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 } };
+var __keyframe = { startFrame: 0, duration: 3, tweenType: "motion object", name: "", getMotionObjectXML: function () { if (timeline.failMotion) throw new Error("motion read failed"); return ""; }, elements: [__startElement] };
+var __middleFrame = { startFrame: 0, duration: 3, tweenType: "motion", elements: [__tweenElement] };
+var __lastFrame = { startFrame: 0, duration: 3, tweenType: "motion", elements: [__tweenElement] };
+var __layer = { name: "Tween", layerType: "normal", locked: false, visible: true, frames: [__keyframe, __middleFrame, __lastFrame] };
+var __currentFrame = 0, __frameAssignments = [];
+var timeline = { currentLayer: 0, get currentFrame() { return __currentFrame; }, set currentFrame(value) { __frameAssignments.push(value); __currentFrame = value; }, selectedFrames: [], layers: [__layer], getSelectedFrames: function () { return this.selectedFrames; }, setSelectedFrames: function (frames, end) { this.selectedFrames = end === undefined ? frames : [frames, end]; if (end !== undefined) this.currentFrame = end; } };
+var __doc = { name: "geometry.fla", type: "Flash", currentTimeline: 0, timelines: [timeline], library: { items: [] }, getTimeline: function () { return this.timelines[this.currentTimeline]; }, exitEditMode: function () {}, editScene: function (index) { this.currentTimeline = index; } };
+var fl = { documents: [__doc], trace: function () {} };`,
+        context,
+    );
+    let handler: ((input: never) => Promise<unknown>) | undefined;
+    const bundlePaths: Record<string, string> = {
+        "select-document": "server/jsfl/shared/select-document.jsfl",
+        "edit-state": "server/jsfl/shared/edit-state.jsfl",
+        "export-common": "server/jsfl/shared/export-common.jsfl",
+        "element-read": "server/jsfl/shared/element-read.jsfl",
+        "inspect-timeline": "server/jsfl/timeline/inspect-timeline.jsfl",
+    };
+    /**
+     * Loads requested JSFL source files for the fixture.
+     * @param names Requested bundle names.
+     * @returns Concatenated JSFL source.
+     */
+    const bundle = (...names: string[]) =>
+        names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
+    registerInspectTimeline(
+        {
+            registerTool: (_name: string, _config: unknown, callback: (input: unknown) => unknown) => {
+                handler = callback as (input: never) => Promise<unknown>;
+            },
+        } as never,
+        {
+            runner: { execute: async (code) => runInContext(code, context) },
+            bundle,
+        },
+    );
+
+    const legacy = (await handler?.({ timeline: 0, frame: 2 } as never)) as {
+        structuredContent: { layers: { elements: Record<string, unknown>[] }[] };
+    };
+    assert.equal(legacy.structuredContent.layers[0].elements[0].x, 123);
+    assert.equal("instanceType" in legacy.structuredContent.layers[0].elements[0], false);
+    assert.deepEqual(JSON.parse(JSON.stringify(runInContext("__frameAssignments", context))), [1, 0]);
+    assert.deepEqual(JSON.parse(JSON.stringify(runInContext("timeline.selectedFrames", context))), []);
+
+    runInContext("__frameAssignments.length = 0; timeline.failMotion = true;", context);
+    const legacyFailed = (await handler?.({ timeline: 0, frame: 2 } as never)) as { isError?: boolean };
+    assert.equal(legacyFailed.isError, true);
+    assert.equal(runInContext("timeline.currentFrame", context), 0);
+    assert.deepEqual(JSON.parse(JSON.stringify(runInContext("__frameAssignments", context))), [1, 0]);
+    assert.deepEqual(JSON.parse(JSON.stringify(runInContext("timeline.selectedFrames", context))), []);
+    runInContext("timeline.failMotion = false; __frameAssignments.length = 0;", context);
+
+    const result = (await handler?.({ timeline: 0, frame: 2, geometry: true } as never)) as {
+        structuredContent: { layers: { elements: Record<string, unknown>[] }[] };
+    };
+    const element = result.structuredContent.layers[0].elements[0];
+    assert.equal(element.x, 10);
+    assert.deepEqual(element.bounds, { left: 1, top: 2, right: 9, bottom: 8 });
+    assert.equal(element.interpolated, true);
+    assert.equal("matrix" in element, false);
+    assert.equal(element.instanceType, "symbol");
+    assert.equal(element.symbolFrameCount, 3);
+    assert.equal(element.loop, "play once");
+    assert.equal(element.firstFrame, 2);
+    assert.equal(runInContext("timeline.currentFrame", context), 0);
+    assert.deepEqual(JSON.parse(JSON.stringify(runInContext("__frameAssignments", context))), [1, 1, 0]);
+
+    runInContext("__keyframe.tweenType = 'shape'; __frameAssignments.length = 0;", context);
+    const shapeTween = (await handler?.({ timeline: 0, frame: 2, geometry: true } as never)) as {
+        structuredContent: { layers: { elements: Record<string, unknown>[] }[] };
+    };
+    assert.equal("interpolated" in shapeTween.structuredContent.layers[0].elements[0], false);
+    assert.deepEqual(JSON.parse(JSON.stringify(runInContext("__frameAssignments", context))), []);
+
+    runInContext("__keyframe.tweenType = 'motion object'; __frameAssignments.length = 0;", context);
+    runInContext("timeline.failRead = true; __frameAssignments.length = 0;", context);
+    const failed = (await handler?.({ timeline: 0, frame: 2, geometry: true } as never)) as { isError?: boolean };
+    assert.equal(failed.isError, true);
+    assert.equal(runInContext("timeline.currentFrame", context), 0);
+    assert.deepEqual(JSON.parse(JSON.stringify(runInContext("__frameAssignments", context))), [1, 1, 0]);
 });
