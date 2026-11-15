@@ -45,33 +45,10 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 
 ## How it works
 
-```mermaid
-%%{init: {'theme':'dark'}}%%
-flowchart TB
-  Agent(["AI agent<br/>Claude Code / Codex"])
-  subgraph Server["animate-mcp (Node.js)"]
-    Tools["MCP tools ×24"]
-    Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
-    Runner["Runner<br/>serial + timeout"]
-  end
-  Files["exports/<br/>scripts + structure.md"]
-  Chrome(["Chrome"])
-  Animate(["Adobe Animate<br/>(running)"])
-  Agent -->|"edit files"| Files
-  Agent -->|"MCP stdio"| Tools
-  Tools -->|"export / apply"| Files
-  Tools -->|"verify_canvas_output"| Chrome
-  Tools --> Bundle --> Runner
-  Runner -->|"1. open Run.jsfl"| Animate
-  Animate -.->|"2. write Result.json"| Runner
-  classDef actor fill:#172554,stroke:#60a5fa,color:#f8fafc
-  classDef core fill:#3b2f12,stroke:#fbbf24,color:#fff7ed
-  classDef store fill:#143326,stroke:#4ade80,color:#f0fdf4
-  class Agent,Animate,Chrome actor
-  class Tools,Bundle,Runner core
-  class Files store
-  style Server fill:#161b22,stroke:#6b7280,color:#e5e7eb
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.png">
+  <img src="assets/architecture-light.png" alt="Architecture: AI agent, MCP tools, JSFL runner, Adobe Animate and Chrome" width="560">
+</picture>
 
 Each tool builds a JSFL script, writes it to `~/.animate-mcp/runs/`, and opens it in the running Animate. The script writes its result as JSON, which the server reads back. Runs are serialized and time out if Animate does not respond.
 

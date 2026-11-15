@@ -1,0 +1,26 @@
+%%{init: {'theme':'base','themeVariables':{'lineColor':'#6b7280','edgeLabelBackground':'#ffffff','tertiaryColor':'#ffffff','primaryTextColor':'#1f2328','fontSize':'16px'}}}%%
+flowchart TB
+  Agent(["AI agent<br/>Claude Code / Codex"])
+  subgraph Server["animate-mcp (Node.js)"]
+    Tools["MCP tools ×24"]
+    Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
+    Runner["Runner<br/>serial + timeout"]
+  end
+  Files["exports/<br/>scripts + structure.md"]
+  Chrome(["Chrome"])
+  Animate(["Adobe Animate<br/>(running)"])
+  Agent -->|"edit files"| Files
+  Agent -->|"MCP stdio"| Tools
+  Tools -->|"export / apply"| Files
+  Tools -->|"verify_canvas_output"| Chrome
+  Tools --> Bundle --> Runner
+  Runner -->|"1. open Run.jsfl"| Animate
+  Animate -.->|"2. write Result.json"| Runner
+  linkStyle default stroke:#6b7280
+  classDef actor fill:#dbeafe,stroke:#2563eb,color:#0f172a
+  classDef core fill:#fef3c7,stroke:#d97706,color:#1c1917
+  classDef store fill:#dcfce7,stroke:#16a34a,color:#052e16
+  class Agent,Animate,Chrome actor
+  class Tools,Bundle,Runner core
+  class Files store
+  style Server fill:#f6f8fa,stroke:#9ca3af,color:#1f2328
