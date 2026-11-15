@@ -47,6 +47,11 @@
     "typescript": "^5.9.3",
     "zod": "^4.1.12"
   },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
+  },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
     "@types/pngjs": "^6.0.5",
