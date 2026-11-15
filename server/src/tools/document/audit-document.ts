@@ -1,8 +1,13 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
 
-export const auditDocumentTool: ToolDefinition = {
+const INPUT = {
+    document: z.string().optional().describe("Open document name; defaults to the only open document"),
+};
+
+export const auditDocumentTool: ToolDefinition<typeof INPUT> = {
     name: "audit_document",
     description:
         "Read-only hygiene suggestions for unused Library items, empty keyframes, and default-looking English/Japanese layer or symbol names. These are review heuristics, not proof that content should be deleted; linkage-bearing items are explicitly protected from that conclusion.",
@@ -10,16 +15,17 @@ export const auditDocumentTool: ToolDefinition = {
     guidance: {
         basic: "- Use audit_document for read-only document hygiene suggestions. Review every finding before changing content; unused Library items may be intentional, especially when linkage is enabled.",
     },
+    inputSchema: INPUT,
     /**
      * Collects read-only document hygiene findings.
-     * @param _args No input arguments.
+     * @param document Optional open document name.
      * @param deps Tool dependencies for executing Animate commands.
      * @returns Findings grouped by category with any warnings.
      */
-    run: async (_args: never, deps: ToolDeps) => {
+    run: async ({ document }: Parameters<ToolCallback<typeof INPUT>>[0], deps: ToolDeps) => {
         const { runner, bundle } = deps;
         const result = JSON.parse(
-            String(await runner.execute(jsflRun("audit-document", { __docName: "" }, bundle))),
+            String(await runner.execute(jsflRun("audit-document", { __docName: document ?? "" }, bundle))),
         ) as {
             document: string;
             findings: {

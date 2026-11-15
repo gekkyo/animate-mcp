@@ -142,3 +142,27 @@ test("audit_document warns and suppresses unused findings when selection restora
         },
     );
 });
+
+test("audit_document selects an explicit document without changing the other open document", {
+    timeout: 30_000,
+}, async () => {
+    await withServer(
+        {
+            FAKE_TWO: "1",
+            FAKE_INITIAL_CURRENT_LAYER: "1",
+            FAKE_INITIAL_CURRENT_FRAME: "2",
+            FAKE_INITIAL_SELECTED_FRAMES: "[1,0,2]",
+        },
+        async (client, tempDir) => {
+            const result = await client.callTool({ name: "audit_document", arguments: { document: "b.fla" } });
+            assert.equal(result.isError, undefined, text(result));
+            assert.equal((result.structuredContent as { document: string }).document, "b.fla");
+            assert.deepEqual((await stateLog(tempDir)).at(-1), {
+                currentLayer: 1,
+                currentFrame: 2,
+                selectedFrames: [1, 0, 2],
+                selectedElements: 0,
+            });
+        },
+    );
+});
