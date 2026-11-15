@@ -195,10 +195,15 @@ export const applyScriptsTool: ToolDefinition<typeof APPLY_SCRIPTS_INPUT> = {
                         warnings.push(`Edit state may not have been restored: ${message}`);
                     }
                 }
-                if (pass === 1 && progressToken !== undefined) {
+                // Report both passes so early progress goes out before later Runs, not in a burst with the response.
+                if (progressToken !== undefined) {
                     await extra.sendNotification({
                         method: "notifications/progress",
-                        params: { progressToken, progress: chunkIndex + 1, total: editChunks.length },
+                        params: {
+                            progressToken,
+                            progress: pass * editChunks.length + chunkIndex + 1,
+                            total: editChunks.length * 2,
+                        },
                     });
                 }
             }
