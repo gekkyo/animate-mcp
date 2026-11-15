@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added `get_status` for a short Animate responsiveness probe and open-document summary; it does not report unsaved changes.
+- Added read-only `preflight_publish` checks and audit findings without saving or publishing. Output-file checks are limited to safe candidate names beside the FLA, and compilation remains unchecked.
+- Added `visual_regression` to save and compare named frame Baselines, with guarded overwrite and diff images for failed comparisons.
+
+### Changed
+
+- `inspect_timeline` accepts `geometry: true` to read bounds and symbol playback metadata, including interpolated tween values when available.
+
 ## 0.2.0
 
 ### Added

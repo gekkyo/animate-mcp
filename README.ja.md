@@ -185,6 +185,7 @@ Canvas 出力を Chrome で開いて、コンソールエラーがないか確�
 | 分類 | ツール | できること |
 |------|--------|------------|
 | ドキュメント | `get_document_info` | 名前・サイズ・フレームレート・AS バージョンを確認 |
+|  | `get_status` | Animate の応答と開いているドキュメントを確認 |
 |  | `open_document` | `.fla` を開く／新規ドキュメントを作成 |
 |  | `save_document` | ドキュメントを保存 |
 |  | `close_document` | 保存せずにドキュメントを閉じる |
@@ -192,7 +193,7 @@ Canvas 出力を Chrome で開いて、コンソールエラーがないか確�
 |  | `audit_document` | 未使用のライブラリ項目や空キーフレームを一覧化 |
 | スクリプト | `export_scripts` | フレームスクリプトと構造をファイルに書き出す |
 |  | `apply_scripts` | 編集したスクリプトを Animate に反映 |
-| タイムライン・要素 | `inspect_timeline` | レイヤー・キーフレーム・インスタンス・トゥイーンを確認 |
+| タイムライン・要素 | `inspect_timeline` | レイヤー・キーフレーム・インスタンス・トゥイーンと任意の幾何情報を確認 |
 |  | `edit_timeline` | レイヤー・フレーム・キーフレーム・ラベルを編集 |
 |  | `edit_tween` | トゥイーンの作成とイージング変更 |
 |  | `edit_elements` | シンボルインスタンスの編集・配置 |
@@ -201,11 +202,13 @@ Canvas 出力を Chrome で開いて、コンソールエラーがないか確�
 | ライブラリ | `edit_library` | 整理・使用箇所の検索・AS3 リンケージ編集 |
 |  | `import_assets` | 画像・音声をライブラリに取り込む |
 | 出力・確認 | `publish` | Publish して Build result を返す |
+|  | `preflight_publish` | Publish せずに事前確認 |
 |  | `read_output` | Output / Compiler Errors パネルを読む |
 |  | `test_movie` | AS3 の Test Movie を実行してコンパイル診断と起動直後の出力を取得 |
 |  | `verify_canvas_output` | Canvas 出力を Chrome で開いてエラーを確認 |
 |  | `capture_frame` | フレームまたは範囲を PNG で取得 |
 |  | `diff_captures` | キャプチャ PNG 2枚を比較 |
+|  | `visual_regression` | 名前付きフレーム基準画像を保存・比較 |
 | その他 | `install_greensock` | GreenSock-AS3 を導入（保存済み AS3 のみ・ライセンス確認が必要） |
 |  | `run_jsfl` | 任意の JSFL を実行 |
 
@@ -225,7 +228,7 @@ Canvas 出力を Chrome で開いて、コンソールエラーがないか確�
 flowchart TB
   Agent(["AI agent<br/>Claude Code / Codex"])
   subgraph Server["animate-mcp (Node.js)"]
-    Tools["MCP tools ×24"]
+    Tools["MCP tools ×27"]
     Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
     Runner["Runner<br/>serial + timeout"]
   end

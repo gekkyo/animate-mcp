@@ -33,3 +33,13 @@ animate-mcp-isolated-publish-hXHKlo.fla
 animate-mcp-isolated-publish-hXHKlo.html
 animate-mcp-isolated-publish-hXHKlo.js
 ```
+
+## Read-only inspection (verified on Animate 2027, macOS, AS3 and Canvas)
+
+- Shape and text elements expose `x`, `y`, `width`, `height`, `scaleX`, `scaleY`, `rotation`, `matrix`, `left`, `top`; `skew` and `instanceType` are undefined for them. Symbol instances report `instanceType="symbol"`; graphic instances also expose `loop` and `firstFrame`.
+- Symbol length: `item.timeline.frameCount` (Library item) and `element.libraryItem.timeline.frameCount` (stage instance).
+- Tween middle frames: `frames[n].elements[0].x` only returns the interpolated value after `timeline.currentFrame = n`; with `currentFrame` elsewhere it returns the start value. `matrix.tx` is not interpolated. Reading inserted no keyframes. Restore `currentFrame` afterwards.
+- A tested AS3 movie-clip instance returned finite `left`/`top` bounds but undefined `right`/`bottom` (serialized as `null`), even when its Library item contained a shape. Transform fields remained available.
+- `doc.exportPNG(uri, true, true)` is byte-identical when the same frame is captured twice (SHA-256), and differs between different frames.
+- `doc.exportPublishProfileString()` returns profile XML with enabled-format flags (`<flash>1</flash>`, `<html>1</html>`, ...) and file names, but no output directory; outputs land beside the FLA.
+- A newly created, saved HTML5 Canvas document's profile uses `<publishFormat id="...">0|1</publishFormat>` flags paired with `<PublishProperties id="..." name="SVG Image|JavaScript/HTML">`; the `JavaScript/HTML` flag was `1` and `SVG Image` was `0`. Preflight can report those formats, but leaves output paths unchecked because filenames are stored as nested `<Property name="filename">` values and use a generated stem.

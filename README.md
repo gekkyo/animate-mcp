@@ -193,6 +193,7 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 | Area | Tool | What it does |
 |------|------|--------------|
 | Document | `get_document_info` | Show name, size, frame rate, and AS version |
+|  | `get_status` | Check Animate response and list open documents |
 |  | `open_document` | Open a `.fla` or create a new document |
 |  | `save_document` | Save a document |
 |  | `close_document` | Close a document without saving |
@@ -200,7 +201,7 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 |  | `audit_document` | List unused Library items and empty keyframes |
 | Scripts | `export_scripts` | Export frame scripts and structure to files |
 |  | `apply_scripts` | Apply edited scripts back to Animate |
-| Timeline and elements | `inspect_timeline` | Read layers, keyframes, instances, and tweens |
+| Timeline and elements | `inspect_timeline` | Read layers, keyframes, instances, tweens, and optional geometry |
 |  | `edit_timeline` | Edit layers, frames, keyframes, and labels |
 |  | `edit_tween` | Create tweens and change easing |
 |  | `edit_elements` | Edit or place symbol instances |
@@ -209,11 +210,13 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 | Library | `edit_library` | Organize items, find usages, edit AS3 linkage |
 |  | `import_assets` | Import images and audio into the Library |
 | Output and verification | `publish` | Publish and return the Build result |
+|  | `preflight_publish` | Check publish readiness without publishing |
 |  | `read_output` | Read the Output and Compiler Errors panels |
 |  | `test_movie` | Run an AS3 Test Movie and capture compile diagnostics and early output |
 |  | `verify_canvas_output` | Open Canvas output in Chrome and check for errors |
 |  | `capture_frame` | Capture a frame or range as PNG |
 |  | `diff_captures` | Compare two captured PNGs |
+|  | `visual_regression` | Save and compare named frame baselines |
 | Other | `install_greensock` | Install GreenSock-AS3 (saved AS3 only; license review required) |
 |  | `run_jsfl` | Run arbitrary JSFL |
 
@@ -233,7 +236,7 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 flowchart TB
   Agent(["AI agent<br/>Claude Code / Codex"])
   subgraph Server["animate-mcp (Node.js)"]
-    Tools["MCP tools ×24"]
+    Tools["MCP tools ×27"]
     Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
     Runner["Runner<br/>serial + timeout"]
   end
