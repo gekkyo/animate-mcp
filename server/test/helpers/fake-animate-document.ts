@@ -74,7 +74,7 @@ const doc = (documentName, documentType) => {
   if (process.env.FAKE_INITIAL_CURRENT_LAYER !== undefined) sceneTimeline.currentLayer = Number(process.env.FAKE_INITIAL_CURRENT_LAYER);
   if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
   if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
-  const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, backgroundColor: "#FFFFFF", currentTimeline: 0, timelines: [sceneTimeline],
+  const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : (process.env.FAKE_VOLUME_URI ? pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href.replace("file:///", "file:///Macintosh%20HD/") : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href), width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, backgroundColor: "#FFFFFF", currentTimeline: 0, timelines: [sceneTimeline],
     /**
      * Simulates Test Movie while preserving the Output panel for the next Run.
      * @param abortOnErrors Whether compilation errors should prevent launching the player
@@ -268,7 +268,7 @@ if (!src.includes("HANG")) runInNewContext(src, {
      * @param uri Document URI
      * @returns The corresponding platform path
      */
-    uriToPlatformPath: (uri) => fileURLToPath(uri),
+     uriToPlatformPath: (uri) => fileURLToPath(process.env.FAKE_VOLUME_URI ? uri.replace("file:///Macintosh%20HD/", "file:///") : uri),
     /**
      * Writes content to a fake Animate file path.
      * @param path Destination path

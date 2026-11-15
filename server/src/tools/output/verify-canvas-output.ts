@@ -2,7 +2,6 @@ import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { basename, extname, isAbsolute, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Browser } from "playwright-core";
 import { z } from "zod";
@@ -95,7 +94,8 @@ async function serveDirectory(root: string) {
                 createReadStream(actual).pipe(response);
             }
         } catch {
-            response.writeHead(404).end();
+            // Chrome probes an undeclared favicon; its absence is not a page-load error.
+            response.writeHead(request.url === "/favicon.ico" ? 204 : 404).end();
         }
     });
     await new Promise<void>((resolveListen, reject) => {
@@ -137,9 +137,9 @@ export const verifyCanvasOutputTool: ToolDefinition<typeof INPUT> = {
         }
         const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n${deps.bundle("select-document")}`;
         const info = await deps.runner.execute(
-            `${prelude}\n(function () { var document = selectDocument(); if (!document.pathURI) throw new Error("Document is not saved; save first"); if (document.type !== "htmlcanvas") throw new Error("verify_canvas_output supports HTML5 Canvas documents only"); fl.setActiveWindow(document); return document.pathURI; })()`,
+            `${prelude}\n(function () { var document = selectDocument(); if (!document.pathURI) throw new Error("Document is not saved; save first"); if (document.type !== "htmlcanvas") throw new Error("verify_canvas_output supports HTML5 Canvas documents only"); fl.setActiveWindow(document); return FLfile.uriToPlatformPath(document.pathURI); })()`,
         );
-        const flaPath = fileURLToPath(String(info));
+        const flaPath = String(info);
         let buildResult: Record<string, unknown> | null = null;
         if (publish) {
             buildResult = await runPublish(document, deps);

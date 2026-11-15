@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type TestContext, test } from "node:test";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -70,6 +70,36 @@ test("verify_canvas_output opens an explicit HTML fixture, reports browser error
         assert.ok(result.content.some((item) => item.type === "image" && item.mimeType === "image/png"));
         const publishLog = await readFile(join(tempDir, "log.publish"), "utf8").catch(() => "");
         assert.ok(!publishLog.split("\n").includes("publish"), "publish:false invoked Publish");
+    });
+});
+
+test("verify_canvas_output resolves the default HTML path from a volume-style Animate URI", {
+    timeout: 30_000,
+}, async (context) => {
+    await withServer({ FAKE_TYPE: "htmlcanvas", FAKE_VOLUME_URI: "1" }, async (client, tempDir) => {
+        const documentDir = join(tempDir, "document");
+        const defaultHtml = join(documentDir, "a.html");
+        const explicitHtml = join(tempDir, "custom.html");
+        await mkdir(documentDir);
+        await writeFile(defaultHtml, "<!doctype html><title>default fixture</title>");
+        await writeFile(explicitHtml, "<!doctype html><title>explicit fixture</title>");
+
+        const defaultResult = await client.callTool({
+            name: "verify_canvas_output",
+            arguments: { publish: false, observeMs: 0 },
+        });
+        skipIfChromeUnavailable(defaultResult, context);
+        assert.ok(isCallToolResult(defaultResult));
+        assert.equal(defaultResult.isError, undefined, text(defaultResult));
+        assert.equal(defaultResult.structuredContent?.htmlPath, await realpath(defaultHtml));
+
+        const explicitResult = await client.callTool({
+            name: "verify_canvas_output",
+            arguments: { publish: false, htmlPath: explicitHtml, observeMs: 0 },
+        });
+        assert.ok(isCallToolResult(explicitResult));
+        assert.equal(explicitResult.isError, undefined, text(explicitResult));
+        assert.equal(explicitResult.structuredContent?.htmlPath, await realpath(explicitHtml));
     });
 });
 
@@ -182,6 +212,8 @@ test("verify_canvas_output Publishes by default and reports the separate Build r
             warnings: [],
             note: "HTML5 Canvas: compile errors are unverified; ok only means Publish ran",
         });
+        const browserOutput = result.structuredContent?.browserOutput as { consoleErrors: string[] };
+        assert.deepEqual(browserOutput.consoleErrors, []);
         const publishLog = await readFile(join(tempDir, "log.publish"), "utf8");
         assert.ok(publishLog.split("\n").includes("publish"));
     });
