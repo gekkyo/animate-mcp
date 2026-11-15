@@ -1,13 +1,6 @@
 import { resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type {
-    AppliedNewScript,
-    ApplyPayload,
-    ApplyResult,
-    TimelineFingerprint,
-} from "../../export-workspace/apply-contract.js";
-import { collectChanges, recordApplied } from "../../export-workspace/export-workspace.js";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import {
     registerToolDefinition,
@@ -16,6 +9,8 @@ import {
     type ToolDeps,
     type ToolExtra,
 } from "../shared.js";
+import type { AppliedNewScript, ApplyPayload, ApplyResult, TimelineFingerprint } from "./workspace/apply-contract.js";
+import { collectChanges, recordApplied } from "./workspace/export-workspace.js";
 
 const APPLY_SCRIPTS_INPUT = { dir: z.string(), document: z.string().optional() };
 

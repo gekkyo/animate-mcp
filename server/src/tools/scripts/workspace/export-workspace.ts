@@ -1,5 +1,6 @@
 import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
+import { isInside } from "../../paths.js";
 
 /** Manifest entry for Apply: frame position (0-based) and the script at Export. A library symbol uses item instead of scene. */
 export type ManifestFile = { scene: number; layer: number; start: number; script: string; item?: string };
@@ -54,7 +55,7 @@ function insideDir(dir: string, file: string): string {
     const root = resolve(dir);
     const absolutePath = resolve(root, file);
     // Require a separator after root so similarly prefixed sibling paths are rejected too.
-    if (!absolutePath.startsWith(root + sep)) {
+    if (!isInside(root, absolutePath)) {
         throw new Error(`Path outside the export directory: ${file}`);
     }
     return absolutePath;

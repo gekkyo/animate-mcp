@@ -1,10 +1,8 @@
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { type ExportData, type ExportScene, safeName, writeExport } from "../../export-workspace/export.js";
-import { prepareExport } from "../../export-workspace/export-workspace.js";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
+import { exportsDir } from "../paths.js";
 import {
     registerToolDefinition,
     TIMELINES_PER_RUN,
@@ -12,6 +10,8 @@ import {
     type ToolDeps,
     type ToolExtra,
 } from "../shared.js";
+import { type ExportData, type ExportScene, safeName, writeExport } from "./workspace/export.js";
+import { prepareExport } from "./workspace/export-workspace.js";
 
 const EXPORT_SCRIPTS_INPUT = {
     document: z.string().optional(),
@@ -116,7 +116,7 @@ export const exportScriptsTool: ToolDefinition<typeof EXPORT_SCRIPTS_INPUT> = {
             (symbol as { linked?: string }).linked = linkedBySymbolName.get(symbol.name);
         }
         const outputDirectory = resolve(
-            dir ?? join(homedir(), ".animate-mcp", "exports", safeName(exportData.document.replace(/\.fla$/i, ""))),
+            dir ?? join(exportsDir(), safeName(exportData.document.replace(/\.fla$/i, ""))),
         );
         await prepareExport(outputDirectory, force ?? false);
         const exportResult = { ...(await writeExport(exportData, outputDirectory)), warnings };
