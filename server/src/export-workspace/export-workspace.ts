@@ -60,7 +60,12 @@ function insideDir(dir: string, file: string): string {
     return absolutePath;
 }
 
-/** Writes the manifest atomically in its existing on-disk format. */
+/**
+ * Writes the manifest atomically in its existing on-disk format.
+ * @param dir Export directory
+ * @param manifest Manifest to write
+ * @returns Nothing.
+ */
 export async function writeManifest(dir: string, manifest: ExportManifest): Promise<void> {
     const path = join(dir, MANIFEST);
     await writeFile(`${path}.tmp`, JSON.stringify(manifest));

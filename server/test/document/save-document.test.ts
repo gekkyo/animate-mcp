@@ -17,6 +17,8 @@ const saveJSFL = readFileSync(new URL("../../jsfl/document/save-document.jsfl", 
  * @param initial Documents initially open
  * @param files Existing file URIs
  * @param options Fake save result and reported path overrides
+ * @param options.saveResult Whether the fake save operation succeeds
+ * @param options.reportedPath Path reported by the fake save operation
  * @returns Tool-call helpers and recorded save/bundle calls
  */
 function setup(
@@ -62,7 +64,9 @@ function setup(
     };
     const bundleNames: string[][] = [];
     registerSaveDocument(server as unknown as McpServer, {
-        runner: { execute: async (code) => runInNewContext(code, globals) },
+        runner: {
+            execute: async (code) => runInNewContext(code, globals),
+        },
         bundle: (...names) => {
             bundleNames.push(names);
             return names.map((name) => (name === "document-target" ? targetJSFL : saveJSFL)).join("\n");

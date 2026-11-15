@@ -139,6 +139,9 @@ function renderKeyframeMarkdown(keyframe: ExportFrame, scriptFile: string) {
 
 /** Renders one layer's Markdown table and writes its scripts during traversal.
  * @param layer Layer and keyframe data to render
+ * @param layer.index Zero-based layer index
+ * @param layer.name Layer name
+ * @param layer.frames Keyframes in the layer
  * @param timelineDirectory Relative timeline directory
  * @param layerDirectory Relative layer directory
  * @param scriptExtension File extension for frame scripts

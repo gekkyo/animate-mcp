@@ -15,6 +15,7 @@ const jsflParts = {
 /**
  * Register the tool against a minimal server and capture its bundle requests.
  * @param runner Executes generated JSFL and returns its result.
+ * @param runner.execute Generated JSFL to execute.
  * @param bundle Supplies the JSFL source bundle.
  * @returns The registered tool and requested bundle names.
  */

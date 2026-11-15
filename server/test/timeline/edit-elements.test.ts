@@ -8,9 +8,14 @@ import { registerEditElements } from "../../src/tools/timeline/edit-elements.js"
 import { layersLog, stateLog, text, withServer } from "../helpers/fake-animate.js";
 
 /**
- * Execute edit_elements in a JSFL VM fixture with independent Library and instance symbol types.
+ * Executes edit_elements in an independent Library and instance type fixture.
  * @param input Tool arguments to validate and execute.
  * @param options Fixture Library type, instance symbol type, and optional timeline shape.
+ * @param options.libraryItemType Fixture Library item type.
+ * @param options.symbolType Type reported by the placed instance.
+ * @param options.timeline Optional fixture timeline data.
+ * @param options.timeline.frameCount Optional total frame count.
+ * @param options.timeline.layers Optional fixture layers and frames.
  * @returns The tool result and VM context for state assertions.
  */
 const callEditElementsWithSymbolType = async (
@@ -50,6 +55,11 @@ var fl = { documents: [__doc], trace: function () {} };`,
         "element-read": "server/jsfl/shared/element-read.jsfl",
         "edit-elements": "server/jsfl/timeline/edit-elements.jsfl",
     };
+    /**
+     * Loads requested JSFL source files for the fixture.
+     * @param names Requested bundle names.
+     * @returns Concatenated JSFL source.
+     */
     const bundle = (...names: string[]) =>
         names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
     registerEditElements(
@@ -59,7 +69,10 @@ var fl = { documents: [__doc], trace: function () {} };`,
                 handler = callback as (input: never) => Promise<unknown>;
             },
         } as never,
-        { runner: { execute: async (code) => runInContext(code, context) }, bundle },
+        {
+            runner: { execute: async (code) => runInContext(code, context) },
+            bundle,
+        },
     );
     const parsed = z.object(inputSchema).safeParse(input);
     if (!parsed.success) {

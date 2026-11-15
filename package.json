@@ -36,7 +36,7 @@
     "test": "tsx --test \"server/test/**/*.test.ts\"",
     "test:coverage": "tsx --test --experimental-test-coverage \"server/test/**/*.test.ts\"",
     "start": "node server/dist/index.js",
-    "lint": "biome check",
+    "lint": "biome check && eslint \"server/**/*.ts\" \"server/**/*.mjs\"",
     "format": "biome check --write"
   },
   "dependencies": {
@@ -50,6 +50,9 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
     "@types/pngjs": "^6.0.5",
+    "@typescript-eslint/parser": "^8.72.2",
+    "eslint": "^10.15.0",
+    "eslint-plugin-jsdoc": "^65.4.7",
     "tsx": "^4.20.6"
   }
 }
