@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+### Fixed
+
+- The publish workflow waits for npm package visibility before publishing to the MCP Registry and can recover a failed registry publish without republishing an existing npm version.
+
 ## 0.3.0
 
 ### Added
