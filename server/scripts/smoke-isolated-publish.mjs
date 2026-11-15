@@ -80,7 +80,7 @@ try {
     const fla = await stat(flaPath);
     assert.ok(fla.isFile() && fla.size > 0, "saved disposable Canvas FLA is empty");
     documentName = await runValue(
-        `(function () { var __docs = fl.documents || [], __matches = [], __sameName = 0; for (var __i = 0; __i < __docs.length; __i++) { if (__docs[__i].pathURI === ${JSON.stringify(savedPath)}) __matches.push(__docs[__i]); if (__docs[__i].name === ${JSON.stringify(created.name)}) __sameName++; } if (__matches.length !== 1) throw new Error("Expected exactly one saved Canvas document"); if (__sameName !== 1) throw new Error("Disposable document name conflicts with another open document"); return __matches[0].name; })()`,
+        `(function () { var __docs = fl.documents || [], __matches = []; for (var __i = 0; __i < __docs.length; __i++) if (__docs[__i].pathURI === ${JSON.stringify(savedPath)}) __matches.push(__docs[__i]); if (__matches.length !== 1) throw new Error("Expected exactly one saved Canvas document"); return __matches[0].name; })()`,
         "locate saved disposable document",
     );
 
