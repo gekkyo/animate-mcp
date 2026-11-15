@@ -6,6 +6,10 @@ export const JSFL_FILES: Record<string, { path: string; deps: string[] }> = {
     "export-common": { path: "shared/export-common.jsfl", deps: [] },
     "document-runtime-info": { path: "document/document-runtime-info.jsfl", deps: [] },
     "get-document-info": { path: "document/get-document-info.jsfl", deps: ["export-common", "document-runtime-info"] },
+    "audit-document": {
+        path: "document/audit-document.jsfl",
+        deps: ["select-document", "edit-state", "export-common"],
+    },
     "export-scenes": { path: "scripts/export-scenes.jsfl", deps: ["select-document", "edit-state", "export-common"] },
     "export-library": { path: "scripts/export-library.jsfl", deps: ["select-document", "edit-state", "export-common"] },
     "apply-scenes": { path: "scripts/apply-scenes.jsfl", deps: ["select-document", "edit-state", "export-common"] },

@@ -40,11 +40,14 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@types/node": "^25.0.0",
+    "playwright-core": "^1.65.1",
+    "pngjs": "^7.0.0",
     "typescript": "^5.9.3",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
+    "@types/pngjs": "^6.0.5",
     "tsx": "^4.20.6"
   }
 }

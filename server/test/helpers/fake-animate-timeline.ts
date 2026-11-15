@@ -183,6 +183,9 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
      */
     getSelectedFrames() { return this.selectedFrames ? this.selectedFrames.slice() : []; },
     setSelectedFrames(startFrameIndex, endFrameIndex) {
+      if (process.env.FAKE_AUDIT_RESTORE_FAIL && Array.isArray(startFrameIndex) && startFrameIndex.length === 0 && this.libraryItem) {
+        throw new Error("fake audit selection restore failure");
+      }
       if (Array.isArray(startFrameIndex)) {
         this.selectedFrames = startFrameIndex.slice();
         if (this.selectedFrames.length) this.currentLayer = this.selectedFrames[0];

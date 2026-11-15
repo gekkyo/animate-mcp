@@ -77,6 +77,38 @@ export function parseCompilerOutput(output: string): { errors: Diagnostic[]; war
     return { errors, warnings };
 }
 
+export async function runPublish(document: string | undefined, deps: ToolDeps): Promise<BuildResult> {
+    const { runner, bundle } = deps;
+    const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
+    const activate = `${prelude}${bundle("select-document")}\n(function () {\n  var document = selectDocument();\n  if (!document.pathURI) throw new Error("Document is not saved; save first");\n  fl.setActiveWindow(document);\n  return document.type;\n})()`;
+    const documentType = await runner.execute(activate);
+
+    const outputPath = join(tmpdir(), `animate-mcp-publish-${randomUUID()}.txt`);
+    const publish = `${prelude}var __publishOutputPath = ${JSON.stringify(outputPath)};\n${bundle("publish")}`;
+    const firstOutput = String(await runner.execute(publish));
+    if (documentType === "htmlcanvas") {
+        return {
+            ok: true,
+            compilerOutput: "not_checked",
+            errors: [],
+            warnings: [],
+            note: "HTML5 Canvas: compile errors are unverified; ok only means Publish ran",
+        };
+    }
+    const output = firstOutput || String(await runner.execute(publish));
+    if (!output) {
+        return {
+            ok: true,
+            compilerOutput: "unavailable",
+            errors: [],
+            warnings: [],
+            note: "compiler output unavailable; no errors reported",
+        };
+    }
+    const { errors, warnings } = parseCompilerOutput(output);
+    return { ok: errors.length === 0, compilerOutput: "verified", errors, warnings };
+}
+
 export const publishTool: ToolDefinition<typeof PUBLISH_INPUT> = {
     name: "publish",
     description:
@@ -91,42 +123,9 @@ export const publishTool: ToolDefinition<typeof PUBLISH_INPUT> = {
     guidance: {
         basic: "- Use publish to publish AS3 or HTML5 Canvas documents and check the Build result; outputs at the document's publish settings are overwritten. Canvas compile errors cannot be detected.",
     },
-    run: async ({ document }: Parameters<ToolCallback<typeof PUBLISH_INPUT>>[0], deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
-        const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
-        const activate = `${prelude}${bundle("select-document")}\n(function () {\n  var document = selectDocument();\n  if (!document.pathURI) throw new Error("Document is not saved; save first");\n  fl.setActiveWindow(document);\n  return document.type;\n})()`;
-        const documentType = await runner.execute(activate);
-
-        const outputPath = join(tmpdir(), `animate-mcp-publish-${randomUUID()}.txt`);
-        const publish = `${prelude}var __publishOutputPath = ${JSON.stringify(outputPath)};\n${bundle("publish")}`;
-        const firstOutput = String(await runner.execute(publish));
-        let result: BuildResult;
-        if (documentType === "htmlcanvas") {
-            result = {
-                ok: true,
-                compilerOutput: "not_checked",
-                errors: [],
-                warnings: [],
-                note: "HTML5 Canvas: compile errors are unverified; ok only means Publish ran",
-            };
-        } else {
-            const output = firstOutput || String(await runner.execute(publish));
-            if (!output) {
-                result = {
-                    ok: true,
-                    compilerOutput: "unavailable",
-                    errors: [],
-                    warnings: [],
-                    note: "compiler output unavailable; no errors reported",
-                };
-            } else {
-                const { errors, warnings } = parseCompilerOutput(output);
-                result = { ok: errors.length === 0, compilerOutput: "verified", errors, warnings };
-            }
-        }
-        return { data: result };
-    },
+    run: async ({ document }: Parameters<ToolCallback<typeof PUBLISH_INPUT>>[0], deps: ToolDeps) => ({
+        data: await runPublish(document, deps),
+    }),
 };
 
 export function registerPublish(server: McpServer, deps: ToolDeps): void {

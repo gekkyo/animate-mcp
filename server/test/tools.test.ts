@@ -4,8 +4,8 @@ import { INSTRUCTIONS, TOOLS } from "../src/index.js";
 import { text, withServer } from "./helpers/fake-animate.js";
 
 test("registry keeps all tools and the original client instructions", () => {
-    assert.equal(TOOLS.length, 21);
-    assert.equal(new Set(TOOLS.map((tool) => tool.name)).size, 21);
+    assert.equal(TOOLS.length, 24);
+    assert.equal(new Set(TOOLS.map((tool) => tool.name)).size, 24);
     assert.equal(
         INSTRUCTIONS,
         `Read and write Adobe Animate timeline scripts as files.
@@ -27,6 +27,9 @@ Basic flow:
 - For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.
 - Use publish to publish AS3 or HTML5 Canvas documents and check the Build result; outputs at the document's publish settings are overwritten. Canvas compile errors cannot be detected.
 - Use capture_frame to inspect the active timeline as PNG images; request one frame or an inclusive range of up to 24 frames. It saves new images under ~/.animate-mcp/captures/<document>/ and restores the current frame.
+- Use diff_captures with absolute before/after paths returned by capture_frame. It creates a non-overwriting red-highlight PNG alongside the earlier Capture.
+- Use audit_document for read-only document hygiene suggestions. Review every finding before changing content; unused Library items may be intentional, especially when linkage is enabled.
+- Use verify_canvas_output to check a published HTML5 Canvas page in Chrome. By default Publish overwrites the document's configured outputs; use publish: false to avoid publishing or htmlPath to specify custom output. Page scripts run in Chrome.
 
 Notes:
 - When several documents are open, document is required. get_document_info returns the name.
@@ -109,6 +112,19 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
                 destructiveHint: false,
                 idempotentHint: false,
                 openWorldHint: false,
+            },
+            diff_captures: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            audit_document: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+            verify_canvas_output: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: true,
             },
             install_greensock: {
                 readOnlyHint: false,

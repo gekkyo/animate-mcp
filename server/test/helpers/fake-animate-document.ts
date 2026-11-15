@@ -31,6 +31,10 @@ const doc = (documentName, documentType) => {
     makeKeyframe(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [makeInstance("hero", Number(process.env.FAKE_INITIAL_X ?? 0))] }),
     makeKeyframe(2, 3, { name: "end", ...(process.env.FAKE_TWEEN ? { tweenType: process.env.FAKE_TWEEN } : {}), elements: [makeInstance(process.env.FAKE_INSTANCE_CONTINUES ? "hero" : "", Number(process.env.FAKE_INITIAL_X ?? 0))] }),
   ];
+  if (process.env.FAKE_AUDIT_FIXTURES) {
+    sceneFrames[0].soundLibraryItem = { name: "Sound", itemType: "sound" };
+    sceneFrames[0].elements.push(makeInstance("nested-symbol", 1, { name: "Folder/Symbol 3", itemType: "graphic" }));
+  }
   if (process.env.FAKE_FRAME_COUNT !== undefined && sceneFrames.length > 1) {
     sceneFrames[1].duration = Number(process.env.FAKE_FRAME_COUNT) - sceneFrames[0].duration;
   }
@@ -54,7 +58,14 @@ const doc = (documentName, documentType) => {
   });
   const sceneLayers = [layer("a/b", expand(sceneFrames), "normal", Boolean(process.env.FAKE_LOCK_DISTRIBUTE)),
     ...(process.env.FAKE_SECOND_LAYER ? [layer(process.env.FAKE_SECOND_LAYER, expand([secondFrame]))] : []),
+    ...(process.env.FAKE_AUDIT_FIXTURES ? [layer("Layer 1", expand([makeKeyframe(0, 5)]))] : []),
+    ...(process.env.FAKE_AUDIT_FIXTURES ? [layer("レイヤー 2", expand([makeKeyframe(0, 5, { elements: [makeInstance("occupied", 1)] })]))] : []),
     layer("dir", [], "folder")];
+  if (process.env.FAKE_AUDIT_FIXTURES) {
+    const audioOnlyLayer = layer("Audio only", expand([makeKeyframe(0, 1)]));
+    audioOnlyLayer.frames[0].soundLibraryItem = { name: "Sound", itemType: "sound" };
+    sceneLayers.push(audioOnlyLayer);
+  }
   if (process.env.FAKE_INNER_KEYFRAME) sceneLayers[0].frames[3] = makeKeyframe(3, 1);
   if (process.env.FAKE_AS_LAYER) {
     sceneLayers.unshift(layer(process.env.FAKE_AS_LAYER, expand([makeKeyframe(0, 5)]), "normal", Boolean(process.env.FAKE_LOCK_AS)));

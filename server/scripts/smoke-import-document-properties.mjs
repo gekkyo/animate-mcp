@@ -6,9 +6,9 @@ import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
 import { registerGetDocumentInfo } from "../dist/tools/document/get-document-info.js";
+import { registerSetDocumentProperties } from "../dist/tools/document/set-document-properties.js";
 import { registerImportAssets } from "../dist/tools/library/import-assets.js";
 import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
-import { registerSetDocumentProperties } from "../dist/tools/document/set-document-properties.js";
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "./smoke-lib.mjs";
 
 const TEMP_ROOT = "/private/var/folders/c2/dmv_gdrs3jzcjpbgsv8t2k4c0000gn/T/opencode";
@@ -144,7 +144,10 @@ try {
     console.log(
         `OBSERVE addNewItem with selected folder: item=${stageItemName}; post-call selected Library items=${selectedAfterAddNewItem || "(none)"}.`,
     );
-    assert.equal(await runValue(selectedLibraryItems(disposable.pathURI), "verify selected Library folder before import"), folderName);
+    assert.equal(
+        await runValue(selectedLibraryItems(disposable.pathURI), "verify selected Library folder before import"),
+        folderName,
+    );
     const stageBeforeImport = await runValue(stageSnapshot(disposable.pathURI), "record stage before import");
     assert.match(stageBeforeImport, new RegExp(`instance:${stageItemName}:50:60:`));
 
@@ -153,13 +156,22 @@ try {
         "import generated PNG and WAV",
     );
     assert.deepEqual(imported, { document: disposable.name, items: [imageName, audioName] });
-    const stageAfterImport = await runValue(stageSnapshot(disposable.pathURI), "verify import did not place assets on stage");
+    const stageAfterImport = await runValue(
+        stageSnapshot(disposable.pathURI),
+        "verify import did not place assets on stage",
+    );
     assert.equal(stageAfterImport, stageBeforeImport, "import changed stage elements");
     const libraryAfterImport = await runValue(librarySnapshot(disposable.pathURI), "verify imported Library items");
     assert.ok(libraryAfterImport.split("\n").includes(imageName), "imported PNG missing from Library");
     assert.ok(libraryAfterImport.split("\n").includes(audioName), "imported WAV missing from Library");
-    assert.ok(!libraryAfterImport.split("\n").includes(`${folderName}/${imageName}`), "PNG was imported into the selected folder");
-    assert.ok(!libraryAfterImport.split("\n").includes(`${folderName}/${audioName}`), "WAV was imported into the selected folder");
+    assert.ok(
+        !libraryAfterImport.split("\n").includes(`${folderName}/${imageName}`),
+        "PNG was imported into the selected folder",
+    );
+    assert.ok(
+        !libraryAfterImport.split("\n").includes(`${folderName}/${audioName}`),
+        "WAV was imported into the selected folder",
+    );
     assert.equal(
         await runValue(selectedLibraryItems(disposable.pathURI), "verify Library folder selection was restored"),
         folderName,
@@ -196,7 +208,10 @@ try {
         document: disposable.name,
         properties: { width: 640, height: 360, frameRate: 30, backgroundColor: "#123456" },
     });
-    const stageAfterResize = await runValue(stageSnapshot(disposable.pathURI), "verify resize left stage content unchanged");
+    const stageAfterResize = await runValue(
+        stageSnapshot(disposable.pathURI),
+        "verify resize left stage content unchanged",
+    );
     assert.equal(stageAfterResize, stageBeforeImport, "document resize moved or scaled stage content");
 
     const activated = await runValue(
@@ -239,7 +254,9 @@ try {
             await closeDocumentByPath(runJsfl, disposable.pathURI);
         } catch (error) {
             console.error("Disposable FLA cleanup failed:", error);
-            failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup both failed") : error;
+            failure = failure
+                ? new AggregateError([failure, error], "Smoke test and document cleanup both failed")
+                : error;
         }
     }
 
@@ -247,10 +264,16 @@ try {
         try {
             const finalDocuments = await documentRows();
             finalCount = finalDocuments.length;
-            assert.deepEqual(finalDocuments, initialDocuments, "existing documents changed or a disposable FLA remains open");
+            assert.deepEqual(
+                finalDocuments,
+                initialDocuments,
+                "existing documents changed or a disposable FLA remains open",
+            );
         } catch (error) {
             console.error("Final document-state verification failed:", error);
-            failure = failure ? new AggregateError([failure, error], "Smoke test and final-state verification failed") : error;
+            failure = failure
+                ? new AggregateError([failure, error], "Smoke test and final-state verification failed")
+                : error;
         }
     }
 
@@ -259,12 +282,16 @@ try {
         await assert.rejects(stat(tempDir), { code: "ENOENT" });
     } catch (error) {
         console.error("Temporary asset/FLA cleanup failed:", error);
-        failure = failure ? new AggregateError([failure, error], "Smoke test and temporary cleanup both failed") : error;
+        failure = failure
+            ? new AggregateError([failure, error], "Smoke test and temporary cleanup both failed")
+            : error;
     }
     console.log(
         `Cleanup state: initial documents ${initialDocuments?.length ?? "unknown"}, final ${finalCount}; temp directory removed; disposable FLA ${disposable?.pathURI ? "closed by exact pathURI" : "not created"}.`,
     );
 }
 
-if (failure) throw failure;
+if (failure) {
+    throw failure;
+}
 console.log(`Import/document-properties smoke passed (disposable AS3 FLA: ${disposable?.pathURI}).`);

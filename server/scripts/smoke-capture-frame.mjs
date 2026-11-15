@@ -12,14 +12,20 @@ const handle = toolHandler(registerCaptureFrame);
 const runJsfl = toolHandler(registerRunJsfl);
 const executeJsfl = async (code) => {
     const result = await runJsfl({ code });
-    if (result.isError) throw new Error(result.content[0]?.type === "text" ? result.content[0].text : "run_jsfl failed");
+    if (result.isError) {
+        throw new Error(result.content[0]?.type === "text" ? result.content[0].text : "run_jsfl failed");
+    }
     return result.structuredContent.result;
 };
 const args = process.argv.slice(2);
 let input, dir;
 if (args[0] === "--range") {
     const values = args[1]?.split(":").map(Number) ?? [];
-    if ((values.length !== 2 && values.length !== 3) || values.some((value) => !Number.isInteger(value) || value < 1) || values[1] < values[0]) {
+    if (
+        (values.length !== 2 && values.length !== 3) ||
+        values.some((value) => !Number.isInteger(value) || value < 1) ||
+        values[1] < values[0]
+    ) {
         throw new Error("Use --range start:end[:step] with positive ascending integers");
     }
     input = { range: { start: values[0], end: values[1], ...(values[2] === undefined ? {} : { step: values[2] }) } };
@@ -52,16 +58,27 @@ try {
         }
         const nonDefaultFrame = originalFrame === 0 ? 1 : 0;
         try {
-            const setFrame = Number(await executeJsfl(`(function () { var timeline = fl.getDocumentDOM().getTimeline(); timeline.currentFrame = ${nonDefaultFrame}; return timeline.currentFrame; })()`));
+            const setFrame = Number(
+                await executeJsfl(
+                    `(function () { var timeline = fl.getDocumentDOM().getTimeline(); timeline.currentFrame = ${nonDefaultFrame}; return timeline.currentFrame; })()`,
+                ),
+            );
             assert.equal(setFrame, nonDefaultFrame, "failed to set a non-default current frame");
 
             const result = await handle({ ...input, dir: dir ?? disposableDir });
-            if (result.isError) throw new Error(result.content[0]?.type === "text" ? result.content[0].text : "capture_frame failed");
+            if (result.isError) {
+                throw new Error(result.content[0]?.type === "text" ? result.content[0].text : "capture_frame failed");
+            }
             const captures = result.structuredContent.captures;
             const { start, end, step = 1 } = input.range;
             const expectedFrames = [];
-            for (let frame = start; frame <= end; frame += step) expectedFrames.push(frame);
-            assert.deepEqual(captures.map(({ frame }) => frame), expectedFrames);
+            for (let frame = start; frame <= end; frame += step) {
+                expectedFrames.push(frame);
+            }
+            assert.deepEqual(
+                captures.map(({ frame }) => frame),
+                expectedFrames,
+            );
             const images = result.content.filter((item) => item.type === "image");
             const metadata = result.content.filter((item) => item.type === "text");
             assert.equal(images.length, captures.length);
@@ -78,15 +95,23 @@ try {
         }
     } else {
         const result = await handle({ ...input, dir: dir ?? disposableDir });
-        if (result.isError) throw new Error(result.content[0]?.type === "text" ? result.content[0].text : "capture_frame failed");
+        if (result.isError) {
+            throw new Error(result.content[0]?.type === "text" ? result.content[0].text : "capture_frame failed");
+        }
         const image = result.content.find((item) => item.type === "image");
         const text = result.content.find((item) => item.type === "text");
-        if (!image || image.type !== "image" || !text || text.type !== "text") throw new Error("Missing image or metadata content");
+        if (image?.type !== "image" || !text || text.type !== "text") {
+            throw new Error("Missing image or metadata content");
+        }
         const metadata = JSON.parse(text.text);
         assert.deepEqual(await readFile(metadata.path), Buffer.from(image.data, "base64"));
         console.log(JSON.stringify(metadata));
     }
 } finally {
-    if (disposableDir) await rm(disposableDir, { recursive: true, force: true });
-    await executeJsfl(`var __closeName = ${JSON.stringify(documentName)}; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __closeName) { fl.documents[__index].close(false); break; } true;`);
+    if (disposableDir) {
+        await rm(disposableDir, { recursive: true, force: true });
+    }
+    await executeJsfl(
+        `var __closeName = ${JSON.stringify(documentName)}; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __closeName) { fl.documents[__index].close(false); break; } true;`,
+    );
 }

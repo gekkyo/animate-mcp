@@ -1,10 +1,10 @@
 // Real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-edit-elements.mjs`.
 // Creates and closes a disposable document; Animate must be running.
 import assert from "node:assert/strict";
+import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
 import { registerEditElements } from "../dist/tools/timeline/edit-elements.js";
 import { registerEditTween } from "../dist/tools/timeline/edit-tween.js";
 import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
 import { toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
@@ -16,7 +16,8 @@ const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     return result.structuredContent;
 };
-const near = (actual, expected, description) => assert.ok(Math.abs(actual - expected) < 0.1, `${description}: ${actual}`);
+const near = (actual, expected, description) =>
+    assert.ok(Math.abs(actual - expected) < 0.1, `${description}: ${actual}`);
 
 const setup = await runJsfl({
     code: `var __smokeDoc = null, __canvasDoc = null;
@@ -83,10 +84,15 @@ try {
   throw __error;
 }`,
 });
-if (setup.isError) throw new Error(`Could not prepare Animate smoke document: ${message(setup)}`);
+if (setup.isError) {
+    throw new Error(`Could not prepare Animate smoke document: ${message(setup)}`);
+}
 const [documentName, canvasDocumentName] = String(setup.structuredContent?.result ?? "").split("\t");
-if (!documentName || !canvasDocumentName) throw new Error(`Setup did not return both document names: ${message(setup)}`);
+if (!documentName || !canvasDocumentName) {
+    throw new Error(`Setup did not return both document names: ${message(setup)}`);
+}
 
+let failure;
 try {
     const initialTimeline = verifyTool(
         await inspectTimeline({ document: documentName, timeline: 0, frame: 1 }),
@@ -108,7 +114,10 @@ try {
                         layer,
                         instance,
                         kind,
-                        keyframes: [{ frame: 1, x: 50 }, { frame: 5, x: 150 }],
+                        keyframes: [
+                            { frame: 1, x: 50 },
+                            { frame: 5, x: 150 },
+                        ],
                     },
                 ],
             }),
@@ -197,7 +206,14 @@ try {
         await editElements({
             document: documentName,
             timeline: 0,
-            ops: [{ layer: "effects", frame: 1, element: "staticInstance", set: { x: 124, y: 86, scaleX: 1.4, scaleY: 0.8, rotation: 35 } }],
+            ops: [
+                {
+                    layer: "effects",
+                    frame: 1,
+                    element: "staticInstance",
+                    set: { x: 124, y: 86, scaleX: 1.4, scaleY: 0.8, rotation: 35 },
+                },
+            ],
         }),
         "set position with scale and rotation",
     );
@@ -213,7 +229,22 @@ try {
             await editElements({
                 document: targetDocument,
                 timeline: 0,
-                ops: [{ layer: "graphic", frame: 1, element: "graphicInstance", set: { x: 124, y: 86, scaleX: 1.4, scaleY: 0.8, rotation: 35, loop: "single frame", firstFrame: 2 } }],
+                ops: [
+                    {
+                        layer: "graphic",
+                        frame: 1,
+                        element: "graphicInstance",
+                        set: {
+                            x: 124,
+                            y: 86,
+                            scaleX: 1.4,
+                            scaleY: 0.8,
+                            rotation: 35,
+                            loop: "single frame",
+                            firstFrame: 2,
+                        },
+                    },
+                ],
             }),
             `${targetDocument}: set graphic playback properties`,
         );
@@ -255,18 +286,43 @@ try {
             document: documentName,
             timeline: 0,
             ops: [
-                { op: "add", item: "EditElementsSmokeSymbol", layer: "static", frame: 7, x: 123, y: 234.05, set: { name: "placedSmoke", scaleX: 1.25 } },
-                { op: "add", item: "EditElementsSmokeSymbol", layer: "static", frame: 7, x: 321, y: 123, set: { name: "secondPlacedSmoke" } },
-                { op: "add", item: "EditElementsSmokeSymbol", layer: "static", frame: 7, set: { name: "centerPlacedSmoke" } },
+                {
+                    op: "add",
+                    item: "EditElementsSmokeSymbol",
+                    layer: "static",
+                    frame: 7,
+                    x: 123,
+                    y: 234.05,
+                    set: { name: "placedSmoke", scaleX: 1.25 },
+                },
+                {
+                    op: "add",
+                    item: "EditElementsSmokeSymbol",
+                    layer: "static",
+                    frame: 7,
+                    x: 321,
+                    y: 123,
+                    set: { name: "secondPlacedSmoke" },
+                },
+                {
+                    op: "add",
+                    item: "EditElementsSmokeSymbol",
+                    layer: "static",
+                    frame: 7,
+                    set: { name: "centerPlacedSmoke" },
+                },
             ],
         }),
         "place Library item on a new layer and extended frame",
     );
-    assert.deepEqual(placed.elements.map((element) => [element.name, element.layer, element.frame]), [
-        ["placedSmoke", "static_idn", 7],
-        ["secondPlacedSmoke", "static_idn", 7],
-        ["centerPlacedSmoke", "static_idn", 7],
-    ]);
+    assert.deepEqual(
+        placed.elements.map((element) => [element.name, element.layer, element.frame]),
+        [
+            ["placedSmoke", "static_idn", 7],
+            ["secondPlacedSmoke", "static_idn", 7],
+            ["centerPlacedSmoke", "static_idn", 7],
+        ],
+    );
     near(placed.elements[0].x, 123, "explicit placement x");
     near(placed.elements[0].y, 234.05, "explicit placement y");
     near(placed.elements[1].x, 321, "second explicit placement x");
@@ -275,11 +331,14 @@ try {
         await inspectTimeline({ document: documentName, timeline: 0, layers: ["static_idn"], frame: 7 }),
         "inspect placed Library item",
     );
-    assert.deepEqual(placedInspect.layers[0].elements.map((element) => [element.name, element.x, element.y]), [
-        ["placedSmoke", 123, 234.05],
-        ["secondPlacedSmoke", 321, 123],
-        ["centerPlacedSmoke", 275, 200],
-    ]);
+    assert.deepEqual(
+        placedInspect.layers[0].elements.map((element) => [element.name, element.x, element.y]),
+        [
+            ["placedSmoke", 123, 234.05],
+            ["secondPlacedSmoke", 321, 123],
+            ["centerPlacedSmoke", 275, 200],
+        ],
+    );
     console.log("Library placement, layer creation, and timeline extension: passed");
 
     const filters = [{ name: "blurFilter", blurX: 8, blurY: 4, quality: "high", enabled: false }];
@@ -302,7 +361,18 @@ try {
         [{ mode: "alpha", alphaPercent: 57 }, "alpha"],
         [{ mode: "brightness", brightnessPercent: 34 }, "brightness"],
         [{ mode: "tint", tintColor: "#33aaee", tintPercent: 63 }, "tint"],
-        [{ mode: "advanced", redPercent: 80, greenPercent: 70, bluePercent: 60, redAmount: 10, greenAmount: -20, blueAmount: 30 }, "advanced"],
+        [
+            {
+                mode: "advanced",
+                redPercent: 80,
+                greenPercent: 70,
+                bluePercent: 60,
+                redAmount: 10,
+                greenAmount: -20,
+                blueAmount: 30,
+            },
+            "advanced",
+        ],
     ];
     for (const [colorEffect, mode] of colorModes) {
         verifyTool(
@@ -319,8 +389,12 @@ try {
         );
         const colorEffectReadback = inspected.layers[0].elements[0].colorEffect;
         assert.equal(colorEffectReadback.mode, mode);
-        if (mode === "alpha") near(colorEffectReadback.alphaPercent, 57, "alpha percent");
-        if (mode === "brightness") near(colorEffectReadback.brightnessPercent, 34, "brightness percent");
+        if (mode === "alpha") {
+            near(colorEffectReadback.alphaPercent, 57, "alpha percent");
+        }
+        if (mode === "brightness") {
+            near(colorEffectReadback.brightnessPercent, 34, "brightness percent");
+        }
         if (mode === "tint") {
             assert.equal(colorEffectReadback.tintColor.toLowerCase(), "#33aaee");
             near(colorEffectReadback.tintPercent, 63, "tint percent");
@@ -336,7 +410,14 @@ try {
         await editElements({
             document: documentName,
             timeline: 1,
-            ops: [{ layer: "sceneTwoEffects", frame: 1, element: "sceneTwoInstance", set: { colorEffect: { mode: "alpha", alphaPercent: 42 } } }],
+            ops: [
+                {
+                    layer: "sceneTwoEffects",
+                    frame: 1,
+                    element: "sceneTwoInstance",
+                    set: { colorEffect: { mode: "alpha", alphaPercent: 42 } },
+                },
+            ],
         }),
         "edit color effect on inactive Scene 2",
     );
@@ -363,7 +444,10 @@ try {
                     layer: "sceneTwoEffects",
                     instance: "sceneTwoInstance",
                     kind: "classic",
-                    keyframes: [{ frame: 1, x: 50 }, { frame: 5, x: 150 }],
+                    keyframes: [
+                        { frame: 1, x: 50 },
+                        { frame: 5, x: 150 },
+                    ],
                 },
             ],
         }),
@@ -391,16 +475,29 @@ try {
     ).layers[0].elements[0].x;
     near(afterInvalid, beforeInvalid, "first operation was applied before validation completed");
     console.log("invalid-operation rollback: passed");
+} catch (error) {
+    failure = error;
 } finally {
-    const closed = await runJsfl({
-        code: `var __names = [${JSON.stringify(documentName)}, ${JSON.stringify(canvasDocumentName)}];
+    try {
+        const closed = await runJsfl({
+            code: `var __names = [${JSON.stringify(documentName)}, ${JSON.stringify(canvasDocumentName)}];
 for (var __nameIndex = 0; __nameIndex < __names.length; __nameIndex++) {
   var __doc = null;
   for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __names[__nameIndex]) __doc = fl.documents[__index];
   if (__doc) __doc.close(false);
 }
 'closed';`,
-    });
-    if (closed.isError) throw new Error(`Could not close the smoke document: ${message(closed)}`);
-    console.log(`Closed smoke document ${documentName}`);
+        });
+        if (closed.isError) {
+            const error = new Error(`Could not close the smoke document: ${message(closed)}`);
+            failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup failed") : error;
+        } else {
+            console.log(`Closed smoke document ${documentName}`);
+        }
+    } catch (error) {
+        failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup failed") : error;
+    }
+}
+if (failure) {
+    throw failure;
 }

@@ -8,6 +8,16 @@ export const libraryRuntime = `  const libraryItems = [
     { name: "Font", itemType: "font" },
     ...Array.from({ length: Number(process.env.FAKE_EXTRA ?? 0) }, (_, index) => ({ name: "S" + index, itemType: "graphic" })),
     { name: "Broken", itemType: "button" },
+    ...(process.env.FAKE_AUDIT_FIXTURES ? [
+      { name: "Symbol 1", itemType: "graphic" },
+      { name: "シンボル 2", itemType: "graphic" },
+      { name: "Linked", itemType: "movie clip", linkageExportForAS: true, linkageClassName: "external.Linked" },
+      { name: "constructor", itemType: "bitmap" },
+      { name: "toString", itemType: "bitmap" },
+      { name: "Folder", itemType: "folder" },
+      { name: "Folder/Symbol 3", itemType: "graphic" },
+      { name: "Folder/Unused", itemType: "graphic" },
+    ] : []),
   ];
   const linkageWrites = [];
   for (const item of libraryItems) {

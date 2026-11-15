@@ -2,7 +2,7 @@
 
 # animate-mcp
 
-Edit Adobe Animate scripts and timeline structure from an MCP-compatible AI agent.
+An MCP server for operating Adobe Animate from AI agents.
 
 English | [日本語](README.ja.md)
 
@@ -37,7 +37,9 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 - Import images and audio, find direct Library usages, create or duplicate symbols, and change stage properties.
 - Publish AS3 and HTML5 Canvas documents and get AS3 compile errors and warnings back.
 - Read Animate's diagnostic panels and run an AS3 Test Movie to capture runtime output.
-- Capture a single frame as a PNG image.
+- Capture a frame or range as PNG images.
+- Check for unused Library items and empty keyframes.
+- Verify Canvas HTML in Chrome and compare captured PNGs.
 - Install GreenSock-AS3 with a prompt.
 - Work with ActionScript 3 and HTML5 Canvas, and run arbitrary JSFL.
 
@@ -46,7 +48,7 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 - Node.js
 - Adobe Animate (must be running)
 - An MCP-compatible client (Claude Code, Claude Desktop, etc.)
-- Verified only on Animate 2024 / macOS. Other recent versions should work. Windows is untested.
+- Verified with Animate 2027 on macOS and with Animate on Windows.
 
 ## Install
 
@@ -153,7 +155,10 @@ Install GreenSock-AS3 for the open document
 | `read_output` | Reads the current Output and Compiler Errors panels as raw text and parses compiler diagnostics. | Read-only; contents may be stale or mixed because Animate does not identify their source document or run. `compilerDiagnostics.status: "unavailable"` means the panel is empty, incomplete, or unsupported; it does not prove a clean compile. |
 | `test_movie` | Runs a saved AS3 document in Test Movie with abort-on-compiler-errors enabled, using its current in-memory contents; returns compiler diagnostics plus the Output panel delta. | Does not save, publish, or close the `.fla`; any Test Movie Player remains open for you to close. The Output panel is sampled once, two seconds after launch, so later messages may be missed and concurrent messages may be mixed in. An empty delta does not prove there were no runtime errors. |
 | `publish` | Publishes an AS3 or HTML5 Canvas document and returns its Build result. | Overwrites outputs at the document's publish settings; unsaved edits in the open document are published, but the `.fla` is not saved. `compilerOutput` is `verified` for parsed AS3 output, `unavailable` after one empty-output retry, or `not_checked` for Canvas. An empty `errors` list when output is unavailable or unchecked does not prove a clean build. Compiler diagnostics without a parsed location/code are returned as plain messages when the summary is present. Canvas compile errors are unverified; `ok: true` only means Publish ran. |
+| `verify_canvas_output` | Optionally Publishes a saved HTML5 Canvas document, opens the resulting HTML in installed Chrome, and returns Browser output and a screenshot. | Publish runs by default and overwrites outputs at the document's Publish settings. Use `publish: false` to avoid publishing or `htmlPath` to specify an absolute HTML path; the default is `<FLA stem>.html` beside the FLA (verified on Animate 2027 with default settings) and may not match custom settings. Chrome must already be installed. The HTML and local assets are served only from the HTML directory on loopback; only known web asset types are served, page-authored scripts execute, and remote assets may need network access. Browser output covers console errors, uncaught exceptions, and failed requests during loading plus `observeMs` (default 3000); a clean result does not prove visual correctness or exclude later errors. |
+| `audit_document` | Read-only suggestions for unused Library items, empty keyframes, and default-looking English/Japanese layer and symbol names. | Findings include severity and location and are review heuristics, not proof of defects. Unused items may be referenced by external code; linkage-bearing items are specifically marked as not safe to infer deletion. Direct timeline usage is scanned across scenes and symbols; nested/runtime references are not proven. The tool temporarily visits timelines and restores the prior edit context and selection. |
 | `capture_frame` | Returns PNG images of one frame or an inclusive range from the active timeline, including a library symbol being edited. | Specify either `frame` (1-based, defaults to the current frame) or `range: { start, end, step? }` (1-based, ascending and inclusive; `step` defaults to 1, must be a positive integer, and at most 24 frames are captured). Range results return ordered image/metadata pairs and `structuredContent.captures`. Saves each image under `~/.animate-mcp/captures/<document>/` or `dir`; unsaved documents are supported. The current frame is restored, but changing frames may clear the selection. Stages larger than 2048px on either side are refused, without scaling. |
+| `diff_captures` | Compares two existing Capture PNGs and returns a red-highlight difference image plus changed-pixel count, percentage, and bounding box. | Use absolute paths inside `~/.animate-mcp/captures/`; dimensions must match. `tolerance` defaults to 8 and ignores a pixel when every RGBA channel differs by no more than that value. An unchanged image has `boundingBox: null`. A new diff PNG is saved beside the earlier Capture without overwriting existing files. |
 | `inspect_timeline` | Reads layers, keyframe ranges, instances, text, and tweens at a specified frame of a scene or library symbol. | `timeline` is a zero-based scene index or library-item path. Frame numbers are one-based; layers can be filtered. Text includes its string and whole-field style. |
 | `edit_elements` | Sets symbol-instance transforms, names, color effects, filters, blend modes, visibility, graphic loop/firstFrame, and swaps symbols; or adds a Library item to a timeline. | Set operations use layer and element names or zero-based indexes; `{ op: "add", item, layer, frame, x?, y?, set? }` places a Library item on a named layer at a 1-based frame, creating the layer and extending the timeline if needed. Omitted coordinates default to the stage center. `set.swapSymbol` names an existing Library symbol; `set.loop` and `set.firstFrame` apply only to graphics. Non-instances and tween interiors are refused, and all operations are validated before any write. Supplying `filters` replaces all existing filters; `[]` clears them. Read-back element fields match `inspect_timeline` with added layer/frame/element references. Rotation and skew cannot be set together in one operation. Does not save the `.fla`. |
 | `edit_text` | Adds text to a scene or symbol timeline or edits an existing text field. | `timeline` is a scene index or Library path; `ops` contains `{ op: "add", layer, frame, rectangle: { left, top, right, bottom }, text, style? }` or `{ op: "set", layer, frame, element, text?, style? }`. Style can set face, size, fillColor, bold, italic, alignment, textType, and lineType for the whole field. Canvas refuses input and single-line text. No per-character styling; does not save the `.fla`. |
