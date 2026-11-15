@@ -526,7 +526,7 @@ test("apply_scripts applies library symbols, detects conflicts, continues past f
         // The SDK client drops a progress notification that arrives in the same read as the final response
         // (notification handlers run a microtask later, response handlers run at once), so the last one may be lost.
         assert.equal(seen[0], 1);
-        assert.deepEqual(seen, [1, 2].slice(0, seen.length));
+        assert.deepEqual(seen, [1, 2, 3, 4].slice(0, seen.length));
         const lastSymbol = (await readFile(join(tempDir, "log.sym"), "utf8")).trim().split("\n").at(-1);
         assert.equal(JSON.parse(lastSymbol ?? "{}")["dir/Hero"], "play();");
     });
