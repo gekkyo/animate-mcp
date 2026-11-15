@@ -15,7 +15,8 @@ export const JSFL_FILES: Record<string, { path: string; deps: string[] }> = {
     "export-library": { path: "scripts/export-library.jsfl", deps: ["select-document", "edit-state", "export-common"] },
     "apply-scenes": { path: "scripts/apply-scenes.jsfl", deps: ["select-document", "edit-state", "export-common"] },
     "timeline-helpers": { path: "timeline/helpers.jsfl", deps: ["edit-state"] },
-    "timeline-layers": { path: "timeline/layers.jsfl", deps: ["timeline-helpers"] },
+    "timeline-distribute": { path: "timeline/distribute.jsfl", deps: ["timeline-helpers"] },
+    "timeline-layers": { path: "timeline/layers.jsfl", deps: ["timeline-helpers", "timeline-distribute"] },
     "timeline-frames": { path: "timeline/frames.jsfl", deps: ["timeline-helpers"] },
     "timeline-index": {
         path: "timeline/index.jsfl",
