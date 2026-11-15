@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.svg" alt="animate-mcp" width="140">
+
 # animate-mcp
 
 An MCP server for operating Adobe Animate from AI agents
@@ -8,9 +10,12 @@ English | [日本語](README.ja.md)
 
 [Changelog](CHANGELOG.md)
 
+---
+
 [![CI](https://github.com/gekkyo/animate-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/gekkyo/animate-mcp/actions/workflows/ci.yml)
 [![MCP compatible](https://img.shields.io/badge/MCP-compatible-blue)](https://modelcontextprotocol.io)
 [![npm](https://img.shields.io/npm/v/animate-mcp)](https://www.npmjs.com/package/animate-mcp)
+[![npm downloads](https://img.shields.io/npm/dw/animate-mcp)](https://www.npmjs.com/package/animate-mcp)
 [![license MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
 </div>
