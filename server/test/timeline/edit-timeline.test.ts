@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { editTimeline, layersLog, text, withServer } from "../helpers/fake-animate.js";
+import { editTimeline, layersLog, stateLog, text, withServer } from "../helpers/fake-animate.js";
 
 test("edit_timeline applies layer operations, parenting and relative placement", { timeout: 30_000 }, () =>
     withServer({ FAKE_SECOND_LAYER: "Other" }, async (client) => {
@@ -58,10 +58,13 @@ test("edit_timeline requires confirmation, stops after failure, and disambiguate
             applied: unknown[];
             failed: { error: string };
             skipped: unknown[];
+            warnings: string[];
             layers: { name: string }[];
         };
         assert.equal(summary.applied.length, 1);
         assert.match(summary.failed.error, /confirm required/);
+        // Delete is rejected after the rename; verify the later operation was not attempted.
+        assert.match(summary.warnings[0], /Operation 2 \(deleteLayer\) failed and may have been partially applied/);
         assert.equal(summary.skipped.length, 1);
         assert.ok(summary.layers.some((entry) => entry.name === "Before failure"));
         assert.ok(!summary.layers.some((entry) => entry.name === "Skipped"));
@@ -87,6 +90,21 @@ test("edit_timeline requires confirmation, stops after failure, and disambiguate
             1,
         );
     });
+});
+
+test("edit_timeline restores the selected layer by identity after deleting or moving layers", {
+    timeout: 30_000,
+}, async () => {
+    for (const ops of [
+        [{ op: "deleteLayer", layer: "a/b", confirm: true }],
+        [{ op: "moveLayer", layer: "a/b", below: "dir" }],
+    ]) {
+        await withServer({ FAKE_SECOND_LAYER: "Other", FAKE_INITIAL_CURRENT_LAYER: "1" }, async (client, tempDir) => {
+            const result = await editTimeline(client, 0, ops);
+            assert.equal((result.structuredContent as { failed: unknown }).failed, null, text(result));
+            assert.equal((await stateLog(tempDir)).at(-1).currentLayer, 0);
+        });
+    }
 });
 
 test("edit_timeline supports frame edits and labels", { timeout: 30_000 }, () =>
@@ -383,7 +401,10 @@ test("edit_timeline distributeToLayers rejects unsupported or multi-span sources
             /cannot contain a tween/,
         );
     });
-    for (const env of [{ FAKE_DISTRIBUTE_ACTIONSCRIPT: "1" }, { FAKE_DISTRIBUTE_LABEL: "1" }]) {
+    for (const env of [{ FAKE_DISTRIBUTE_ACTIONSCRIPT: "1" }, { FAKE_DISTRIBUTE_LABEL: "1" }] as Record<
+        string,
+        string
+    >[]) {
         await withServer({ FAKE_DISTRIBUTE: "1", FAKE_LOCK_DISTRIBUTE: "1", ...env }, async (client, tempDir) => {
             const rejected = await editTimeline(client, 0, [{ op: "distributeToLayers", layer: "a/b" }]);
             const summary = rejected.structuredContent as {
@@ -409,6 +430,7 @@ test("edit_timeline distributeToLayers rejects unsupported or multi-span sources
                 layers: { name: string; locked: boolean }[];
             };
             assert.match(summary.failed.error, /fake addItemToDocument failure/);
+            // A failed copy must leave source content intact and remove any incomplete destination layers.
             assert.ok(
                 summary.layers.some((entry) => entry.name === "a/b" && entry.locked),
                 "the source layer remains after a copy failure",
@@ -438,6 +460,7 @@ test("edit_timeline keeps every element after native distribution partially muta
             };
             assert.match(summary.failed.error, /fake native distribution failure after partial mutation/);
             assert.match(summary.failed.error, /Undo in Animate/);
+            // Native distribution can mutate before throwing, so all original elements must remain represented.
             assert.ok(summary.layers.some((entry) => entry.name === "a/b" && entry.locked));
             assert.ok(summary.layers.some((entry) => entry.name === "Native partial"));
             const layers = (await layersLog(tempDir)).at(-1);

@@ -101,9 +101,11 @@ test("edit_tween rejects invalid spans and stops at the first failed operation",
             applied: unknown[];
             failed: { error: string };
             skipped: unknown[];
+            warnings: string[];
         };
         assert.equal(summary.applied.length, 0);
         assert.match(summary.failed.error, /Instance must be the only element/);
+        assert.match(summary.warnings[0], /Operation 1 \(createTween\) failed and may have been partially applied/);
         assert.equal(summary.skipped.length, 1);
 
         const beyond = await editTween(client, 0, [

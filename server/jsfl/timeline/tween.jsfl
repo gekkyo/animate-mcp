@@ -1,6 +1,7 @@
 // `var __timelineRef` (scene index or library item path) and `var __ops` are injected before this file.
   var document = selectDocument(), timeline = null;
-  var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.currentLayer;
+  var originalTimeline = document.getTimeline(), originalLayerIndex = originalTimeline.currentLayer;
+  var originalLayer = originalTimeline.layers[originalLayerIndex];
   var originalFrame = originalTimeline.currentFrame, applied = [], failed = null, skipped = [], warnings = [];
   var targetSelectedFramesAfter = null;
 
@@ -267,8 +268,8 @@
   /** Replaces the keyframes in a Motion Editor property channel.
    * @param xml Original motion XML
    * @param propertyId Motion Editor property id
-   * @param values Property values at each keyframe
    * @param easeProperty Easing property name
+   * @param values Property values at each keyframe
    * @param startFrame Zero-based first frame
    * @param frameRate Document frame rate
    * @returns Updated motion XML
@@ -283,6 +284,7 @@
     for (var keyIndex = 0; keyIndex < track.length; keyIndex++) {
       var current = track[keyIndex], incoming = keyIndex > 0 ? track[keyIndex - 1] : current;
       var outgoing = keyIndex + 1 < track.length ? track[keyIndex + 1] : current;
+      // Bezier handles are expressed relative to each keyframe segment's time and value range.
       var incomingCurve = easeCurve(easeFor(current.source || {}, easeProperty));
       var outgoingCurve = easeCurve(easeFor(outgoing.source || {}, easeProperty));
       var value = current.value, nextX = (outgoing.frame - current.frame) * unitsPerFrame * outgoingCurve[0];
@@ -556,7 +558,7 @@
                 xml = xml.replace(expression, function (whole, open, inner, close) {
                   var updatedInner = inner.replace(
                     /<Keyframe[^>]*\/>/g,
-                    /** Replaces one keyframe with the updated version.
+                    /** Returns the next updated keyframe in channel order.
                      * @returns Updated keyframe XML
                      */
                     function () { return propertyFrames[frameCursor++]; }
@@ -576,7 +578,11 @@
   }
 
   try {
-    var session = withTimelineEdit(document, __timelineRef, function (targetTimeline) {
+    var session = withTimelineEdit(document, __timelineRef, /** Applies requested tween and easing operations.
+     * @param targetTimeline Timeline selected for editing.
+     * @returns Nothing.
+     */
+    function (targetTimeline) {
       timeline = targetTimeline;
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
       var op = __ops[opIndex];
@@ -586,6 +592,7 @@
         applied.push(op);
       } catch (error) {
         failed = { op: op, error: String(error && error.message ? error.message : error) };
+        warnings.push('Operation ' + (opIndex + 1) + ' (' + op.op + ') failed and may have been partially applied; check the timeline or use Undo.');
         for (var skippedIndex = opIndex + 1; skippedIndex < __ops.length; skippedIndex++) skipped.push(__ops[skippedIndex]);
         break;
       }
@@ -596,7 +603,10 @@
     if (targetSelectedFramesAfter && timeline.setSelectedFrames) timeline.setSelectedFrames(targetSelectedFramesAfter);
   } finally {
     var restoredTimeline = document.getTimeline();
-    if (originalLayer < restoredTimeline.layers.length) restoredTimeline.currentLayer = originalLayer;
+    // Restore by layer object identity because operations may reorder or remove layers.
+    var restoredLayerIndex = editLayerPosition(restoredTimeline, originalLayer);
+    if (restoredLayerIndex >= 0) restoredTimeline.currentLayer = restoredLayerIndex;
+    else if (restoredTimeline.layers.length) restoredTimeline.currentLayer = Math.max(0, Math.min(originalLayerIndex, restoredTimeline.layers.length - 1));
     restoredTimeline.currentFrame = originalFrame;
   }
   return serialize({ applied: applied, failed: failed, skipped: skipped, warnings: warnings, layers: listLayers() });
