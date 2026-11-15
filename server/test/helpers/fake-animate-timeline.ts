@@ -265,6 +265,18 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
         frames.push(...Array(startFrameIndex).fill(blank));
       }
       for (const frame of keyframes) frames.push(...Array(frame.duration).fill(frame));
+      if (process.env.FAKE_PASTE_TRAILING_EMPTY && lastKeyframe) {
+        const trailing = Object.assign({}, lastKeyframe, {
+          startFrame: frames.length,
+          duration: lastKeyframe.duration,
+          isEmpty: true,
+          elements: [],
+          actionScript: "",
+          name: process.env.FAKE_PASTE_TRAILING_EMPTY === "labeled" ? "tail" : "",
+          soundLibraryItem: null,
+        });
+        frames.push(...Array(trailing.duration).fill(trailing));
+      }
       target.frames.splice(0, target.frames.length, ...frames);
       this.recalculateLayer(target);
     },
@@ -313,6 +325,84 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
   };
   for (const candidate of layers) for (const frame of new Set(candidate.frames)) {
     Object.defineProperty(frame, "__fakeTimeline", { value: timeline, configurable: true });
+    let tweenType = frame.tweenType;
+    Object.defineProperty(frame, "tweenType", {
+      configurable: true,
+      get: () => tweenType,
+      set: (value) => {
+        tweenType = value;
+        if (value !== "shape") return;
+        const targetLayer = timeline.layers.find((entry) => entry.frames.includes(frame));
+        if (!targetLayer) return;
+        const start = frame.startFrame;
+        let end = targetLayer.frames.length;
+        for (let index = start + 1; index < targetLayer.frames.length; index++) {
+          if (targetLayer.frames[index].startFrame === index) {
+            end = index;
+            break;
+          }
+        }
+        // Animate creates a shape span by replacing every in-between frame with its start keyframe.
+        frame.duration = end - start;
+        for (let index = start; index < end; index++) targetLayer.frames[index] = frame;
+        timeline.recalculateLayer(targetLayer);
+      },
+    });
+  }
+  // Shape-tween fixtures (Scene 1 / a/b, keys at frames 0 and 2; 4 when chained):
+  // FAKE_SHAPE_TWEEN selects shape conversion fixtures; FAKE_SHAPE_TWEEN_INSPECT selects an existing shape tween for inspection.
+  // FAKE_SHAPE_TWEEN_CHAIN adds a key at frame 4; FAKE_SHAPE_TWEEN_INTERMEDIATE adds a key at frame 1.
+  // FAKE_SHAPE_TWEEN_EMPTY, FAKE_SHAPE_TWEEN_BAD_ELEMENT, FAKE_SHAPE_TWEEN_GROUP, and FAKE_SHAPE_TWEEN_DRAWING select that content at the named key.
+  // FAKE_SHAPE_TWEEN_EXISTING marks frame 0 of the first layer as an existing motion tween.
+  // Other timeline fixtures:
+  // FAKE_ENFORCE_ELEMENT_LOCK enables element-lock enforcement; FAKE_AUDIT_RESTORE_FAIL makes restoring empty symbol selection fail.
+  // FAKE_RENAME_STATIC renames a newly added "static" layer; FAKE_SYM_INSTANCE adds an instance to symbol timelines.
+  // FAKE_PERSIST_AS with FAKE_LOG enables ActionScript layer persistence markers.
+  // FAKE_LOG also enables the fixture's timeline operation logs; FAKE_PASTE_TRAILING_EMPTY models Animate's extra empty pasted tail span (value "labeled" gives that span a label).
+  if ((process.env.FAKE_SHAPE_TWEEN || process.env.FAKE_SHAPE_TWEEN_INSPECT) && name === "Scene 1") {
+    const targetLayer = layers.find((candidate) => candidate.name === "a/b");
+    if (process.env.FAKE_SHAPE_TWEEN) {
+      if (process.env.FAKE_SHAPE_TWEEN_CHAIN) {
+        const middleFrame = targetLayer?.frames[2];
+        if (middleFrame) {
+          middleFrame.duration = 2;
+          targetLayer.frames[4] = Object.assign({}, middleFrame, { startFrame: 4, duration: 1, elements: middleFrame.elements.map((element) => Object.assign({}, element)) });
+          timeline.recalculateLayer(targetLayer);
+        }
+      }
+      if (process.env.FAKE_SHAPE_TWEEN_INTERMEDIATE) {
+        const startFrame = targetLayer?.frames[0];
+        if (startFrame) {
+          startFrame.duration = 1;
+          targetLayer.frames[1] = Object.assign({}, startFrame, { startFrame: 1, duration: 1, elements: startFrame.elements.map((element) => Object.assign({}, element)) });
+          timeline.recalculateLayer(targetLayer);
+        }
+      }
+      // Environment flags below select which fixture frame to mutate or mark as an existing tween.
+      const shapeKeys = process.env.FAKE_SHAPE_TWEEN_INTERMEDIATE
+        ? [0, 1, 2]
+        : process.env.FAKE_SHAPE_TWEEN_CHAIN ? [0, 2, 4] : [0, 2];
+      for (const index of shapeKeys) {
+        const frame = targetLayer?.frames[index];
+        if (!frame || frame.startFrame !== index) continue;
+        if (process.env.FAKE_SHAPE_TWEEN_EMPTY === String(index)) {
+          frame.elements = [];
+          continue;
+        }
+        const element = frame.elements[0];
+        if (!element) continue;
+        element.elementType = process.env.FAKE_SHAPE_TWEEN_BAD_ELEMENT === String(index) ? "instance" : "shape";
+        if (process.env.FAKE_SHAPE_TWEEN_GROUP === String(index)) element.isGroup = true;
+        if (process.env.FAKE_SHAPE_TWEEN_DRAWING === String(index)) element.isDrawingObject = true;
+      }
+      if (process.env.FAKE_SHAPE_TWEEN_EXISTING) layers[0].frames[0].tweenType = "motion";
+    }
+    if (process.env.FAKE_SHAPE_TWEEN_INSPECT) {
+      const frame = layers[0].frames[0];
+      frame.tweenType = "shape";
+      frame.tweenEasing = 30;
+      frame.shapeTweenBlend = "angular";
+    }
   }
   return timeline;
 };

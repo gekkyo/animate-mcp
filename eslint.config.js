@@ -28,11 +28,23 @@ const jsdocRules = {
 };
 
 export default [
-  // JSFL is excluded: Espree cannot parse its top-level return fragments or syntax extensions.
   {
     files: ["server/**/*.ts", "server/**/*.mjs"],
     plugins: { jsdoc },
     rules: jsdocRules,
+  },
+  {
+    files: ["server/jsfl/**/*.jsfl"],
+    languageOptions: {
+      ecmaVersion: 5,
+      sourceType: "script",
+      parserOptions: { ecmaFeatures: { globalReturn: true } },
+    },
+    plugins: { jsdoc },
+    rules: {
+      ...jsdocRules,
+      "no-restricted-globals": ["error", { name: "JSON", message: "JSFL does not provide the JSON global." }],
+    },
   },
   {
     languageOptions: { parser: tsParser },

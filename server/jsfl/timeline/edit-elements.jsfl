@@ -1,3 +1,4 @@
+(function () {
 // `var __docName`, `var __timelineRef`, and `var __ops` are injected before this file.
   var document = selectDocument(), timeline = null;
   var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.layers[originalTimeline.currentLayer];
@@ -12,7 +13,7 @@
    * @param name Library item name.
    * @returns The matching item, or null when absent.
    */
-  function findLibraryItem(name) {
+  function findElementLibraryItem(name) {
     for (var index = 0; index < document.library.items.length; index++) {
       if (document.library.items[index].name === name) return document.library.items[index];
     }
@@ -132,7 +133,7 @@
     var item = reference && reference.libraryItem ? reference.libraryItem : reference;
     var symbolType = reference && reference.elementType === 'instance' ? reference.symbolType : reference && reference.itemType;
     if (set.swapSymbol !== undefined) {
-      var swapItem = findLibraryItem(set.swapSymbol);
+      var swapItem = findElementLibraryItem(set.swapSymbol);
       if (!swapItem) throw new Error('Library item not found: ' + set.swapSymbol);
       if (['movie clip', 'graphic', 'button'].indexOf(swapItem.itemType) < 0) {
         throw new Error('Library item is not a symbol: ' + set.swapSymbol);
@@ -217,7 +218,7 @@
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
       var op = __ops[opIndex];
       if (op.op === 'add') {
-        var item = findLibraryItem(op.item);
+        var item = findElementLibraryItem(op.item);
         var visualItemTypes = ['movie clip', 'graphic', 'button', 'bitmap', 'component', 'compiled clip'];
         if (!item) throw new Error('Library item not found: ' + op.item);
         if (visualItemTypes.indexOf(item.itemType) < 0) throw new Error('Library item is not a visual item: ' + op.item);
@@ -292,7 +293,7 @@
             targetLayer.parentLayer = null;
             entry.layerPlan.layer = targetLayer;
           }
-          var targetLayerIndex = layerPosition(targetLayer), targetFrameIndex = entry.op.frame - 1;
+          var targetLayerIndex = layerPosition(timeline, targetLayer), targetFrameIndex = entry.op.frame - 1;
           if (targetLayerIndex < 0) throw new Error('Destination layer disappeared: ' + entry.op.layer);
           timeline.currentLayer = targetLayerIndex;
           if (targetFrameIndex >= targetLayer.frames.length) {
@@ -336,7 +337,7 @@
           resultElements.push(addedResult);
           continue;
         }
-        var setLayerIndex = layerPosition(entry.layer);
+        var setLayerIndex = layerPosition(timeline, entry.layer);
         if (setLayerIndex < 0) throw new Error('Layer disappeared: ' + entry.op.layerName);
         timeline.currentLayer = setLayerIndex;
         timeline.currentFrame = entry.frame.startFrame;
@@ -353,7 +354,7 @@
     if (timeline && targetLayerState) {
       // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
       if (document.selectNone) document.selectNone();
-      var targetLayerIndex = layerPosition(targetLayerState);
+      var targetLayerIndex = layerPosition(timeline, targetLayerState);
       if (targetLayerIndex >= 0) timeline.currentLayer = targetLayerIndex;
       timeline.currentFrame = targetFrameState;
       for (var selectionIndex = 0; selectionIndex < targetSelection.length; selectionIndex++) targetSelection[selectionIndex].selected = true;

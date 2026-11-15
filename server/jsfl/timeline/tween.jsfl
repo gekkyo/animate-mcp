@@ -1,3 +1,4 @@
+(function () {
 // `var __timelineRef` (scene index or library item path) and `var __ops` are injected before this file.
   var document = selectDocument(), timeline = null;
   var originalTimeline = document.getTimeline(), originalLayerIndex = originalTimeline.currentLayer;
@@ -349,7 +350,7 @@
    * @returns Nothing
    */
   function createTween(op) {
-    var layerIndex = findLayerIndex(op.layer, op.index), layer = timeline.layers[layerIndex];
+    var layerIndex = findLayerIndex(timeline, op.layer, op.index), layer = timeline.layers[layerIndex];
     var first = op.keyframes[0].frame - 1, last = op.keyframes[op.keyframes.length - 1].frame - 1, existingKind = null;
     if (last >= timeline.frameCount || last >= layer.frames.length) throw new Error('Frame beyond timeline length');
     for (var frameIndex = first; frameIndex <= last; frameIndex++) {
@@ -441,6 +442,65 @@
     });
   }
 
+  /** Creates a shape tween between existing raw-shape keyframes.
+   * @param op createShapeTween operation
+   * @returns Nothing
+   */
+  function createShapeTween(op) {
+    var layerIndex = findLayerIndex(timeline, op.layer, op.index), layer = timeline.layers[layerIndex];
+    var first = op.from - 1, last = op.to - 1;
+    var ease = op.ease === undefined ? 0 : op.ease, blend = op.blend === undefined ? 'distributive' : op.blend;
+    if (first < 0 || last >= timeline.frameCount || last >= layer.frames.length) throw new Error('Frame beyond timeline length');
+    if (first >= last) throw new Error('from must be less than to');
+    if (!isShapeTweenEase(ease)) throw new Error('ease must be a number from -100 to 100');
+    if (blend !== 'distributive' && blend !== 'angular') throw new Error('blend must be distributive or angular');
+    for (var frameIndex = first; frameIndex < last; frameIndex++) {
+      var frame = layer.frames[frameIndex];
+      if (frame && frame.tweenType !== 'none') throw new Error('Span already has a tween; shape tweens do not replace existing spans');
+    }
+    var keyframes = [first, last];
+    for (var keyIndex = 0; keyIndex < keyframes.length; keyIndex++) {
+      var keyframeIndex = keyframes[keyIndex], keyframe = layer.frames[keyframeIndex];
+      if (!keyframe || keyframe.startFrame !== keyframeIndex) {
+        throw new Error('Frame ' + (keyframeIndex + 1) + ' must be an existing keyframe');
+      }
+      if (!keyframe.elements || keyframe.elements.length === 0) throw new Error('Frame ' + (keyframeIndex + 1) + ' must contain raw shapes');
+      for (var elementIndex = 0; elementIndex < keyframe.elements.length; elementIndex++) {
+        var element = keyframe.elements[elementIndex];
+        if (element.elementType !== 'shape' || element.isGroup === true || element.isDrawingObject === true) {
+          // unverified: true isGroup/isDrawingObject cases have not been verified in real Animate.
+          throw new Error('Frame ' + (keyframeIndex + 1) + ' must contain only raw shapes (no groups, drawing objects, instances, or text)');
+        }
+      }
+    }
+    if (layer.frames[first].duration !== last - first) {
+      throw new Error('Shape tween span cannot contain intermediate keyframes');
+    }
+    withEditUnlockedLayers([layer], function () {
+      timeline.currentLayer = layerIndex;
+      var startFrame = layer.frames[first];
+      startFrame.tweenType = 'shape';
+      startFrame.tweenEasing = ease;
+      startFrame.shapeTweenBlend = blend;
+    });
+  }
+
+  /** Checks whether an ease value is valid for a shape tween.
+   * @param ease Ease value to check
+   * @returns Whether the value is a finite number from -100 to 100
+   */
+  function isShapeTweenEase(ease) {
+    return typeof ease === 'number' && isFinite(ease) && ease >= -100 && ease <= 100;
+  }
+
+  /** Checks whether a frame belongs to a supported tween type.
+   * @param tweenType Frame tween type
+   * @returns Whether the tween type supports easing
+   */
+  function isEaseableTweenType(tweenType) {
+    return tweenType === 'motion' || tweenType === 'motion object' || tweenType === 'shape';
+  }
+
   /** Compares ease specifications for classic tween group validation.
    * @param left First ease specification
    * @param right Second ease specification
@@ -501,17 +561,25 @@
    * @returns Nothing
    */
   function setEase(op) {
-    var layerIndex = findLayerIndex(op.layer, op.index), layer = timeline.layers[layerIndex], frameIndex = op.frame - 1;
+    var layerIndex = findLayerIndex(timeline, op.layer, op.index), layer = timeline.layers[layerIndex], frameIndex = op.frame - 1;
     if (frameIndex < 0 || frameIndex >= timeline.frameCount || frameIndex >= layer.frames.length) throw new Error('Frame beyond timeline length');
     var frame = layer.frames[frameIndex], span = layer.frames[frame.startFrame], arrivalFrame = frameIndex;
-    if (!span || (span.tweenType !== 'motion' && span.tweenType !== 'motion object')) {
+    if (!span || !isEaseableTweenType(span.tweenType)) {
       var priorFrame = frameIndex - 1;
       if (priorFrame >= 0) {
         var prior = layer.frames[priorFrame], priorSpan = layer.frames[prior.startFrame];
-        if (priorSpan && (priorSpan.tweenType === 'motion' || priorSpan.tweenType === 'motion object')) span = priorSpan;
+        if (priorSpan && isEaseableTweenType(priorSpan.tweenType)) span = priorSpan;
       }
     }
-    if (!span || (span.tweenType !== 'motion' && span.tweenType !== 'motion object')) throw new Error('Frame is not inside a tween');
+    if (!span || !isEaseableTweenType(span.tweenType)) throw new Error('Frame is not inside a tween');
+    if (span.tweenType === 'shape') {
+      if (!isShapeTweenEase(op.ease)) throw new Error('Shape tween ease must be a number from -100 to 100');
+      withEditUnlockedLayers([layer], function () {
+        timeline.currentLayer = layerIndex;
+        span.tweenEasing = op.ease;
+      });
+      return;
+    }
     if (arrivalFrame <= span.startFrame) throw new Error('No tween segment arrives at this frame');
     /** Applies the ease while the target layer is unlocked.
      * @returns Nothing
@@ -588,6 +656,7 @@
       var op = __ops[opIndex];
       try {
         if (op.op === 'createTween') createTween(op);
+        else if (op.op === 'createShapeTween') createShapeTween(op);
         else setEase(op);
         applied.push(op);
       } catch (error) {
