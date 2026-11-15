@@ -1,16 +1,4 @@
-import { isAbsolute, relative, sep } from "node:path";
 import { PNG } from "pngjs";
-
-/**
- * Checks whether a path is a strict descendant of a root.
- * @param root Canonical root path.
- * @param path Canonical path to check.
- * @returns Whether path is inside root but is not root itself.
- */
-export function isInside(root: string, path: string): boolean {
-    const rel = relative(root, path);
-    return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
-}
 
 /**
  * Decodes a PNG and associates malformed-image errors with its path.

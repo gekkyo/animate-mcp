@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { capturesDir } from "../paths.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
 
 type CaptureResult = { path: string; frame: number; timeline: string; width: number; height: number };
@@ -61,7 +61,7 @@ export const captureFrameTool: ToolDefinition<typeof CAPTURE_FRAME_INPUT> = {
             `var __captureFrame = ${frame ?? "null"};`,
             `var __captureRange = ${JSON.stringify(range ?? null)};`,
             `var __captureDir = ${JSON.stringify(outputDir ?? "")};`,
-            `var __captureRoot = ${JSON.stringify(join(homedir(), ".animate-mcp", "captures"))};`,
+            `var __captureRoot = ${JSON.stringify(capturesDir())};`,
         ].join("\n");
         const result = JSON.parse(
             String(await runner.execute(`${prelude}\n${bundle("capture-frame")}`)),

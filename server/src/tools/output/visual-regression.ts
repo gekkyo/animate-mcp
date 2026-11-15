@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, join, relative, sep } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PNG } from "pngjs";
 import { z } from "zod";
+import { baselinesDir, capturesDir, isInside } from "../paths.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
-import { comparePixels, decodePng, isInside } from "./image-diff.js";
+import { comparePixels, decodePng } from "./image-diff.js";
 
 const RANGE = z
     .object({
@@ -153,8 +153,8 @@ export const visualRegressionTool: ToolDefinition<typeof INPUT> = {
         if (range && Math.floor((range.end - range.start) / (range.step ?? 1)) + 1 > 24) {
             throw new Error("Capture range cannot exceed 24 frames");
         }
-        const captureRoot = join(homedir(), ".animate-mcp", "captures");
-        const baselineRoot = join(homedir(), ".animate-mcp", "baselines");
+        const captureRoot = capturesDir();
+        const baselineRoot = baselinesDir();
         const captureJson = await deps.runner.execute(
             [
                 `var __captureFrame = ${frame ?? "null"};`,

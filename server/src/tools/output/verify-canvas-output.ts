@@ -1,10 +1,11 @@
 import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { basename, extname, isAbsolute, relative, resolve } from "node:path";
+import { basename, extname, isAbsolute, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Browser } from "playwright-core";
 import { z } from "zod";
+import { isInside } from "../paths.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
 import { runPublish } from "./publish.js";
 
@@ -42,20 +43,6 @@ const MIME: Record<string, string> = {
     ".woff": "font/woff",
     ".woff2": "font/woff2",
 };
-
-/**
- * Checks whether a resolved path is the root or one of its descendants.
- * @param root Canonical directory boundary.
- * @param path Path to check.
- * @returns Whether the path stays within the root.
- */
-function isInside(root: string, path: string): boolean {
-    const rel = relative(root, path);
-    return (
-        rel === "" ||
-        (!rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) && rel !== ".." && !isAbsolute(rel))
-    );
-}
 
 /**
  * Serves allowlisted files from a directory over an ephemeral loopback-only HTTP server.

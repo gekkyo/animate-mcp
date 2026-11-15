@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -25,6 +23,7 @@ import { readOutputTool } from "./tools/output/read-output.js";
 import { testMovieTool } from "./tools/output/test-movie.js";
 import { verifyCanvasOutputTool } from "./tools/output/verify-canvas-output.js";
 import { visualRegressionTool } from "./tools/output/visual-regression.js";
+import { runsDir } from "./tools/paths.js";
 import { createToolRegistry } from "./tools/registry.js";
 import { runJsflTool } from "./tools/run-jsfl.js";
 import { applyScriptsTool } from "./tools/scripts/apply-scripts.js";
@@ -83,7 +82,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  */
 async function main() {
     const runner = createRunner({
-        dir: process.env.ANIMATE_MCP_RUNS_DIR ?? join(homedir(), ".animate-mcp", "runs"),
+        dir: runsDir(),
         launch: launcher(),
         isRunning: isAnimateRunning,
         timeoutMs: Number(process.env.ANIMATE_MCP_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
