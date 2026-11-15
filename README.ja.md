@@ -35,6 +35,38 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの編
 - Canvas 出力の Chrome での確認、フレームの PNG 取得・差分比較
 - GreenSock-AS3 の導入、任意の JSFL の実行
 
+## 仕組み
+
+```mermaid
+%%{init: {'theme':'dark'}}%%
+flowchart TB
+  Agent(["AI agent<br/>Claude Code / Codex"])
+  subgraph Server["animate-mcp (Node.js)"]
+    Tools["MCP tools ×24"]
+    Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
+    Runner["Runner<br/>serial + timeout"]
+  end
+  Files["exports/<br/>scripts + structure.md"]
+  Chrome(["Chrome"])
+  Animate(["Adobe Animate<br/>(running)"])
+  Agent -->|"edit files"| Files
+  Agent -->|"MCP stdio"| Tools
+  Tools -->|"export / apply"| Files
+  Tools -->|"verify_canvas_output"| Chrome
+  Tools --> Bundle --> Runner
+  Runner -->|"1. open Run.jsfl"| Animate
+  Animate -.->|"2. write Result.json"| Runner
+  classDef actor fill:#172554,stroke:#60a5fa,color:#f8fafc
+  classDef core fill:#3b2f12,stroke:#fbbf24,color:#fff7ed
+  classDef store fill:#143326,stroke:#4ade80,color:#f0fdf4
+  class Agent,Animate,Chrome actor
+  class Tools,Bundle,Runner core
+  class Files store
+  style Server fill:#161b22,stroke:#6b7280,color:#e5e7eb
+```
+
+各ツールは JSFL スクリプトを生成して `~/.animate-mcp/runs/` に書き出し、起動中の Animate で開いて実行します。スクリプトは結果を JSON で書き出し、サーバーがそれを読み取ります。実行は直列で、Animate が応答しない場合はタイムアウトします。
+
 ## 動作環境
 
 - Node.js
