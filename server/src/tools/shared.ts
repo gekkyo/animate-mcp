@@ -34,8 +34,18 @@ export const failure = (error: unknown) => ({
     isError: true,
 });
 
-/** Registers a tool definition and converts its result to the MCP response envelope. */
+/** Registers a tool definition and converts its result to the MCP response envelope.
+ * @param server MCP server to register against
+ * @param tool Tool definition to register
+ * @param deps Runtime dependencies passed to the tool
+ * @returns Nothing.
+ */
 export function registerToolDefinition(server: McpServer, tool: ToolDefinition, deps: ToolDeps): void {
+    /** Invokes a tool and converts thrown errors to MCP error results.
+     * @param args Tool arguments
+     * @param extra MCP callback metadata and notification helpers
+     * @returns MCP response envelope
+     */
     const invoke = async (args: unknown, extra: ToolExtra) => {
         try {
             const { data, text, content } = await tool.run(args as never, deps, extra);
@@ -47,6 +57,12 @@ export function registerToolDefinition(server: McpServer, tool: ToolDefinition, 
             return failure(error);
         }
     };
+    /**
+     * Creates the schema-appropriate callback that invokes this registered tool.
+     * @param args Tool arguments, when the tool has an input schema
+     * @param extra MCP callback metadata and notification helpers
+     * @returns The tool invocation result
+     */
     const handler =
         tool.inputSchema === undefined
             ? (extra: ToolExtra) => invoke({}, extra)

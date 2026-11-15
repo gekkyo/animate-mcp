@@ -1,4 +1,7 @@
 // Runs the current in-memory AS3 document and returns the invocation timestamp.
+/** Starts Test Movie for the active AS3 document.
+ * @returns The invocation timestamp in milliseconds.
+ */
 (function () {
   var document = selectDocument();
   if (document.type !== "Flash" || String(document.asVersion).indexOf("3") < 0) {

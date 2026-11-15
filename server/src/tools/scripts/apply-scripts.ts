@@ -92,6 +92,12 @@ export const applyScriptsTool: ToolDefinition<typeof APPLY_SCRIPTS_INPUT> = {
     guidance: {
         basic: "- If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.",
     },
+    /** Applies exported script changes to Animate and records successful results.
+     * @param args Validated apply options
+     * @param deps Runtime runner and JSFL bundler
+     * @param extra MCP callback metadata and notification helpers
+     * @returns Apply results, failures, and warnings
+     */
     run: async (
         { dir, document }: Parameters<ToolCallback<typeof APPLY_SCRIPTS_INPUT>>[0],
         deps: ToolDeps,
@@ -213,6 +219,11 @@ export const applyScriptsTool: ToolDefinition<typeof APPLY_SCRIPTS_INPUT> = {
     },
 };
 
+/** Registers the apply_scripts tool.
+ * @param server MCP server to register against
+ * @param deps Runtime dependencies passed to the tool
+ * @returns Nothing.
+ */
 export function registerApplyScripts(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, applyScriptsTool, deps);
 }

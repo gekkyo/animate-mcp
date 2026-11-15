@@ -27,6 +27,11 @@ function saveEditState(doc) {
   };
 }
 
+/** Finds a layer's current index by object identity.
+ * @param targetTimeline Timeline containing the layer.
+ * @param targetLayer Layer object to locate.
+ * @returns The current layer index, or -1 when the layer is absent.
+ */
 function editLayerPosition(targetTimeline, targetLayer) {
   for (var index = 0; index < targetTimeline.layers.length; index++) {
     if (targetTimeline.layers[index] === targetLayer) return index;
@@ -34,6 +39,11 @@ function editLayerPosition(targetTimeline, targetLayer) {
   return -1;
 }
 
+/** Captures layer object references at the layer-index slots in selected-frame data.
+ * @param targetTimeline Timeline whose selected frames are captured.
+ * @param frames Selected-frame array returned by Animate, or null.
+ * @returns Layer references paired with their selected-frame array offsets.
+ */
 function editSelectedFrameLayers(targetTimeline, frames) {
   var result = [];
   if (!frames) return result;
@@ -43,6 +53,12 @@ function editSelectedFrameLayers(targetTimeline, frames) {
   return result;
 }
 
+/** Restores selected frames while updating layer indices after layer reordering.
+ * @param targetTimeline Timeline receiving the selection.
+ * @param frames Original selected-frame array, or null.
+ * @param layerRefs Layer references captured from the original selection.
+ * @returns Nothing.
+ */
 function restoreEditSelectedFrames(targetTimeline, frames, layerRefs) {
   if (!frames || !targetTimeline.setSelectedFrames) return;
   var restoredFrames = frames.slice();
@@ -57,6 +73,11 @@ function restoreEditSelectedFrames(targetTimeline, frames, layerRefs) {
   targetTimeline.setSelectedFrames(restoredFrames);
 }
 
+/** Enters a requested scene or Library item timeline.
+ * @param document Animate document to edit.
+ * @param timelineRef Scene index or Library item name.
+ * @returns The resolved timeline.
+ */
 function resolveEditTimeline(document, timelineRef) {
   if (typeof timelineRef === 'number') {
     if (Math.floor(timelineRef) !== timelineRef || timelineRef < 0 || timelineRef >= document.timelines.length) {
@@ -75,6 +96,12 @@ function resolveEditTimeline(document, timelineRef) {
   return document.getTimeline();
 }
 
+/** Runs a callback in a target timeline and restores timeline, selection, and edit state.
+ * @param document Animate document to edit.
+ * @param timelineRef Scene index or Library item name.
+ * @param fn Operation to run with the target timeline.
+ * @returns The callback result and any state-restoration warnings.
+ */
 function withTimelineEdit(document, timelineRef, fn) {
   var restore = saveEditState(document), timeline = null, selectedFrames = null, layerRefs = [], result;
   var warnings = [], operationError, operationFailed = false;
@@ -106,6 +133,11 @@ function withTimelineEdit(document, timelineRef, fn) {
   return { result: result, warnings: warnings };
 }
 
+/** Resolves a layer index or unique layer name.
+ * @param targetTimeline Timeline containing candidate layers.
+ * @param reference Numeric layer index or layer name.
+ * @returns The resolved zero-based layer index.
+ */
 function resolveEditLayerIndex(targetTimeline, reference) {
   if (typeof reference === 'number') {
     if (Math.floor(reference) !== reference || reference < 0 || reference >= targetTimeline.layers.length) {
@@ -125,6 +157,11 @@ function resolveEditLayerIndex(targetTimeline, reference) {
   return found;
 }
 
+/** Finds a uniquely named layer for an add-or-reuse edit.
+ * @param targetTimeline Timeline containing candidate layers.
+ * @param name Layer name to find.
+ * @returns The matching layer, or null when absent.
+ */
 function resolveEditAddLayer(targetTimeline, name) {
   var found = null, matches = 0;
   for (var index = 0; index < targetTimeline.layers.length; index++) {
@@ -137,6 +174,11 @@ function resolveEditAddLayer(targetTimeline, name) {
   return found;
 }
 
+/** Reuses or creates a planned layer record by name.
+ * @param plannedLayers Mutable layer-plan records.
+ * @param name Planned layer name.
+ * @returns The matching or newly created layer-plan record.
+ */
 function plannedEditLayer(plannedLayers, name) {
   for (var index = 0; index < plannedLayers.length; index++) {
     if (plannedLayers[index].name === name) return plannedLayers[index];
@@ -146,6 +188,11 @@ function plannedEditLayer(plannedLayers, name) {
   return plan;
 }
 
+/** Resolves an element index or unique element name.
+ * @param elements Timeline elements to search.
+ * @param reference Numeric element index or element name.
+ * @returns The resolved zero-based element index.
+ */
 function resolveEditElement(elements, reference) {
   if (typeof reference === 'number') {
     if (Math.floor(reference) !== reference || reference < 0 || reference >= elements.length) {
@@ -165,6 +212,11 @@ function resolveEditElement(elements, reference) {
   return found;
 }
 
+/** Temporarily unlocks layers while running a callback, then restores their lock states.
+ * @param layers Layers whose lock states are temporarily changed.
+ * @param callback Operation to run while the layers are unlocked.
+ * @returns The callback result.
+ */
 function withEditUnlockedLayers(layers, callback) {
   var states = [];
   for (var index = 0; index < layers.length; index++) {

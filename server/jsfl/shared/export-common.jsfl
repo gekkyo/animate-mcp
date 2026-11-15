@@ -73,6 +73,7 @@ function exportTimeline(timeline) {
  */
 function fnv1a32(text) {
   var hash = 2166136261;
+  // The shift/add sequence multiplies by the FNV prime before truncating to 32 bits.
   for (var characterIndex = 0; characterIndex < text.length; characterIndex++) {
     hash ^= text.charCodeAt(characterIndex);
     hash = (hash + (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)) >>> 0;

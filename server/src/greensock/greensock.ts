@@ -8,7 +8,8 @@ export const GREEN_SOCK_VERSION = "12.1.5";
 export const GREEN_SOCK_LICENSE_URL = "https://gsap.com/standard-license/";
 const GREEN_SOCK_URL = `https://codeload.github.com/greensock/GreenSock-AS3/tar.gz/refs/tags/${GREEN_SOCK_VERSION}`;
 
-/** @param error Caught value
+/** Converts a caught value to displayable text.
+ * @param error Caught value
  * @returns Its message text
  */
 function errorMessage(error: unknown): string {
@@ -25,7 +26,7 @@ export function isGreensockInstalled(folder: string | null): boolean {
 
 /** Downloads and installs the GreenSock-AS3 sources beside a saved document.
  * @param folder Platform path of the document folder
- * @returns Promise<void> after installation completes
+ * @returns Resolves after installation completes.
  */
 export async function installGreensock(folder: string): Promise<void> {
     const packageDirectory = join(folder, "com");
@@ -78,7 +79,7 @@ export async function installGreensock(folder: string): Promise<void> {
 /** Extracts a gzip tar archive with the system tar command.
  * @param archive Path to the downloaded archive
  * @param destination Directory to extract into
- * @returns Promise<void> after extraction completes
+ * @returns Resolves after extraction completes.
  */
 function extractTar(archive: string, destination: string): Promise<void> {
     return new Promise(

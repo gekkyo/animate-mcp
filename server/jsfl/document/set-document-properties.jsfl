@@ -1,4 +1,7 @@
 // `var __docName` and `var __properties` are injected before this file.
+/** Updates supported document properties and returns their read-back values.
+ * @returns The serialized document name and updated properties.
+ */
 (function () {
   var document = selectDocument(), properties = __properties || {}, hasProperty = false, key;
   for (key in properties) {

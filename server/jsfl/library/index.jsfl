@@ -5,6 +5,11 @@
   var originalLibrarySelection = document.library.getSelectedItems();
   var applied = [], results = [], failed = null, skipped = [], warnings = [], libraryChanged = false;
 
+  /** Checks whether an element reference still belongs to a timeline.
+   * @param timeline Timeline to scan.
+   * @param target Element object to locate.
+   * @returns Whether the timeline contains the exact element object.
+   */
   function containsElement(timeline, target) {
     for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
       var frames = timeline.layers[layerIndex].frames;
@@ -18,10 +23,15 @@
     return false;
   }
 
+  /** Restores selected frames, current layer and frame, and surviving stage selections.
+   * @param timeline Timeline whose state is restored.
+   * @returns Nothing.
+   */
   function restoreTimelineState(timeline) {
     if (originalSelectedFrames && originalSelectedFrames.length && timeline.setSelectedFrames) {
       timeline.setSelectedFrames(originalSelectedFrames);
     }
+    // Resolve the saved layer by object identity because preceding operations may reorder layers.
     var layerIndex = -1;
     for (var index = 0; index < timeline.layers.length; index++) {
       if (timeline.layers[index] === originalLayer) layerIndex = index;
@@ -34,6 +44,9 @@
     }
   }
 
+  /** Restores the original Library selection, excluding items that no longer exist.
+   * @returns Nothing.
+   */
   function restoreLibrarySelection() {
     document.library.selectNone();
     for (var index = 0; index < originalLibrarySelection.length; index++) {

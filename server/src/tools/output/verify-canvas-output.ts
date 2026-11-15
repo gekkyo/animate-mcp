@@ -44,6 +44,12 @@ const MIME: Record<string, string> = {
     ".woff2": "font/woff2",
 };
 
+/**
+ * Checks whether a resolved path is the root or one of its descendants.
+ * @param root Canonical directory boundary.
+ * @param path Path to check.
+ * @returns Whether the path stays within the root.
+ */
 function isInside(root: string, path: string): boolean {
     const rel = relative(root, path);
     return (
@@ -52,6 +58,11 @@ function isInside(root: string, path: string): boolean {
     );
 }
 
+/**
+ * Serves allowlisted files from a directory over an ephemeral loopback-only HTTP server.
+ * @param root Canonical directory exposed by the server.
+ * @returns The started server and its local URL.
+ */
 async function serveDirectory(root: string) {
     const server = createServer(async (request, response) => {
         if (request.method !== "GET" && request.method !== "HEAD") {
@@ -60,6 +71,7 @@ async function serveDirectory(root: string) {
         }
         try {
             const pathname = decodeURIComponent(new URL(request.url ?? "/", "http://127.0.0.1").pathname);
+            // Reject dot-prefixed path segments before resolving to prevent hidden-file access.
             if (pathname.split("/").some((segment) => segment.startsWith("."))) {
                 throw new Error("dot path segments are not served");
             }
@@ -69,6 +81,7 @@ async function serveDirectory(root: string) {
             }
             const actual = await realpath(target);
             const contentType = MIME[extname(actual).toLowerCase()];
+            // Recheck the canonical path so a symlink cannot escape the served directory.
             if (!isInside(root, actual) || !(await stat(actual)).isFile() || !contentType) {
                 throw new Error("not a file");
             }
@@ -87,6 +100,7 @@ async function serveDirectory(root: string) {
     });
     await new Promise<void>((resolveListen, reject) => {
         server.once("error", reject);
+        // Bind only to loopback so the temporary file server is not reachable on the LAN.
         server.listen(0, "127.0.0.1", resolveListen);
     });
     const address = server.address();
@@ -105,6 +119,15 @@ export const verifyCanvasOutputTool: ToolDefinition<typeof INPUT> = {
     guidance: {
         basic: "- Use verify_canvas_output to check a published HTML5 Canvas page in Chrome. By default Publish overwrites the document's configured outputs; use publish: false to avoid publishing or htmlPath to specify custom output. Page scripts run in Chrome.",
     },
+    /**
+     * Optionally publishes a Canvas document and inspects its browser output.
+     * @param document Optional document selector.
+     * @param publish Whether to publish before browser inspection.
+     * @param htmlPath Optional absolute path to the published HTML file.
+     * @param observeMs Additional time to observe browser events after page load.
+     * @param deps Tool dependencies for Animate execution and JSFL bundles.
+     * @returns Build details, browser diagnostics, and a screenshot.
+     */
     run: async (
         { document, publish = true, htmlPath, observeMs = 3000 }: Parameters<ToolCallback<typeof INPUT>>[0],
         deps: ToolDeps,
@@ -217,6 +240,11 @@ export const verifyCanvasOutputTool: ToolDefinition<typeof INPUT> = {
     },
 };
 
+/**
+ * Registers the verify_canvas_output tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerVerifyCanvasOutput(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, verifyCanvasOutputTool, deps);
 }

@@ -37,6 +37,7 @@ export function parseCompilerOutput(output: string): { errors: Diagnostic[]; war
             .reverse()
             .find((line) => line.trim().length > 0)
             ?.trim() ?? "";
+    // Animate appends localized error and warning totals; require that footer before trusting the listing.
     if (!/^\d+\D+,\s*\d+\D+$/.test(lastLine)) {
         throw new Error("Compiler output unavailable; retry publish");
     }
@@ -55,6 +56,7 @@ export function parseCompilerOutput(output: string): { errors: Diagnostic[]; war
             continue;
         }
         const prefix = severity === "error" ? "**Error**" : "**Warning**";
+        // Parse both English and Japanese compiler labels while preserving the source location and message.
         const match = /^\*\*(?:Error|Warning)\*\*\s*(.*?)\t(?:(?:Warning|警告):\s*)?([^:]+):\s*(.*)$/.exec(line);
         const parsed = match?.[1].trim() && match[2].trim() ? match : null;
         const location = parsed ? parsed[1] : "";
@@ -77,6 +79,12 @@ export function parseCompilerOutput(output: string): { errors: Diagnostic[]; war
     return { errors, warnings };
 }
 
+/**
+ * Publishes a document and parses compiler output when Animate provides it.
+ * @param document Optional document selector.
+ * @param deps Tool dependencies for executing Animate commands.
+ * @returns Publish status, compiler diagnostics, and any availability note.
+ */
 export async function runPublish(document: string | undefined, deps: ToolDeps): Promise<BuildResult> {
     const { runner, bundle } = deps;
     const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
@@ -123,11 +131,22 @@ export const publishTool: ToolDefinition<typeof PUBLISH_INPUT> = {
     guidance: {
         basic: "- Use publish to publish AS3 or HTML5 Canvas documents and check the Build result; outputs at the document's publish settings are overwritten. Canvas compile errors cannot be detected.",
     },
+    /**
+     * Publishes the selected document and returns its build result.
+     * @param document Optional document selector.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns The publish build result.
+     */
     run: async ({ document }: Parameters<ToolCallback<typeof PUBLISH_INPUT>>[0], deps: ToolDeps) => ({
         data: await runPublish(document, deps),
     }),
 };
 
+/**
+ * Registers the publish tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerPublish(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, publishTool, deps);
 }

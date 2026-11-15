@@ -20,11 +20,15 @@ const MODAL_QUERY = `tell application "System Events"
     return "CLEAR"
 end tell`;
 
+/** Checks macOS accessibility state for an Animate modal dialog or sheet.
+ * @returns Promise resolving to modal state and optional diagnostic reason.
+ */
 async function inspectAnimateModal() {
     if (process.platform !== "darwin") {
         return { state: "unavailable", reason: "macOS System Events is unavailable on this platform" };
     }
     try {
+        // Bound the accessibility probe so a stalled System Events query cannot hang a smoke run.
         const { stdout } = await execFileAsync("osascript", ["-e", MODAL_QUERY], { timeout: 3000, maxBuffer: 4096 });
         switch (stdout.trim()) {
             case "MODAL":
@@ -47,6 +51,10 @@ async function inspectAnimateModal() {
     }
 }
 
+/** Formats a human-readable hint from the Animate modal diagnostic.
+ * @param diagnostic Modal state returned by inspectAnimateModal.
+ * @returns Diagnostic hint text.
+ */
 function modalHint(diagnostic) {
     switch (diagnostic?.state) {
         case "modal":
@@ -62,11 +70,11 @@ function modalHint(diagnostic) {
     }
 }
 
-/** Creates and saves a disposable AS3 document (Test Movie and publish need a saved path).
- * @param runJsfl run_jsfl tool handler
- * @param fileUri file:/// URI of the .fla to create, under a temp dir
- * @param actionScript frame-1 script
- * @returns {Promise<{ name: string, pathURI: string }>} pathURI is Animate's normalized URI (`/Macintosh%20HD` prefix on macOS)
+/** Creates and saves a disposable AS3 document for saved-path smoke operations.
+ * @param runJsfl run_jsfl tool handler.
+ * @param fileUri file URI where the temporary FLA will be saved.
+ * @param actionScript Frame-one ActionScript source.
+ * @returns Promise resolving to the document name and normalized path URI.
  */
 export async function createSavedAs3Document(runJsfl, fileUri, actionScript) {
     const result = await runJsfl({
@@ -88,9 +96,10 @@ export async function createSavedAs3Document(runJsfl, fileUri, actionScript) {
     return { name, pathURI };
 }
 
-/** Closes only the document with this exact pathURI, discarding edits; never touches other documents.
- * @param runJsfl run_jsfl tool handler
- * @param pathURI URI returned by createSavedAs3Document
+/** Closes only the document with this exact path URI, discarding edits.
+ * @param runJsfl run_jsfl tool handler.
+ * @param pathURI Exact URI of the disposable document.
+ * @returns Promise resolving when Animate confirms the document is closed.
  */
 export async function closeDocumentByPath(runJsfl, pathURI) {
     if (typeof pathURI !== "string" || !pathURI) {
@@ -107,6 +116,11 @@ export async function closeDocumentByPath(runJsfl, pathURI) {
     }
 }
 
+/** Registers a tool with a real-Animate runner and augments timeout errors with modal diagnostics.
+ * @param register Tool registration function.
+ * @param checkModal Function that reports Animate modal state.
+ * @returns Async handler for the registered tool.
+ */
 export function toolHandler(register, checkModal = inspectAnimateModal) {
     const runner = createRunner({
         dir: `${process.env.HOME}/.animate-mcp/runs`,

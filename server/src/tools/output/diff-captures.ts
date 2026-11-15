@@ -12,11 +12,23 @@ const INPUT = {
     tolerance: z.number().int().min(0).max(255).default(8).describe("Per-channel difference threshold (0–255)"),
 };
 
+/**
+ * Checks whether a path is a strict descendant of the capture root.
+ * @param root Canonical capture directory.
+ * @param path Canonical path to check.
+ * @returns Whether the path is inside the root but not the root itself.
+ */
 function isInside(root: string, path: string): boolean {
     const rel = relative(root, path);
     return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
+/**
+ * Validates and resolves a Capture PNG path within the capture directory.
+ * @param path User-supplied PNG path.
+ * @param root Canonical capture directory.
+ * @returns The canonical validated PNG path.
+ */
 async function capturePath(path: string, root: string): Promise<string> {
     if (!isAbsolute(path) || !path.toLowerCase().endsWith(".png")) {
         throw new Error(`Capture path must be an absolute PNG path: ${path}`);
@@ -30,6 +42,12 @@ async function capturePath(path: string, root: string): Promise<string> {
     return resolved;
 }
 
+/**
+ * Decodes PNG bytes and associates malformed-image errors with their path.
+ * @param path Source image path for error reporting.
+ * @param bytes PNG file contents.
+ * @returns The decoded PNG.
+ */
 function decode(path: string, bytes: Buffer): PNG {
     try {
         return PNG.sync.read(bytes);
@@ -47,6 +65,13 @@ export const diffCapturesTool: ToolDefinition<typeof INPUT> = {
     guidance: {
         basic: "- Use diff_captures with absolute before/after paths returned by capture_frame. It creates a non-overwriting red-highlight PNG alongside the earlier Capture.",
     },
+    /**
+     * Compares two captures and writes a red-highlight image of changed pixels.
+     * @param before Absolute path to the earlier capture.
+     * @param after Absolute path to the later capture.
+     * @param tolerance Maximum per-channel difference treated as unchanged.
+     * @returns Comparison statistics and the generated difference image.
+     */
     run: async ({ before, after, tolerance }: Parameters<ToolCallback<typeof INPUT>>[0]) => {
         const root = await realpath(join(homedir(), ".animate-mcp", "captures")).catch(() => {
             throw new Error("Capture directory does not exist");
@@ -71,6 +96,7 @@ export const diffCapturesTool: ToolDefinition<typeof INPUT> = {
         for (let y = 0; y < left.height; y++) {
             for (let x = 0; x < left.width; x++) {
                 const offset = (y * left.width + x) * 4;
+                // A pixel changes when any RGBA channel exceeds the configured threshold.
                 const changed = [0, 1, 2, 3].some(
                     (channel) => Math.abs(left.data[offset + channel] - right.data[offset + channel]) > tolerance,
                 );
@@ -132,6 +158,11 @@ export const diffCapturesTool: ToolDefinition<typeof INPUT> = {
     },
 };
 
+/**
+ * Registers the diff_captures tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerDiffCaptures(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, diffCapturesTool, deps);
 }

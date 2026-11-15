@@ -11,11 +11,26 @@ const runJsfl = toolHandler(registerRunJsfl);
 const editElements = toolHandler(registerEditElements);
 const editTween = toolHandler(registerEditTween);
 const inspectTimeline = toolHandler(registerInspectTimeline);
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts a successful tool response and returns its structured payload.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     return result.structuredContent;
 };
+/** Asserts that two numeric values are within the smoke test tolerance.
+ * @param actual Measured value.
+ * @param expected Expected value.
+ * @param description Assertion context.
+ * @returns Nothing.
+ */
 const near = (actual, expected, description) =>
     assert.ok(Math.abs(actual - expected) < 0.1, `${description}: ${actual}`);
 
@@ -27,6 +42,10 @@ try {
   var __symbol = "EditElementsSmokeSymbol";
   __smokeDoc.library.addNewItem("movie clip", __symbol);
   var __graphic = "EditElementsSmokeGraphic", __graphicTarget = "EditElementsSmokeGraphicTarget";
+  /** Creates a three-frame graphic symbol in the supplied document.
+   * @param __doc Animate document.
+   * @param __name Library name for the symbol.
+   */
   function __makeGraphic(__doc, __name) {
     __doc.library.addNewItem("graphic", __name);
     __doc.library.editItem(__name);
@@ -40,6 +59,12 @@ try {
   var __timeline = __smokeDoc.getTimeline();
   __timeline.insertFrames(4, true, 0);
   if (__timeline.frameCount < 5) throw new Error("Could not create the 5-frame smoke timeline");
+  /** Adds a named Library instance on a new layer of the smoke timeline.
+   * @param __layerName Name of the new layer.
+   * @param __instanceName Name assigned to the placed instance.
+   * @param __item Optional Library item; defaults to the smoke symbol.
+   * @returns Index of the created layer.
+   */
   function __addInstance(__layerName, __instanceName, __item) {
     var __layerIndex = __timeline.addNewLayer(__layerName, "normal", true);
     __timeline.currentLayer = __layerIndex;

@@ -11,6 +11,7 @@ function documentRuntimeInfo(document) {
     try { platformPath = FLfile.uriToPlatformPath(pathURI); } catch (conversionError) {}
   }
   if (platformPath) {
+    // Convert to a platform path before splitting; Animate may normalize the URI form.
     var separator = Math.max(platformPath.lastIndexOf("/"), platformPath.lastIndexOf("\\"));
     if (separator >= 0) folder = separator === 0 ? platformPath.charAt(0) : platformPath.substring(0, separator);
   }

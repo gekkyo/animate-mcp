@@ -10,6 +10,12 @@ export const auditDocumentTool: ToolDefinition = {
     guidance: {
         basic: "- Use audit_document for read-only document hygiene suggestions. Review every finding before changing content; unused Library items may be intentional, especially when linkage is enabled.",
     },
+    /**
+     * Collects read-only document hygiene findings.
+     * @param _args No input arguments.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns Findings grouped by category with any warnings.
+     */
     run: async (_args: never, deps: ToolDeps) => {
         const { runner, bundle } = deps;
         const result = JSON.parse(
@@ -39,6 +45,11 @@ export const auditDocumentTool: ToolDefinition = {
     },
 };
 
+/**
+ * Registers the audit_document tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerAuditDocument(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, auditDocumentTool, deps);
 }

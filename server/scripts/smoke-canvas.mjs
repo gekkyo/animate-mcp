@@ -43,12 +43,27 @@ const readOutput = toolHandler(registerReadOutput);
 const testMovie = toolHandler(registerTestMovie);
 const installGreensock = toolHandler(registerInstallGreensock);
 
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts a successful tool response and returns its structured payload.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     assert.ok(result.structuredContent, `${description} returned no structured content`);
     return result.structuredContent;
 };
+/** Asserts that a tool response is a refusal matching the expected message.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @param expectedMessage Expected error-message pattern.
+ * @returns Refusal message text.
+ */
 const expectRefusal = (result, description, expectedMessage) => {
     assert.equal(result.isError, true, `${description} was not refused`);
     const text = message(result);
@@ -56,6 +71,11 @@ const expectRefusal = (result, description, expectedMessage) => {
     console.log(`PASS ${description}: ${text}`);
     return text;
 };
+/** Asserts that a Library operation was refused for the expected Canvas limitation.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Refusal message text.
+ */
 const expectLibraryRefusal = (result, description) => {
     let text;
     if (result.isError) {
@@ -73,11 +93,20 @@ const expectLibraryRefusal = (result, description) => {
     console.log(`PASS ${description}: ${text}`);
     return text;
 };
+/** Runs JSFL and returns its result after checking for tool errors.
+ * @param code JSFL source to execute.
+ * @param description Operation description for assertion errors.
+ * @returns JSFL result value.
+ */
 const runValue = async (code, description) => {
     const result = await runJsfl({ code });
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     return result.structuredContent?.result;
 };
+/** Reads open Animate documents as sorted name/path rows.
+ * @param description Operation description for assertion errors.
+ * @returns Promise resolving to document rows.
+ */
 const documentRows = async (description) => {
     const result = await runValue(
         `var __smokeDocuments = fl.documents || []; var __smokeRows = []; for (var __i = 0; __i < __smokeDocuments.length; __i++) __smokeRows.push(__smokeDocuments[__i].name + "\\t" + (__smokeDocuments[__i].pathURI || "")); __smokeRows.join("\\n");`,
@@ -86,6 +115,11 @@ const documentRows = async (description) => {
     assert.equal(typeof result, "string", `${description} returned invalid document details`);
     return result ? result.split("\n").sort() : [];
 };
+/** Removes expected rows from a copy, failing if any expected row is missing.
+ * @param rows Original document rows.
+ * @param expected Rows that must be present and removed.
+ * @returns Remaining sorted rows.
+ */
 const withoutRows = (rows, expected) => {
     const remaining = [...rows];
     for (const row of expected) {
@@ -95,6 +129,10 @@ const withoutRows = (rows, expected) => {
     }
     return remaining.sort();
 };
+/** Recursively lists files beneath a directory.
+ * @param directory Directory to scan.
+ * @returns Promise resolving to file paths.
+ */
 const findFiles = async (directory) => {
     const files = [];
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -107,6 +145,12 @@ const findFiles = async (directory) => {
     }
     return files;
 };
+/** Inspects one layer at a specific frame in the main timeline.
+ * @param document Animate document name.
+ * @param layer Layer name.
+ * @param frame One-based frame number.
+ * @returns Inspected layer data.
+ */
 const inspect = async (document, layer, frame) =>
     verifyTool(
         await inspectTimeline({ timeline: 0, document, layers: [layer], frame }),

@@ -19,6 +19,13 @@ export const importAssetsTool: ToolDefinition<typeof IMPORT_ASSETS_INPUT> = {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     inputSchema: IMPORT_ASSETS_INPUT,
     guidance: {},
+    /**
+     * Validates and imports supported files into the selected document's Library.
+     * @param paths Absolute paths to asset files.
+     * @param document Optional document selector.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns The target document and imported Library item names.
+     */
     run: async ({ paths, document }: Parameters<ToolCallback<typeof IMPORT_ASSETS_INPUT>>[0], deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -59,6 +66,11 @@ export const importAssetsTool: ToolDefinition<typeof IMPORT_ASSETS_INPUT> = {
     },
 };
 
+/**
+ * Registers the import_assets tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerImportAssets(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, importAssetsTool, deps);
 }

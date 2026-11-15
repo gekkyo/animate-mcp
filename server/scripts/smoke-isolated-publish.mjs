@@ -16,17 +16,36 @@ const openDocument = toolHandler(registerOpenDocument);
 const saveDocument = toolHandler(registerSaveDocument);
 const publish = toolHandler(registerPublish);
 const runJsfl = toolHandler(registerRunJsfl);
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts a successful tool response and returns its structured payload.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     assert.ok(result.structuredContent, `${description} returned no structured content`);
     return result.structuredContent;
 };
+/** Runs JSFL and returns its result after checking for tool errors.
+ * @param code JSFL source to execute.
+ * @param description Operation description for assertion errors.
+ * @returns JSFL result value.
+ */
 const runValue = async (code, description) => {
     const result = await runJsfl({ code });
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     return result.structuredContent?.result;
 };
+/** Recursively lists files under a directory using relative paths.
+ * @param directory Root directory to scan.
+ * @param relative Relative subdirectory to scan.
+ * @returns Promise resolving to sorted relative file paths.
+ */
 const listFiles = async (directory, relative = "") => {
     const files = [];
     for (const entry of await readdir(join(directory, relative), { withFileTypes: true })) {

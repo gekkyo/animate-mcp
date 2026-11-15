@@ -1,3 +1,6 @@
+/** Closes the targeted document without saving and verifies it is no longer open.
+ * @returns The closed document name and path separated by a newline.
+ */
 (function () {
   var document = resolveDocumentTarget(__closeDocumentTarget);
   var result = document.name + "\n" + (document.pathURI || "");

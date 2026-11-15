@@ -1,4 +1,7 @@
 // `__saveDocumentTarget`, `__saveDocumentPath`, and `__saveDocumentConfirm` are injected before this file.
+/** Saves the targeted document to its current or requested path and verifies the saved file.
+ * @returns The saved document path URI.
+ */
 (function () {
   var document = resolveDocumentTarget(__saveDocumentTarget);
   var currentPath = document.pathURI || "";

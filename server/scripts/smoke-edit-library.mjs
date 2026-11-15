@@ -7,7 +7,16 @@ import { toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
 const editLibrary = toolHandler(registerEditLibrary);
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts tool success and that no operation failed.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     const content = result.structuredContent;
@@ -45,6 +54,9 @@ if (selected.isError) {
     throw new Error(`Could not prepare Library selection: ${message(selected)}`);
 }
 
+/** Verifies an operation preserved the selected Library item.
+ * @param description Operation description for assertion errors.
+ */
 const assertSelectionPreserved = async (description) => {
     const result = await runJsfl({
         code: `var __smokeName = ${JSON.stringify(documentName)}; var __smokeDoc = null; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __smokeName) __smokeDoc = fl.documents[__index]; var __selected = __smokeDoc.library.getSelectedItems(); __selected.length === 1 ? __selected[0].name : "selection count: " + __selected.length;`,

@@ -92,6 +92,14 @@ export const editTextTool: ToolDefinition<typeof EDIT_TEXT_INPUT> = {
     guidance: {
         basic: "- Use edit_text to add or update whole text fields; Canvas does not support input or single-line text. Use import_assets for images/audio and set_document_properties for stage settings; neither saves the .fla.",
     },
+    /**
+     * Adds or updates text fields in the selected timeline.
+     * @param timeline Scene index or Library item path.
+     * @param document Optional document selector.
+     * @param ops Text operations to apply.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns The result of the applied text operations.
+     */
     run: async ({ timeline, document, ops }: Parameters<ToolCallback<typeof EDIT_TEXT_INPUT>>[0], deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -105,6 +113,11 @@ export const editTextTool: ToolDefinition<typeof EDIT_TEXT_INPUT> = {
     },
 };
 
+/**
+ * Registers the edit_text tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerEditText(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, editTextTool, deps);
 }

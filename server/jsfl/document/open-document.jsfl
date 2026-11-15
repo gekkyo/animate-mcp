@@ -1,3 +1,6 @@
+/** Opens or creates a document, activates it, and returns its name and path.
+ * @returns The document name and path separated by a newline.
+ */
 (function () {
   var path = __openDocumentPath, type = __openDocumentType, documents = fl.documents || [], i, document;
   if (path) {
@@ -9,6 +12,7 @@
     }
     if (matches.length > 1) throw new Error("Several open documents match path: " + path);
     if (matches.length === 1) {
+      // Animate applies setActiveWindow only after this Run returns.
       fl.setActiveWindow(matches[0]);
       return matches[0].name + "\n" + (matches[0].pathURI || "");
     }
@@ -21,6 +25,7 @@
       if (document.pathURI && normalizeDocumentTargetPath(document.pathURI) === pathURI) matches.push(document);
     }
     if (matches.length !== 1) throw new Error("Animate could not open a valid FLA at path: " + path);
+    // Animate applies setActiveWindow only after this Run returns.
     fl.setActiveWindow(matches[0]);
     return matches[0].name + "\n" + (matches[0].pathURI || "");
   }
@@ -40,6 +45,7 @@
   if (type === "htmlcanvas" ? document.type !== "htmlcanvas" : document.type !== "Flash" || String(document.asVersion).indexOf("3") < 0) {
     throw new Error("Animate did not create the requested " + (type === "timeline" ? "AS3" : "HTML5 Canvas") + " document");
   }
+  // Animate applies setActiveWindow only after this Run returns.
   fl.setActiveWindow(document);
   return document.name + "\n" + (document.pathURI || "");
 })()

@@ -9,11 +9,25 @@ import { toolHandler } from "./smoke-lib.mjs";
 const runJsfl = toolHandler(registerRunJsfl);
 const editText = toolHandler(registerEditText);
 const inspectTimeline = toolHandler(registerInspectTimeline);
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts a successful tool response and returns its structured payload.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     return result.structuredContent;
 };
+/** Asserts that a tool response is a refusal matching the expected message.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @param expectedMessage Expected error-message pattern.
+ */
 const expectRefusal = (result, description, expectedMessage) => {
     assert.equal(result.isError, true, `${description} was not refused`);
     assert.match(message(result), expectedMessage, `${description} returned an unexpected error`);

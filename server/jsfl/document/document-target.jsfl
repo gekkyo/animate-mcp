@@ -1,4 +1,7 @@
-/** Converts a document path or file URI to Animate's canonical file URI. */
+/** Converts a document path or file URI to Animate's canonical file URI.
+ * @param path Platform path or file URI.
+ * @returns Animate's canonical file URI.
+ */
 function normalizeDocumentTargetPath(path) {
   if (typeof path !== "string" || !path) throw new Error("A document path is required");
   var platformPath = /^file:\/\//i.test(path) ? FLfile.uriToPlatformPath(path) : path;
@@ -7,7 +10,10 @@ function normalizeDocumentTargetPath(path) {
   return uri;
 }
 
-/** Resolves an exact document name or path and refuses zero or ambiguous matches. */
+/** Resolves an exact document name or path and refuses zero or ambiguous matches.
+ * @param target Exact open-document name, platform path, or file URI.
+ * @returns The unique matching open document.
+ */
 function resolveDocumentTarget(target) {
   if (typeof target !== "string" || !target) throw new Error("A document name or path is required");
   var pathURI = null, matches = [], documents = fl.documents || [], i, document, matchesDocument;

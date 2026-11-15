@@ -17,6 +17,10 @@ const TEST_MOVIE_INPUT = {
 function parsePanelSnapshot(result: string) {
     let offset = 0;
     const compilerPanelAvailable = result.charAt(offset++) === "1";
+    /**
+     * Reads one length-prefixed field from the encoded panel snapshot.
+     * @returns The next decoded panel string.
+     */
     const readField = () => {
         const separator = result.indexOf(":", offset);
         if (separator < 0 || !/^\d+$/.test(result.slice(offset, separator))) {
@@ -46,6 +50,12 @@ export const testMovieTool: ToolDefinition<typeof TEST_MOVIE_INPUT> = {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     inputSchema: TEST_MOVIE_INPUT,
     guidance: {},
+    /**
+     * Runs Test Movie and captures one delayed snapshot of its output panels.
+     * @param document Optional saved AS3 document selector.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns Runtime output, compiler panel text, and parsed diagnostics when available.
+     */
     run: async ({ document }: Parameters<ToolCallback<typeof TEST_MOVIE_INPUT>>[0], deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -102,6 +112,11 @@ export const testMovieTool: ToolDefinition<typeof TEST_MOVIE_INPUT> = {
     },
 };
 
+/**
+ * Registers the test_movie tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerTestMovie(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, testMovieTool, deps);
 }

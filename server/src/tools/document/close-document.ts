@@ -18,6 +18,13 @@ export const closeDocumentTool: ToolDefinition<typeof CLOSE_DOCUMENT_INPUT> = {
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     inputSchema: CLOSE_DOCUMENT_INPUT,
     guidance: {},
+    /**
+     * Closes the explicitly selected document after requiring confirmation to discard edits.
+     * @param document Exact document name or saved path.
+     * @param discardUnsavedChanges Confirmation that unsaved edits may be discarded.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns The closed document name and path.
+     */
     run: async (
         { document, discardUnsavedChanges }: Parameters<ToolCallback<typeof CLOSE_DOCUMENT_INPUT>>[0],
         deps: ToolDeps,
@@ -41,6 +48,11 @@ export const closeDocumentTool: ToolDefinition<typeof CLOSE_DOCUMENT_INPUT> = {
     },
 };
 
+/**
+ * Registers the close_document tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerCloseDocument(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, closeDocumentTool, deps);
 }

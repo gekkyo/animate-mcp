@@ -15,6 +15,13 @@ export const openDocumentTool: ToolDefinition<typeof OPEN_DOCUMENT_INPUT> = {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     inputSchema: OPEN_DOCUMENT_INPUT,
     guidance: {},
+    /**
+     * Opens an existing document or creates a new one.
+     * @param path Existing document path, when opening a file.
+     * @param type New document type, when creating a document.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns The opened or created document name and path.
+     */
     run: async ({ path, type }: Parameters<ToolCallback<typeof OPEN_DOCUMENT_INPUT>>[0], deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -36,6 +43,11 @@ export const openDocumentTool: ToolDefinition<typeof OPEN_DOCUMENT_INPUT> = {
     },
 };
 
+/**
+ * Registers the open_document tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerOpenDocument(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, openDocumentTool, deps);
 }

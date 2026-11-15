@@ -21,6 +21,16 @@ export const setDocumentPropertiesTool: ToolDefinition<typeof SET_DOCUMENT_PROPE
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     inputSchema: SET_DOCUMENT_PROPERTIES_INPUT,
     guidance: {},
+    /**
+     * Updates one or more properties on the selected document.
+     * @param width New stage width in pixels.
+     * @param height New stage height in pixels.
+     * @param frameRate New frame rate.
+     * @param backgroundColor New stage background color.
+     * @param document Optional document selector.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns The selected document and applied properties.
+     */
     run: async (
         {
             width,
@@ -50,6 +60,11 @@ export const setDocumentPropertiesTool: ToolDefinition<typeof SET_DOCUMENT_PROPE
     },
 };
 
+/**
+ * Registers the set_document_properties tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerSetDocumentProperties(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, setDocumentPropertiesTool, deps);
 }

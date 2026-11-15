@@ -63,17 +63,17 @@ export const TOOLS = [
 const registry = createToolRegistry(TOOLS);
 export const INSTRUCTIONS = registry.instructions;
 
-/** Version from package.json (the same relative path from src/ and dist/) */
+/** Reads the package version from the location shared by src/ and dist/. */
 const PACKAGE_VERSION = (
     JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
 ).version;
 
-/** Default timeout for one Run in milliseconds */
+/** Default timeout for one Run in milliseconds. */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
  * Builds the Runner, registers the MCP tools and listens on stdio.
- * @returns Promise<void> that resolves once connected (rejects on failure; the caller sets the exit code)
+ * @returns Resolves once connected; rejects on failure so the caller can set the exit code.
  */
 async function main() {
     const runner = createRunner({

@@ -16,6 +16,14 @@ export const saveDocumentTool: ToolDefinition<typeof SAVE_DOCUMENT_INPUT> = {
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     inputSchema: SAVE_DOCUMENT_INPUT,
     guidance: {},
+    /**
+     * Saves the specified open document, optionally to a new path.
+     * @param document Exact document name or path.
+     * @param path Optional save-as destination.
+     * @param confirm Confirmation to overwrite an existing file.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns The verified saved path.
+     */
     run: async (
         { document, path, confirm }: Parameters<ToolCallback<typeof SAVE_DOCUMENT_INPUT>>[0],
         deps: ToolDeps,
@@ -40,6 +48,11 @@ export const saveDocumentTool: ToolDefinition<typeof SAVE_DOCUMENT_INPUT> = {
     },
 };
 
+/**
+ * Registers the save_document tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerSaveDocument(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, saveDocumentTool, deps);
 }

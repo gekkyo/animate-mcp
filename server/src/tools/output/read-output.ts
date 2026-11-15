@@ -13,6 +13,12 @@ export const readOutputTool: ToolDefinition = {
     guidance: {
         notes: "- Use read_output to inspect the current Output and Compiler Errors panels; their contents may be stale or mixed because Animate does not identify their source document or run.",
     },
+    /**
+     * Reads and parses the current Output and Compiler Errors panels.
+     * @param _args No input arguments.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns Raw panel contents and parsed compiler diagnostics when available.
+     */
     run: async (_args: never, deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -23,6 +29,10 @@ export const readOutputTool: ToolDefinition = {
         const result = String(await runner.execute(`${prelude}${bundle("read-output")}`));
         let offset = 0;
         const compilerPanelAvailable = result.charAt(offset++) === "1";
+        /**
+         * Reads one length-prefixed field from the panel response.
+         * @returns The next decoded panel field.
+         */
         const readField = () => {
             const separator = result.indexOf(":", offset);
             if (separator < 0 || !/^\d+$/.test(result.slice(offset, separator))) {
@@ -66,6 +76,11 @@ export const readOutputTool: ToolDefinition = {
     },
 };
 
+/**
+ * Registers the read_output tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerReadOutput(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, readOutputTool, deps);
 }

@@ -10,6 +10,10 @@ import { toolHandler } from "./smoke-lib.mjs";
 
 const handle = toolHandler(registerCaptureFrame);
 const runJsfl = toolHandler(registerRunJsfl);
+/** Executes JSFL and returns its result, throwing on tool errors.
+ * @param code JSFL source to execute.
+ * @returns Promise resolving to the JSFL result.
+ */
 const executeJsfl = async (code) => {
     const result = await runJsfl({ code });
     if (result.isError) {

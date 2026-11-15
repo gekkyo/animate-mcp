@@ -16,21 +16,44 @@ const openDocument = toolHandler(registerOpenDocument);
 const saveDocument = toolHandler(registerSaveDocument);
 const closeDocument = toolHandler(registerCloseDocument);
 const convertToSymbol = toolHandler(registerConvertToSymbol);
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts a successful tool response and returns its structured payload.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     assert.ok(result.structuredContent, `${description} returned no structured content`);
     return result.structuredContent;
 };
+/** Asserts that a tool response is a refusal matching the expected message.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @param expectedMessage Expected error-message pattern.
+ */
 const expectRefusal = (result, description, expectedMessage) => {
     assert.equal(result.isError, true, `${description} was not refused`);
     assert.match(message(result), expectedMessage, `${description} returned an unexpected error`);
 };
+/** Runs JSFL and returns its result after checking for tool errors.
+ * @param code JSFL source to execute.
+ * @param description Operation description for assertion errors.
+ * @returns JSFL result value.
+ */
 const runValue = async (code, description) => {
     const result = await runJsfl({ code });
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     return result.structuredContent?.result;
 };
+/** Reads open Animate documents as sorted name/path rows.
+ * @param description Operation description for assertion errors.
+ * @returns Promise resolving to document rows.
+ */
 const documentRows = async (description) => {
     const result = await runValue(
         `var __smokeDocuments = fl.documents || []; var __smokeRows = []; for (var __i = 0; __i < __smokeDocuments.length; __i++) __smokeRows.push(__smokeDocuments[__i].name + "\\t" + (__smokeDocuments[__i].pathURI || "")); __smokeRows.join("\\n");`,
@@ -39,6 +62,11 @@ const documentRows = async (description) => {
     assert.equal(typeof result, "string", `${description} returned invalid document details`);
     return result ? result.split("\n").sort() : [];
 };
+/** Removes expected rows from a copy, failing if any expected row is missing.
+ * @param rows Original document rows.
+ * @param expected Rows that must be present and removed.
+ * @returns Remaining sorted rows.
+ */
 const withoutRows = (rows, expected) => {
     const remaining = [...rows];
     for (const row of expected) {
@@ -187,7 +215,10 @@ try {
     if (initialDocuments) {
         try {
             const ownedPath = await runValue(
-                `(function () { var __wantedUri = FLfile.platformPathToURI(${JSON.stringify(flaPath)}), __wantedName = ${JSON.stringify(documentName ?? "")}, __matches = [], __docs = fl.documents || []; function __normalize(path) { return FLfile.platformPathToURI(/^file:\\/\\//i.test(path) ? FLfile.uriToPlatformPath(path) : path); } for (var __i = 0; __i < __docs.length; __i++) { var __doc = __docs[__i], __isOwnedPath = false; if (__doc.pathURI) { try { __isOwnedPath = __normalize(__doc.pathURI) === __wantedUri; } catch (__error) {} } if (__isOwnedPath || (!__doc.pathURI && __wantedName && __doc.name === __wantedName)) __matches.push(__doc); } if (__matches.length > 1) throw new Error("Found multiple matching disposable documents: " + __matches.length); if (!__matches.length) return ""; if (__matches[0].pathURI) return __matches[0].pathURI; __matches[0].close(false); for (var __j = 0; __j < (fl.documents || []).length; __j++) if (fl.documents[__j] === __matches[0]) throw new Error("Disposable document remained open after cleanup"); return ""; })()`,
+                `(function () { var __wantedUri = FLfile.platformPathToURI(${JSON.stringify(flaPath)}), __wantedName = ${JSON.stringify(documentName ?? "")}, __matches = [], __docs = fl.documents || []; /** Converts an Animate document URI or path to a platform URI.
+ * @param path Animate document URI or platform path.
+ * @returns Normalized platform URI.
+ */ function __normalize(path) { return FLfile.platformPathToURI(/^file:\\/\\//i.test(path) ? FLfile.uriToPlatformPath(path) : path); } for (var __i = 0; __i < __docs.length; __i++) { var __doc = __docs[__i], __isOwnedPath = false; if (__doc.pathURI) { try { __isOwnedPath = __normalize(__doc.pathURI) === __wantedUri; } catch (__error) {} } if (__isOwnedPath || (!__doc.pathURI && __wantedName && __doc.name === __wantedName)) __matches.push(__doc); } if (__matches.length > 1) throw new Error("Found multiple matching disposable documents: " + __matches.length); if (!__matches.length) return ""; if (__matches[0].pathURI) return __matches[0].pathURI; __matches[0].close(false); for (var __j = 0; __j < (fl.documents || []).length; __j++) if (fl.documents[__j] === __matches[0]) throw new Error("Disposable document remained open after cleanup"); return ""; })()`,
                 "locate disposable document for cleanup",
             );
             if (ownedPath) {

@@ -1,13 +1,25 @@
 // Read-only audit; timeline edits are temporary and restored by withTimelineEdit.
+/** Audits scene and symbol timelines and reports review findings as JSON text.
+ * @returns The serialized audit report.
+ */
 (function () {
   var document = selectDocument(), findings = [], warnings = [], usages = {}, scanComplete = true;
   var libraryItems = document.library.items || [];
   var symbolItems = [];
 
+  /** Checks whether a Library item has an editable symbol timeline.
+   * @param item Library item to inspect.
+   * @returns Whether the item is a movie clip, graphic, or button.
+   */
   function isSymbol(item) {
     return item.itemType === 'movie clip' || item.itemType === 'graphic' || item.itemType === 'button';
   }
 
+  /** Checks whether a name resembles an Animate-generated default name.
+   * @param name Name to inspect.
+   * @param kind Whether the name belongs to a layer or symbol.
+   * @returns Whether the name matches a known default-name pattern.
+   */
   function defaultLooking(name, kind) {
     var pattern = kind === 'layer'
       ? /^(Layer|レイヤー)\s*\d+$/i
@@ -15,6 +27,10 @@
     return pattern.test(name);
   }
 
+  /** Records direct Library item and sound references on a timeline.
+   * @param timeline Timeline to scan.
+   * @returns Nothing.
+   */
   function addUsage(timeline) {
     for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
       var layer = timeline.layers[layerIndex], frames = layer.frames || [];
@@ -32,6 +48,11 @@
     }
   }
 
+  /** Adds default-layer and empty-keyframe findings for a timeline.
+   * @param timeline Timeline to inspect.
+   * @param name Display name used in finding locations.
+   * @returns Nothing.
+   */
   function auditTimeline(timeline, name) {
     addUsage(timeline);
     for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
@@ -62,7 +83,10 @@
   for (var sceneIndex = 0; sceneIndex < document.timelines.length; sceneIndex++) {
     if (!scanComplete) break;
     try {
-      var sceneResult = withTimelineEdit(document, sceneIndex, function (timeline) {
+      var sceneResult = withTimelineEdit(document, sceneIndex, /** Audits the selected scene timeline.
+       * @param timeline Scene timeline being inspected.
+       * @returns Nothing.
+       */ function (timeline) {
         auditTimeline(timeline, 'scene "' + (timeline.name || sceneIndex) + '"');
       });
       warnings = warnings.concat(sceneResult.warnings);
@@ -83,7 +107,10 @@
       });
     }
     try {
-      var symbolResult = withTimelineEdit(document, symbol.name, function (timeline) {
+      var symbolResult = withTimelineEdit(document, symbol.name, /** Audits the selected symbol timeline.
+       * @param timeline Symbol timeline being inspected.
+       * @returns Nothing.
+       */ function (timeline) {
         auditTimeline(timeline, 'symbol "' + symbol.name + '"');
       });
       warnings = warnings.concat(symbolResult.warnings);
