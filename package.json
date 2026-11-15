@@ -1,7 +1,7 @@
 {
   "name": "animate-mcp",
   "version": "0.2.0",
-  "description": "Inspect Adobe Animate documents and edit frame scripts, timelines, tweens, and library items.",
+  "description": "MCP server for Adobe Animate: edit scripts, timelines and library, then publish and verify.",
   "mcpName": "io.github.gekkyo/animate-mcp",
   "license": "MIT",
   "keywords": [

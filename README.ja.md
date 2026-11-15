@@ -2,7 +2,7 @@
 
 # animate-mcp
 
-AI エージェントから Adobe Animate を操作するための MCP サーバー。
+AI エージェントから Adobe Animate を操作するための MCP サーバー
 
 [English](README.md) | 日本語
 

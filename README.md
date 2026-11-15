@@ -2,7 +2,7 @@
 
 # animate-mcp
 
-An MCP server for operating Adobe Animate from AI agents.
+An MCP server for operating Adobe Animate from AI agents
 
 English | [日本語](README.ja.md)
 
