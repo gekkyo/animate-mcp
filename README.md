@@ -36,37 +36,12 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 - Organize library folders and items and find unused items.
 - Import images and audio, find direct Library usages, create or duplicate symbols, and change stage properties.
 - Publish AS3 and HTML5 Canvas documents and get AS3 compile errors and warnings back.
-- Read Animate's diagnostic panels and run an AS3 Test Movie to capture runtime output.
+- Read Animate's diagnostic panels and run an AS3 Test Movie to capture compile diagnostics and early Output panel text.
 - Capture a frame or range as PNG images.
 - Check for unused Library items and empty keyframes.
 - Verify Canvas HTML in Chrome and compare captured PNGs.
-- Install GreenSock-AS3 with a prompt.
+- Install GreenSock-AS3 with a prompt (saved AS3 documents only; review the license first).
 - Work with ActionScript 3 and HTML5 Canvas, and run arbitrary JSFL.
-
-## How it works
-
-```mermaid
-%%{init: {'themeVariables': {'fontSize': '13px'}, 'flowchart': {'nodeSpacing': 30, 'rankSpacing': 30, 'diagramPadding': 8}}}%%
-flowchart TB
-  Agent(["AI agent<br/>Claude Code / Codex"])
-  subgraph Server["animate-mcp (Node.js)"]
-    Tools["MCP tools ×24"]
-    Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
-    Runner["Runner<br/>serial + timeout"]
-  end
-  Files["exports/<br/>scripts + structure.md"]
-  Chrome(["Chrome"])
-  Animate(["Adobe Animate<br/>(running)"])
-  Agent -->|"edit files"| Files
-  Agent -->|"MCP stdio"| Tools
-  Tools -->|"export / apply"| Files
-  Tools -->|"verify_canvas_output"| Chrome
-  Tools --> Bundle --> Runner
-  Runner -->|"1. open Run.jsfl"| Animate
-  Animate -.->|"2. write Result.json"| Runner
-```
-
-Each tool builds a JSFL script, writes it to `~/.animate-mcp/runs/`, and opens it in the running Animate. The script writes its result as JSON, which the server reads back. Runs are serialized and time out if Animate does not respond.
 
 ## Requirements
 
@@ -109,6 +84,12 @@ Each tool builds a JSFL script, writes it to `~/.animate-mcp/runs/`, and opens i
 Export the scripts from the open document and find the cause of an error
 ```
 
+#### Editing a script
+
+```text
+Add stop() to the frame 1 script in Scene 1 and apply it
+```
+
 #### Inspecting the timeline
 
 ```text
@@ -127,10 +108,34 @@ Add a Background layer to Scene 1 and extend it to 24 frames
 Move the Ball instance 200 px to the right over frames 1–24 in Scene 1, using backOut easing (overshoot and return)
 ```
 
+#### Adding text
+
+```text
+Add a text field reading "GAME OVER" in 48 pt bold on frame 30 of the Text layer in Scene 1
+```
+
+#### Converting to a symbol
+
+```text
+Convert the Ball on frame 1 of Scene 1 into a movie clip named ball_mc
+```
+
 #### Editing instance properties
 
 ```text
 Set the Ball instance on frame 1 of Scene 1 to 50% alpha and add a blur filter
+```
+
+#### Changing stage settings
+
+```text
+Set the stage to 1280×720 at 30 fps with a black background
+```
+
+#### Importing assets
+
+```text
+Import /path/to/hero.png and /path/to/bgm.mp3 into the library
 ```
 
 #### Publishing
@@ -138,6 +143,20 @@ Set the Ball instance on frame 1 of Scene 1 to 50% alpha and add a blur filter
 ```text
 Publish the open document and tell me the compile errors
 ```
+
+#### Running Test Movie
+
+```text
+Run Test Movie on the open AS3 document and show the compile errors and early output
+```
+
+#### Verifying Canvas output
+
+```text
+Verify the Canvas output in Chrome and report any console errors
+```
+
+This publishes first and overwrites the outputs. To check existing output only, say "without publishing".
 
 #### Capturing a frame
 
@@ -154,7 +173,7 @@ List unused library items
 #### Installing GreenSock
 
 ```text
-Install GreenSock-AS3 for the open document
+Install GreenSock-AS3 into the saved AS3 document (I have reviewed the license)
 ```
 
 ## Usage tips
@@ -191,11 +210,11 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 |  | `import_assets` | Import images and audio into the Library |
 | Output and verification | `publish` | Publish and return the Build result |
 |  | `read_output` | Read the Output and Compiler Errors panels |
-|  | `test_movie` | Run an AS3 Test Movie and capture its output |
+|  | `test_movie` | Run an AS3 Test Movie and capture compile diagnostics and early output |
 |  | `verify_canvas_output` | Open Canvas output in Chrome and check for errors |
 |  | `capture_frame` | Capture a frame or range as PNG |
 |  | `diff_captures` | Compare two captured PNGs |
-| Other | `install_greensock` | Install GreenSock-AS3 |
+| Other | `install_greensock` | Install GreenSock-AS3 (saved AS3 only; license review required) |
 |  | `run_jsfl` | Run arbitrary JSFL |
 
 ## Environment variables
@@ -206,6 +225,31 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 | `ANIMATE_MCP_RUNS_DIR`        | Working directory                            | `~/.animate-mcp/runs` |
 | `ANIMATE_MCP_LAUNCH_COMMAND`  | Custom command to open the `.jsfl` file      | OS default            |
 | `ANIMATE_MCP_PROCESS_PATTERN` | Custom process pattern to detect Animate     | OS default            |
+
+## How it works
+
+```mermaid
+%%{init: {'themeVariables': {'fontSize': '13px'}, 'flowchart': {'nodeSpacing': 30, 'rankSpacing': 30, 'diagramPadding': 8}}}%%
+flowchart TB
+  Agent(["AI agent<br/>Claude Code / Codex"])
+  subgraph Server["animate-mcp (Node.js)"]
+    Tools["MCP tools ×24"]
+    Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
+    Runner["Runner<br/>serial + timeout"]
+  end
+  Files["exports/<br/>scripts + structure.md"]
+  Chrome(["Chrome"])
+  Animate(["Adobe Animate<br/>(running)"])
+  Agent -->|"edit files"| Files
+  Agent -->|"MCP stdio"| Tools
+  Tools -->|"export / apply"| Files
+  Tools -->|"verify_canvas_output"| Chrome
+  Tools --> Bundle --> Runner
+  Runner -->|"1. open Run.jsfl"| Animate
+  Animate -.->|"2. write Result.json"| Runner
+```
+
+Each tool builds a JSFL script, writes it to `~/.animate-mcp/runs/`, and opens it in the running Animate. The script writes its result as JSON, which the server reads back. Runs are serialized and time out if Animate does not respond.
 
 ## Bug reports
 
@@ -218,18 +262,32 @@ Please open an [issue](https://github.com/gekkyo/animate-mcp/issues) with your A
 
 Client config: `node /path/to/animate-mcp/server/dist/index.js` (stdio).
 
-### Manual smoke test (real Animate)
+### Smoke tests (real Animate)
 
-1. Start Animate with a document open.
-2. Run `run_jsfl` with `fl.trace('hi'); 'ok'`. `hi` appears in the Output panel and the tool returns `"ok"`. Animate comes to the front (known behavior).
-3. Run `get_document_info`. It returns name, size, frame rate and timeline names.
-4. Close all documents and run `get_document_info`. It returns "No document open".
-5. Quit Animate and run `run_jsfl`. It returns "Animate not running".
-6. With a saved AS3 document open, run `publish`. It returns `ok: true` with empty `errors`. Add a syntax error and run it again to see it in `errors`.
-7. Run `capture_frame`. It returns a PNG image and its saved path.
-8. Unverified: behavior while a modal dialog is open.
+Manual checks not covered by the scripts below:
 
-Scripted versions of steps 6–7 and tool checks: run `npm run build`, then `node server/scripts/smoke-publish.mjs`, `smoke-capture-frame.mjs`, `smoke-edit-elements.mjs`, `smoke-edit-library.mjs`, `smoke-edit-text.mjs`, and `smoke-import-document-properties.mjs` with Animate available. `node server/scripts/smoke-test-movie.mjs` creates and closes a disposable AS3 FLA; it leaves the Test Movie Player open for you to close manually. `smoke-document-ops.mjs` (AS3) and `smoke-canvas.mjs` (HTML5 Canvas) each create, exercise and close a disposable saved FLA.
+1. With a document open, run `run_jsfl` with `fl.trace('hi'); 'ok'`. `hi` appears in the Output panel and the tool returns `"ok"`. Animate comes to the front (known behavior).
+2. Run `get_document_info`. It returns name, size, frame rate and timeline names.
+3. Close all documents and run `get_document_info`. It returns "No document open".
+4. Quit Animate and run `run_jsfl`. It returns "Animate not running".
+
+Scripted checks: run `npm run build`, then start Animate and run the scripts below as `node server/scripts/<script>`.
+
+Most scripts create a disposable FLA, exercise it and close it without touching your documents. `smoke-publish.mjs` is the exception: it publishes the documents you pass by name.
+
+| Script | Checks | Notes |
+| --- | --- | --- |
+| `smoke-publish.mjs <name.fla>...` | `publish` | Uses your open documents |
+| `smoke-capture-frame.mjs` | `capture_frame` | Disposable FLA |
+| `smoke-edit-elements.mjs` | Layer, frame, tween and instance edits | Disposable FLA |
+| `smoke-edit-library.mjs` | Library edits | Disposable AS3 FLA |
+| `smoke-edit-text.mjs` | `edit_text` | Disposable AS3 and HTML5 Canvas FLAs |
+| `smoke-import-document-properties.mjs` | Import and stage settings | Disposable FLA |
+| `smoke-document-ops.mjs` | open, save, close | Disposable saved AS3 FLA |
+| `smoke-canvas.mjs` | HTML5 Canvas features | Disposable saved FLA |
+| `smoke-isolated-publish.mjs` | `publish` and its output | Disposable saved AS3 FLA; Animate must already be running |
+| `smoke-verification-tools.mjs` | `audit_document`, `verify_canvas_output`, `capture_frame`, `diff_captures` | Disposable saved FLA |
+| `smoke-test-movie.mjs` | `test_movie` | Disposable AS3 FLA; **leaves the Test Movie Player open, so close it manually** |
 
 ## License
 
