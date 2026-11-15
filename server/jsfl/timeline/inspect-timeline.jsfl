@@ -45,6 +45,7 @@
   function normalizedTweenType(tweenType) {
     if (tweenType === 'motion object') return 'motion';
     if (tweenType === 'motion') return 'classic';
+    if (tweenType === 'shape') return 'shape';
     return 'none';
   }
 
@@ -127,6 +128,10 @@
         tweenType: tweenType
       };
       if (frame.name) span.label = frame.name;
+      if (tweenType === 'shape') {
+        span.ease = frame.tweenEasing;
+        span.blend = frame.shapeTweenBlend;
+      }
       spans.push(span);
       if (tweenType === 'motion') {
         timeline.currentLayer = layerIndex;

@@ -63,7 +63,15 @@ export const inspectTimelineTool: ToolDefinition<typeof INSPECT_TIMELINE_INPUT> 
                 locked: boolean;
                 visible: boolean;
                 frameCount: number;
-                spans: { start: number; end: number; keyframe: boolean; tweenType: string; label?: string }[];
+                spans: {
+                    start: number;
+                    end: number;
+                    keyframe: boolean;
+                    tweenType: string;
+                    ease?: number;
+                    blend?: string;
+                    label?: string;
+                }[];
                 elements: Record<string, unknown>[];
                 motionKeyframes?: { frame: number; values: Record<string, string> }[];
             }[];

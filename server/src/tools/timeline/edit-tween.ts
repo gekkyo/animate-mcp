@@ -89,6 +89,15 @@ const KEYFRAME = z.object({
 });
 const EDIT_TWEEN_OP = z.discriminatedUnion("op", [
     z.object({
+        op: z.literal("createShapeTween"),
+        layer: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        from: z.number().int().positive(),
+        to: z.number().int().positive(),
+        ease: z.number().min(-100).max(100).optional(),
+        blend: z.enum(["distributive", "angular"]).optional(),
+    }),
+    z.object({
         op: z.literal("createTween"),
         layer: z.string(),
         index: z.number().int().nonnegative().optional(),
@@ -126,7 +135,7 @@ const EDIT_TWEEN_INPUT = {
 export const editTweenTool: ToolDefinition<typeof EDIT_TWEEN_INPUT> = {
     name: "edit_tween",
     description:
-        "Create motion (default) or classic tweens for a named instance with createTween, or change easing on an existing tween with setEase. Frames are 1-based; layer references use a name and optional zero-based index. The instance must be the only element on its layer; existing tween spans are not replaced. Alpha, brightness, and tint are mutually exclusive Animate color modes. Ease presets include quad, cubic, quart, quint, sine, expo, circ, back In/Out/InOut and linear. Stops at the first failed op. Always run export_scripts again before editing or applying scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
+        "Create motion (default) or classic tweens for a named instance with createTween, shape tweens with createShapeTween (no shape hints), or change easing on an existing tween with setEase. Shape tweens require raw shapes on both keyframes. Frames are 1-based; layer references use a name and optional zero-based index. For createTween, the instance must be the only element on its layer. Existing tween spans are not replaced. Alpha, brightness, and tint are mutually exclusive Animate color modes. Ease presets include quad, cubic, quart, quint, sine, expo, circ, back In/Out/InOut and linear. Stops at the first failed op. Always run export_scripts again before editing or applying scripts. Changes apply to the open document but do not save the .fla; use save_document after confirming an overwrite, or save in Animate.",
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     inputSchema: EDIT_TWEEN_INPUT,
     guidance: {

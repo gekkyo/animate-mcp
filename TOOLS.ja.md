@@ -27,7 +27,7 @@
 | `set_document_properties` | ステージの幅・高さ・フレームレート・背景色を変更します。 | `width` / `height`（整数 1〜3840px。3840pxは受け入れ確認済みで、本ツールの保守的な上限。Animate自体の最大値は未確認）、`frameRate`（0.01〜120）、`backgroundColor`（`#RRGGBB`）を1つ以上指定します。配置済みの内容は拡大・移動せず、`.fla` も保存しません。`document` は省略可。 |
 | `convert_to_symbol` | タイムラインの同一フレーム上にある指定要素を、ムービークリップ・ボタン・グラフィックのいずれかに変換します。 | シーンまたはライブラリのタイムライン、1 始まりのフレーム、要素参照、一意のシンボル名、必要に応じて基準点（既定は中央）を指定します。トゥイーン途中は拒否します。リンケージの設定や `.fla` の保存はせず、AS3 リンケージには別途 `edit_library` の `setLinkage` を使います。 |
 | `edit_timeline` | レイヤー・フレーム・キーフレーム・ラベルを編集し、インスタンスをレイヤーに分配します。操作は `ops` の順に実行します。 | `deleteLayer` と `removeFrames` は `confirm: true` が必要です。`shiftLayerFrames` はクリップボードを上書きし、失敗時に Undo が必要な場合があります。 |
-| `edit_tween` | モーション／クラシックトゥイーンの作成とイージングの変更を行います。プリセット、数値、4 つの数値によるカスタムイーズに対応します。 | 対象の名前付きインスタンスはレイヤー上で単独である必要があります。既存のトゥイーン範囲は置換しません。 |
+| `edit_tween` | モーション／クラシック／シェイプトゥイーンの作成とイージングの変更を行います。プリセット、数値、4 つの数値によるカスタムイーズに対応します（シェイプトゥイーンは -100〜100 の数値のみ）。 | モーション／クラシックでは対象の名前付きインスタンスがレイヤー上で単独である必要があります。シェイプトゥイーンは両キーフレームが生のシェイプである必要があります。既存のトゥイーン範囲は置換しません。 |
 | `edit_library` | フォルダ・シンボルの作成、アイテムの移動・名前変更・複製・削除、直接の使用箇所と未使用アイテムの確認、AS3 リンケージの読み書きを行います。 | `findUsages` はシーン・シンボル上の直接配置のみ返します（`timeline` はシーン番号またはシンボルパス、サウンドの使用は `element: null`）。`createSymbol` は一意の名前と種類、`duplicateItem` は `newName` が必要です。`getLinkage` と `setLinkage` は Flash/AS3 のみ対応します。`setLinkage` は `exportForAS`、`className`、`baseClass`、`exportInFirstFrame` を受け付けます。Export 無効時の値は `{ exportForAS: false, className: "", baseClass: "", exportInFirstFrame: false }`。class/base と first-frame export には `exportForAS: true` が必要です。リンケージを変更したら `export_scripts` を再実行してください。古い Export の `apply_scripts` は拒否されます。`listUnused` は Animate 自身の未使用リストをそのまま返します。フォント・ビットマップ・サウンド・リンケージ付きアイテムでの挙動は未検証のため、結果は候補として扱い、削除して安全な証拠とは見なさないでください。削除は `confirm: true` が必要で、使用中は削除できません。移動・名前変更でコード内の文字列参照は更新されません。 |
 | `install_greensock` | 保存済みの AS3 ドキュメントの隣に GreenSock-AS3 12.1.5 を GitHub から取得・配置します。 | [ライセンス](https://gsap.com/standard-license/)の確認後に `confirm: true` が必要です。`.fla` は変更・保存せず、AS2・HTML5 Canvas は対象外です。 |
 | `run_jsfl` | 任意の JSFL コードを Animate で実行して結果を返します。オブジェクトの返却値は文字列になります。 | ドキュメントやファイルを変更するコードも実行できます。変更操作の前にユーザーの確認が必要です。 |
@@ -59,6 +59,7 @@
 | 操作 | 内容 |
 |------|------|
 | `createTween` | 指定インスタンスにモーション／クラシックトゥイーンを作成する |
+| `createShapeTween` | 2つのシェイプキーフレーム間にシェイプトゥイーンを作成する |
 | `setEase` | 既存トゥイーンのイージングを変更する |
 
 ### `edit_library`
@@ -103,7 +104,10 @@
 | 操作 | 必須引数 | 省略可能な引数・注意 |
 |------|----------|----------------------|
 | `createTween` | `layer`、`instance`、`keyframes`（2件以上。各件に `frame`、全体でトゥイーン対象プロパティが1つ以上） | `kind`（既定 `motion`、または `classic`） |
-| `setEase` | `layer`、`frame`、`ease` | |
+| `createShapeTween` | `layer`、`from`、`to` | `ease`（-100〜100、既定 0）、`blend`（既定 `distributive`、または `angular`） |
+| `setEase` | `layer`、`frame`、`ease` | シェイプトゥイーンでは `ease` は -100〜100 の数値 |
+
+`createShapeTween` は `from` と `to` に既存のキーフレームが必要で、どちらも生のシェイプのみを含む必要があります（グループ、描画オブジェクト、インスタンス、テキストは不可）。既存のトゥイーン範囲は置換しません。シェイプヒントには対応していません。
 
 キーフレームのプロパティ：`x`、`dx`、`y`、`dy`、`scaleX`、`scaleY`、`rotation`、`alpha`（0〜100）、`brightness`（-100〜100）、`tint`（`{ color, amount }`）、`blur`、`glow`、`dropShadow`、`ease`。`alpha`・`brightness`・`tint` は同時に使えない色モードです。
 

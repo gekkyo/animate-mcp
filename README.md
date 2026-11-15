@@ -32,7 +32,7 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 - Add and edit whole text fields, including font, size, color, alignment, and text type.
 - Edit instance transforms, color effects, filters, names, blend modes, and visibility on keyframes.
 - Edit layer and frame structure and labels.
-- Create motion and classic tweens with preset or custom Bézier easing.
+- Create motion and classic tweens with preset or custom Bézier easing, and shape tweens between raw shapes.
 - Organize library folders and items and find unused items.
 - Import images and audio, find direct Library usages, create or duplicate symbols, and change stage properties.
 - Publish AS3 and HTML5 Canvas documents and get AS3 compile errors and warnings back.

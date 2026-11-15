@@ -27,7 +27,7 @@
 | `set_document_properties` | Sets stage width, height, frame rate, and background color. | Specify at least one of `width`, `height` (integer pixels, 1–3840; 3840 was tested as accepted and is the tool's conservative cap, not a verified Animate maximum), `frameRate` (0.01–120), or `backgroundColor` (`#RRGGBB`). Does not scale or move stage content or save the `.fla`; `document` is optional. |
 | `convert_to_symbol` | Converts explicitly addressed elements on one timeline frame into a movie clip, button, or graphic. | Supply a scene or Library timeline, one-based frame, element references, unique symbol name, and optional registration point (center by default). Refuses tween interiors; does not set linkage or save the `.fla`. Use `edit_library`'s `setLinkage` separately for AS3 linkage. |
 | `edit_timeline` | Edits layers, frames, keyframes, and labels, and distributes instances across layers. Runs operations in `ops` order. | `deleteLayer` and `removeFrames` require `confirm: true`. `shiftLayerFrames` overwrites the clipboard and may require Undo if it fails partway through. |
-| `edit_tween` | Creates motion or classic tweens and changes easing. Supports presets, numeric easing, and four-number custom easing. | The named instance must be alone on its layer. Existing tween spans are not replaced. |
+| `edit_tween` | Creates motion, classic, or shape tweens and changes easing. Supports presets, numeric easing, and four-number custom easing (shape tweens take a number from -100 to 100). | For motion and classic tweens the named instance must be alone on its layer; shape tweens need raw shapes on both keyframes. Existing tween spans are not replaced. |
 | `edit_library` | Creates folders and symbols, moves, renames, duplicates, and deletes items, finds direct usages, lists unused items, and reads or updates AS3 linkage. | `findUsages` reports direct scene/symbol timeline placements only: `timeline` is a scene index or a symbol path, and sound uses have `element: null`. `createSymbol` requires a unique name and type; `duplicateItem` requires `newName`. `getLinkage` and `setLinkage` support Flash/AS3 documents only. `setLinkage` accepts `exportForAS`, `className`, `baseClass`, and `exportInFirstFrame`, and returns Animate's read-back values. With export disabled, the linkage fields are `{ exportForAS: false, className: "", baseClass: "", exportInFirstFrame: false }`; results also include the item `name`. Setting class/base or enabling first-frame export requires `exportForAS: true`. If `setLinkage` changes a movie clip, graphic, or button's AS3 export or class name, rerun `export_scripts` to refresh linked-class metadata in the export workspace; `apply_scripts` rejects exports with stale linkage. `listUnused` returns Animate's own unused-item list as is; it has not been verified for fonts, bitmaps, sounds, or linkage items, so treat results as candidates, not proof that an item is safe to delete. Deletion requires `confirm: true` and refuses items in use. Moving or renaming does not update code-string references. |
 | `install_greensock` | Fetches GreenSock-AS3 12.1.5 from GitHub and places it alongside a saved AS3 document. | Review the [license](https://gsap.com/standard-license/) and pass `confirm: true`. Does not change or save the `.fla`; does not support AS2 or HTML5 Canvas. |
 | `run_jsfl` | Executes arbitrary JSFL in Animate and returns the result. Object return values become strings. | Can modify documents and files; ask the user before running code that makes changes. |
@@ -59,6 +59,7 @@
 | Operation | Description |
 |-----------|-------------|
 | `createTween` | Create a motion or classic tween for a named instance |
+| `createShapeTween` | Create a shape tween between two raw-shape keyframes |
 | `setEase` | Change an existing tween's easing |
 
 ### `edit_library`
@@ -103,7 +104,10 @@ Returns the resulting layer list (`name`, `type`, `parent`, `locked`). Tween int
 | Operation | Required arguments | Optional arguments and notes |
 |-----------|--------------------|------------------------------|
 | `createTween` | `layer`, `instance`, `keyframes` (two or more; each has `frame`, and the set has at least one tween property) | `kind` (`motion` by default, or `classic`) |
-| `setEase` | `layer`, `frame`, `ease` | |
+| `createShapeTween` | `layer`, `from`, `to` | `ease` (-100–100, default 0), `blend` (`distributive` by default, or `angular`) |
+| `setEase` | `layer`, `frame`, `ease` | For a shape tween, `ease` is a number from -100 to 100 |
+
+`createShapeTween` needs existing keyframes at `from` and `to`, each containing only raw shapes (no groups, drawing objects, instances, or text), and it does not replace existing tween spans. Shape hints are not supported.
 
 Keyframe properties: `x`, `dx`, `y`, `dy`, `scaleX`, `scaleY`, `rotation`, `alpha` (0–100), `brightness` (-100–100), `tint` (`{ color, amount }`), `blur`, `glow`, `dropShadow`, and `ease`. `alpha`, `brightness`, and `tint` are mutually exclusive color modes.
 

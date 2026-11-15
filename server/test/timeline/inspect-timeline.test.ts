@@ -70,6 +70,27 @@ test("inspect_timeline returns layer spans and instance properties without chang
     );
 });
 
+test("inspect_timeline reports shape tween ease and blend", { timeout: 30_000 }, async () => {
+    await withServer({ FAKE_SHAPE_TWEEN_INSPECT: "1" }, async (client) => {
+        const result = await client.callTool({
+            name: "inspect_timeline",
+            arguments: { timeline: 0, layers: ["a/b"], frame: 2 },
+        });
+        assert.equal(result.isError, undefined, text(result));
+        const inspection = result.structuredContent as {
+            layers: { spans: { tweenType: string; ease?: number; blend?: string }[] }[];
+        };
+        assert.deepEqual(inspection.layers[0].spans[0], {
+            start: 1,
+            end: 2,
+            keyframe: true,
+            tweenType: "shape",
+            ease: 30,
+            blend: "angular",
+        });
+    });
+});
+
 test("inspect_timeline supports selected layers, motion keyframe values and library timelines", {
     timeout: 30_000,
 }, async () => {
