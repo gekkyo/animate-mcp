@@ -8,3 +8,5 @@ docs/*
 !docs/animate-quirks.md
 AGENTS.md
 GLOSSARY.md
+reports/
+research_notes/
