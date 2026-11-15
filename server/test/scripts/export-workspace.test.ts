@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import type { ExportManifest } from "../../src/export-workspace/export-workspace.js";
 import {
     collectChanges,
     prepareExport,
@@ -78,7 +79,6 @@ test("recordApplied updates only successful files and structure metadata", async
                 start: 0,
                 script: "edited();",
                 file: "scenes/Scene/Layer/1.as",
-                expected: "old();",
             },
         ],
         newScripts: [
@@ -96,7 +96,9 @@ test("recordApplied updates only successful files and structure metadata", async
         fingerprints: [{ scene: 0, structureFingerprint: "new-fingerprint" }],
     });
 
-    const manifest = JSON.parse(await readFile(join(dir, ".export.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(join(dir, ".export.json"), "utf8")) as ExportManifest & {
+        timelines: NonNullable<ExportManifest["timelines"]>;
+    };
     assert.equal(manifest.files["scenes/Scene/Layer/1.as"].script, "edited();");
     assert.deepEqual(manifest.files["scenes/Scene/as/2.as"], {
         scene: 0,

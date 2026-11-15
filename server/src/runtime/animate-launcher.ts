@@ -105,7 +105,7 @@ function isAnimateRunning(): Promise<boolean> {
                     "close",
                     /**
                      * Resolves whether tasklist output contains the process image.
-                     * @returns Whether the process image appears in tasklist output
+                     * @returns Nothing.
                      */
                     () => resolve(output.toLowerCase().includes(image.toLowerCase())),
                 );

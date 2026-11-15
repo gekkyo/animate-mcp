@@ -1,4 +1,7 @@
 // Captures one frame or an inclusive range from the active document's currently edited timeline.
+/** Exports one or more timeline frames as PNG files and restores the current frame.
+ * @returns Serialized capture metadata.
+ */
 (function () {
   var document = fl.getDocumentDOM();
   if (!document) throw new Error("No document open");
@@ -40,11 +43,20 @@
     throw new Error("Could not create capture directory: " + outputDir);
   }
 
+  /** Left-pads a value with zeroes to the requested width.
+   * @param value Value to format.
+   * @param length Minimum output width.
+   * @returns The zero-padded text.
+   */
   function pad(value, length) {
     var text = String(value);
     while (text.length < length) text = "0" + text;
     return text;
   }
+  /** Formats a date with millisecond precision for a capture filename.
+   * @param date Date to format.
+   * @returns A compact sortable timestamp.
+   */
   function timestamp(date) {
     return pad(date.getFullYear(), 4) + pad(date.getMonth() + 1, 2) + pad(date.getDate(), 2) + "-" +
       pad(date.getHours(), 2) + pad(date.getMinutes(), 2) + pad(date.getSeconds(), 2) + "-" + pad(date.getMilliseconds(), 3);
@@ -57,6 +69,7 @@
       frame = frames[frameIndex];
       if (__captureRange !== null || __captureFrame !== null) timeline.currentFrame = frame - 1;
       var date = new Date(), outputPath, outputURI;
+      // Bump the timestamp by 1 ms on collision so an existing capture is never overwritten.
       do {
         outputPath = outputDir + "/" + frame + "-" + timestamp(date) + ".png";
         outputURI = FLfile.platformPathToURI(outputPath);

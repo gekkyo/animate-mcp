@@ -24,6 +24,15 @@ export const inspectTimelineTool: ToolDefinition<typeof INSPECT_TIMELINE_INPUT> 
     guidance: {
         basic: "- Use inspect_timeline to check instances and tweens instead of run_jsfl; use the distributeToLayers operation to split a layer.",
     },
+    /**
+     * Reads layer, span, and element details at the requested timeline frame.
+     * @param timeline Scene index or Library item path.
+     * @param layers Optional layer names or zero-based indexes to inspect.
+     * @param frame 1-based frame to inspect.
+     * @param document Optional document selector.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns Timeline and layer details for the requested frame.
+     */
     run: async (
         { timeline, layers, frame, document }: Parameters<ToolCallback<typeof INSPECT_TIMELINE_INPUT>>[0],
         deps: ToolDeps,
@@ -56,6 +65,11 @@ export const inspectTimelineTool: ToolDefinition<typeof INSPECT_TIMELINE_INPUT> 
     },
 };
 
+/**
+ * Registers the inspect_timeline tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerInspectTimeline(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, inspectTimelineTool, deps);
 }

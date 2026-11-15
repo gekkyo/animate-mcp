@@ -6,9 +6,9 @@ import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
 import { registerGetDocumentInfo } from "../dist/tools/document/get-document-info.js";
+import { registerSetDocumentProperties } from "../dist/tools/document/set-document-properties.js";
 import { registerImportAssets } from "../dist/tools/library/import-assets.js";
 import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
-import { registerSetDocumentProperties } from "../dist/tools/document/set-document-properties.js";
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "./smoke-lib.mjs";
 
 const TEMP_ROOT = "/private/var/folders/c2/dmv_gdrs3jzcjpbgsv8t2k4c0000gn/T/opencode";
@@ -16,21 +16,43 @@ const runJsfl = toolHandler(registerRunJsfl);
 const importAssets = toolHandler(registerImportAssets);
 const setDocumentProperties = toolHandler(registerSetDocumentProperties);
 const getDocumentInfo = toolHandler(registerGetDocumentInfo);
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts a successful tool response and returns its structured payload.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     assert.ok(result.structuredContent, `${description} returned no structured content`);
     return result.structuredContent;
 };
+/** Asserts that a tool response is a refusal matching the expected message.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @param expectedMessage Expected error-message pattern.
+ */
 const expectRefusal = (result, description, expectedMessage) => {
     assert.equal(result.isError, true, `${description} was not refused`);
     assert.match(message(result), expectedMessage, `${description} returned an unexpected error`);
 };
+/** Runs JSFL and returns its result after checking for tool errors.
+ * @param code JSFL source to execute.
+ * @param description Operation description for assertion errors.
+ * @returns JSFL result value.
+ */
 const runValue = async (code, description) => {
     const result = await runJsfl({ code });
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     return result.structuredContent?.result;
 };
+/** Reads the open Animate documents as sorted name/path rows.
+ * @returns Promise resolving to document rows.
+ */
 const documentRows = () =>
     runValue(
         'var __docs = fl.documents || [], __rows = []; for (var __i = 0; __i < __docs.length; __i++) __rows.push(__docs[__i].name + "\\t" + (__docs[__i].pathURI || "")); __rows.sort().join("\\n");',
@@ -39,6 +61,11 @@ const documentRows = () =>
         assert.equal(typeof value, "string", "Animate returned invalid document details");
         return value ? value.split("\n") : [];
     });
+/** Removes expected rows from a copy, failing if any expected row is missing.
+ * @param rows Original document rows.
+ * @param expected Rows that must be present and removed.
+ * @returns Remaining sorted rows.
+ */
 const withoutRows = (rows, expected) => {
     const remaining = [...rows];
     for (const row of expected) {
@@ -48,6 +75,9 @@ const withoutRows = (rows, expected) => {
     }
     return remaining.sort();
 };
+/** Builds a minimal valid mono 8-bit WAV fixture.
+ * @returns WAV file bytes.
+ */
 const assetWav = () => {
     const data = Buffer.alloc(45);
     data.write("RIFF", 0);
@@ -65,6 +95,10 @@ const assetWav = () => {
     data[44] = 128;
     return data;
 };
+/** Computes the CRC-32 checksum for a byte sequence.
+ * @param data Bytes to checksum.
+ * @returns Unsigned CRC-32 value.
+ */
 const crc32 = (data) => {
     let crc = 0xffffffff;
     for (const byte of data) {
@@ -75,6 +109,11 @@ const crc32 = (data) => {
     }
     return (crc ^ 0xffffffff) >>> 0;
 };
+/** Encodes a PNG chunk with its length and CRC.
+ * @param type Four-character chunk type.
+ * @param data Chunk payload bytes.
+ * @returns Encoded PNG chunk bytes.
+ */
 const pngChunk = (type, data) => {
     const typeBytes = Buffer.from(type, "ascii");
     const chunk = Buffer.alloc(data.length + 12);
@@ -84,6 +123,9 @@ const pngChunk = (type, data) => {
     chunk.writeUInt32BE(crc32(chunk.subarray(4, data.length + 8)), data.length + 8);
     return chunk;
 };
+/** Builds a valid 1-by-1 RGBA PNG fixture.
+ * @returns PNG file bytes.
+ */
 const assetPng = () => {
     const header = Buffer.alloc(13);
     header.writeUInt32BE(1, 0);
@@ -98,10 +140,22 @@ const assetPng = () => {
         pngChunk("IEND", Buffer.alloc(0)),
     ]);
 };
+/** Builds JSFL that snapshots stage elements in a document identified by path.
+ * @param pathURI Exact Animate document path URI.
+ * @returns JSFL source returning the stage snapshot.
+ */
 const stageSnapshot = (pathURI) =>
     `(function () { var __path = ${JSON.stringify(pathURI)}, __docs = fl.documents || [], __doc = null, __timeline, __rows = [], __layerIndex, __frameIndex, __layer, __frame, __elements, __elementIndex, __element, __item, __row; for (var __i = 0; __i < __docs.length; __i++) if (__docs[__i].pathURI === __path) { if (__doc) throw new Error("Duplicate disposable FLA path"); __doc = __docs[__i]; } if (!__doc) throw new Error("Disposable FLA not open"); __timeline = __doc.getTimeline(); for (__layerIndex = 0; __layerIndex < __timeline.layers.length; __layerIndex++) { __layer = __timeline.layers[__layerIndex]; for (__frameIndex = 0; __frameIndex < __layer.frames.length; __frameIndex++) { __frame = __layer.frames[__frameIndex]; if (!__frame || __frame.startFrame !== __frameIndex) continue; __elements = __frame.elements || []; __row = [String(__layerIndex), String(__frameIndex), String(__layer.name), String(__elements.length)]; for (__elementIndex = 0; __elementIndex < __elements.length; __elementIndex++) { __element = __elements[__elementIndex]; __item = __element.libraryItem; __row.push(String(__element.elementType) + ":" + (__item ? String(__item.name) : "") + ":" + String(__element.x) + ":" + String(__element.y) + ":" + String(__element.scaleX) + ":" + String(__element.scaleY)); } __rows.push(__row.join("\\t")); } } return __rows.join("\\n"); })()`;
+/** Builds JSFL that lists sorted Library item names for a document path.
+ * @param pathURI Exact Animate document path URI.
+ * @returns JSFL source returning the sorted names.
+ */
 const librarySnapshot = (pathURI) =>
     `(function () { var __path = ${JSON.stringify(pathURI)}, __docs = fl.documents || [], __doc = null, __names = []; for (var __i = 0; __i < __docs.length; __i++) if (__docs[__i].pathURI === __path) __doc = __docs[__i]; if (!__doc) throw new Error("Disposable FLA not open"); for (__i = 0; __i < __doc.library.items.length; __i++) __names.push(String(__doc.library.items[__i].name)); __names.sort(); return __names.join("\\n"); })()`;
+/** Builds JSFL that lists selected Library item names for a document path.
+ * @param pathURI Exact Animate document path URI.
+ * @returns JSFL source returning selected names.
+ */
 const selectedLibraryItems = (pathURI) =>
     `(function () { var __path = ${JSON.stringify(pathURI)}, __docs = fl.documents || [], __doc = null, __selected = []; for (var __i = 0; __i < __docs.length; __i++) if (__docs[__i].pathURI === __path) __doc = __docs[__i]; if (!__doc) throw new Error("Disposable FLA not open"); var __items = __doc.library.getSelectedItems() || []; for (__i = 0; __i < __items.length; __i++) __selected.push(String(__items[__i].name)); return __selected.join("\\n"); })()`;
 
@@ -144,7 +198,10 @@ try {
     console.log(
         `OBSERVE addNewItem with selected folder: item=${stageItemName}; post-call selected Library items=${selectedAfterAddNewItem || "(none)"}.`,
     );
-    assert.equal(await runValue(selectedLibraryItems(disposable.pathURI), "verify selected Library folder before import"), folderName);
+    assert.equal(
+        await runValue(selectedLibraryItems(disposable.pathURI), "verify selected Library folder before import"),
+        folderName,
+    );
     const stageBeforeImport = await runValue(stageSnapshot(disposable.pathURI), "record stage before import");
     assert.match(stageBeforeImport, new RegExp(`instance:${stageItemName}:50:60:`));
 
@@ -153,13 +210,22 @@ try {
         "import generated PNG and WAV",
     );
     assert.deepEqual(imported, { document: disposable.name, items: [imageName, audioName] });
-    const stageAfterImport = await runValue(stageSnapshot(disposable.pathURI), "verify import did not place assets on stage");
+    const stageAfterImport = await runValue(
+        stageSnapshot(disposable.pathURI),
+        "verify import did not place assets on stage",
+    );
     assert.equal(stageAfterImport, stageBeforeImport, "import changed stage elements");
     const libraryAfterImport = await runValue(librarySnapshot(disposable.pathURI), "verify imported Library items");
     assert.ok(libraryAfterImport.split("\n").includes(imageName), "imported PNG missing from Library");
     assert.ok(libraryAfterImport.split("\n").includes(audioName), "imported WAV missing from Library");
-    assert.ok(!libraryAfterImport.split("\n").includes(`${folderName}/${imageName}`), "PNG was imported into the selected folder");
-    assert.ok(!libraryAfterImport.split("\n").includes(`${folderName}/${audioName}`), "WAV was imported into the selected folder");
+    assert.ok(
+        !libraryAfterImport.split("\n").includes(`${folderName}/${imageName}`),
+        "PNG was imported into the selected folder",
+    );
+    assert.ok(
+        !libraryAfterImport.split("\n").includes(`${folderName}/${audioName}`),
+        "WAV was imported into the selected folder",
+    );
     assert.equal(
         await runValue(selectedLibraryItems(disposable.pathURI), "verify Library folder selection was restored"),
         folderName,
@@ -196,7 +262,10 @@ try {
         document: disposable.name,
         properties: { width: 640, height: 360, frameRate: 30, backgroundColor: "#123456" },
     });
-    const stageAfterResize = await runValue(stageSnapshot(disposable.pathURI), "verify resize left stage content unchanged");
+    const stageAfterResize = await runValue(
+        stageSnapshot(disposable.pathURI),
+        "verify resize left stage content unchanged",
+    );
     assert.equal(stageAfterResize, stageBeforeImport, "document resize moved or scaled stage content");
 
     const activated = await runValue(
@@ -239,7 +308,9 @@ try {
             await closeDocumentByPath(runJsfl, disposable.pathURI);
         } catch (error) {
             console.error("Disposable FLA cleanup failed:", error);
-            failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup both failed") : error;
+            failure = failure
+                ? new AggregateError([failure, error], "Smoke test and document cleanup both failed")
+                : error;
         }
     }
 
@@ -247,10 +318,16 @@ try {
         try {
             const finalDocuments = await documentRows();
             finalCount = finalDocuments.length;
-            assert.deepEqual(finalDocuments, initialDocuments, "existing documents changed or a disposable FLA remains open");
+            assert.deepEqual(
+                finalDocuments,
+                initialDocuments,
+                "existing documents changed or a disposable FLA remains open",
+            );
         } catch (error) {
             console.error("Final document-state verification failed:", error);
-            failure = failure ? new AggregateError([failure, error], "Smoke test and final-state verification failed") : error;
+            failure = failure
+                ? new AggregateError([failure, error], "Smoke test and final-state verification failed")
+                : error;
         }
     }
 
@@ -259,12 +336,16 @@ try {
         await assert.rejects(stat(tempDir), { code: "ENOENT" });
     } catch (error) {
         console.error("Temporary asset/FLA cleanup failed:", error);
-        failure = failure ? new AggregateError([failure, error], "Smoke test and temporary cleanup both failed") : error;
+        failure = failure
+            ? new AggregateError([failure, error], "Smoke test and temporary cleanup both failed")
+            : error;
     }
     console.log(
         `Cleanup state: initial documents ${initialDocuments?.length ?? "unknown"}, final ${finalCount}; temp directory removed; disposable FLA ${disposable?.pathURI ? "closed by exact pathURI" : "not created"}.`,
     );
 }
 
-if (failure) throw failure;
+if (failure) {
+    throw failure;
+}
 console.log(`Import/document-properties smoke passed (disposable AS3 FLA: ${disposable?.pathURI}).`);

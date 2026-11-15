@@ -6,11 +6,17 @@ import { runInNewContext } from "node:vm";
 
 const EDIT_STATE_SOURCE = fileURLToPath(new URL("../jsfl/shared/edit-state.jsfl", import.meta.url));
 
+/**
+ * Build two timelines with a saved nonempty selection for edit-state restoration tests.
+ * @param throwOnRestore Whether returning to the original scene should fail.
+ * @returns A minimal Animate document fixture.
+ */
 function documentWithSelection(throwOnRestore = false) {
     const makeTimeline = () => ({
         layers: [{}, {}],
         currentLayer: 0,
         currentFrame: 0,
+        // Duplicate frame indexes must survive snapshot/restore without normalization.
         selectedFrames: [0, 0, 2],
         getSelectedFrames() {
             return this.selectedFrames.slice();
@@ -40,6 +46,12 @@ function documentWithSelection(throwOnRestore = false) {
     return document;
 }
 
+/**
+ * Run a callback inside the JSFL edit-state helper using the supplied fake document.
+ * @param document Document fixture to expose to the JSFL.
+ * @param callback JavaScript body executed while the target timeline is active.
+ * @returns The VM evaluation result.
+ */
 async function runSession(document: ReturnType<typeof documentWithSelection>, callback: string) {
     const source = await readFile(EDIT_STATE_SOURCE, "utf8");
     return runInNewContext(`${source}\nwithTimelineEdit(document, 1, function (timeline) { ${callback} })`, {
@@ -54,6 +66,7 @@ test("withTimelineEdit restores selected frames and edit state on success and fa
         warnings: string[];
     };
     assert.equal(success.result, "done");
+    // Restoration targets the original timeline, not the one active during the callback.
     assert.deepEqual(Array.from(successDocument.timelines[1].selectedFrames), [0, 0, 2]);
     assert.equal(successDocument.currentTimeline, 0);
 

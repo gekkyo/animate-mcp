@@ -42,6 +42,7 @@ export const safeName = (name: string) =>
             (char) => (char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char) ? "_" : char),
         )
         .join("")
+        // A dot-only segment is not a usable export filename.
         .replace(/^\.+$/, "_") || "_";
 
 /**
@@ -67,6 +68,7 @@ function uniqueName(used: Set<string>, name: string): string {
  * @param start First frame in the range, 1-based
  * @param end Last frame in the range, 1-based
  * @param frameStart Keyframe start index, 0-based
+ * @returns Nothing.
  */
 function addElementFrameRanges(
     elementRangesByName: Map<string, string[]>,
@@ -233,7 +235,7 @@ async function renderSceneMarkdown(
  * Frame numbers are 1-based to match the Animate UI.
  * @param data Result of export-scenes.jsfl
  * @param dir Output directory
- * @returns Names of exported / failed timelines and Linked classes (AS3 only; empty for Canvas)
+ * @returns Exported and failed timeline names plus linked classes (AS3 only; empty for Canvas).
  */
 export async function writeExport(data: ExportData, dir: string) {
     const scriptExtension = data.type === "htmlcanvas" ? "js" : "as";
@@ -242,6 +244,7 @@ export async function writeExport(data: ExportData, dir: string) {
     /** Writes an export artifact, creating its parent directories first.
      * @param relativePath Path relative to the export directory
      * @param content File content to write
+     * @returns Nothing.
      */
     const writeToExportDir = async (relativePath: string, content: string) => {
         const path = join(dir, relativePath);
@@ -305,6 +308,7 @@ export async function writeExport(data: ExportData, dir: string) {
             libraryItemPath,
             /** Records a rendered script in the manifest and writes its file.
              * @param scriptFile Rendered script metadata and content
+             * @returns Nothing.
              */
             async (scriptFile) => {
                 files[scriptFile.path] = {

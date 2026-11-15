@@ -1,6 +1,5 @@
 // `var __timelineRef` (scene index or library item path) and `var __ops` are injected before this file.
-/** Applies timeline operations and returns their results as JSON text.
- * @returns The serialized operation results.
+/** Defines shared layer and frame helpers for the timeline bundle.
  */
 (function () {
   /** Finds a uniquely named layer and optionally verifies its index.

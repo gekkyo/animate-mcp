@@ -85,6 +85,7 @@
       withEditUnlockedLayers(layers, function () {
         if (op.op === 'insertFrames') {
           timeline.currentLayer = layerIndex;
+          // Animate's ripple flag shifts all non-folder layers; false confines the edit to the selected layer.
           timeline.insertFrames(count, op.ripple === true, frameIndex);
         } else {
           for (layerIndexToEdit = 0; layerIndexToEdit < layers.length; layerIndexToEdit++) {

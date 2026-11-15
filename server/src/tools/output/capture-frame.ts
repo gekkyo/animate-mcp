@@ -39,6 +39,14 @@ export const captureFrameTool: ToolDefinition<typeof CAPTURE_FRAME_INPUT> = {
     guidance: {
         basic: "- Use capture_frame to inspect the active timeline as PNG images; request one frame or an inclusive range of up to 24 frames. It saves new images under ~/.animate-mcp/captures/<document>/ and restores the current frame.",
     },
+    /**
+     * Captures one timeline frame or a bounded range as PNG images.
+     * @param frame Optional 1-based frame to capture.
+     * @param range Optional inclusive frame range to capture.
+     * @param dir Optional output directory.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns Capture metadata and PNG image content.
+     */
     run: async ({ frame, range, dir }: Parameters<ToolCallback<typeof CAPTURE_FRAME_INPUT>>[0], deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -80,6 +88,11 @@ export const captureFrameTool: ToolDefinition<typeof CAPTURE_FRAME_INPUT> = {
     },
 };
 
+/**
+ * Registers the capture_frame tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerCaptureFrame(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, captureFrameTool, deps);
 }

@@ -1,4 +1,7 @@
 // `var __docName`, `var __timelineRef`, and `var __request` are injected before this file.
+/** Converts selected timeline elements into a Library symbol.
+ * @returns The serialized conversion result.
+ */
 (function () {
   var document = selectDocument();
   var originalTimeline = document.getTimeline();
@@ -12,6 +15,10 @@
   var allowedTypes = ["movie clip", "button", "graphic"];
   var registrationPoints = ["top left", "top center", "top right", "center left", "center", "center right", "bottom left", "bottom center", "bottom right"];
 
+  /** Resolves a layer by its zero-based index or unique name.
+   * @param reference Layer index or name.
+   * @returns The matching zero-based layer index.
+   */
   function resolveLayer(reference) {
     if (typeof reference === "number") {
       if (Math.floor(reference) !== reference || reference < 0 || reference >= timeline.layers.length) {
@@ -31,6 +38,11 @@
     return found;
   }
 
+  /** Resolves an element by its index or unique name.
+   * @param elements Elements on the target frame.
+   * @param reference Element index or name.
+   * @returns The matching element index.
+   */
   function resolveElement(elements, reference) {
     if (typeof reference === "number") {
       if (Math.floor(reference) !== reference || reference < 0 || reference >= elements.length) {
@@ -50,6 +62,11 @@
     return found;
   }
 
+  /** Checks whether an element still belongs to any frame in a timeline.
+   * @param targetTimeline Timeline to search.
+   * @param element Element reference to find.
+   * @returns Whether the timeline contains the element.
+   */
   function containsElement(targetTimeline, element) {
     for (var layerIndex = 0; layerIndex < targetTimeline.layers.length; layerIndex++) {
       var frames = targetTimeline.layers[layerIndex].frames;
@@ -63,13 +80,27 @@
     return false;
   }
 
+  /** Restores only selected elements that still exist in the timeline.
+   * @param targetTimeline Timeline containing the selection.
+   * @param selection Element references to restore.
+   * @returns Nothing.
+   */
   function restoreSelection(targetTimeline, selection) {
+    // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
     if (document.selectNone) document.selectNone();
     for (var index = 0; index < selection.length; index++) {
       if (containsElement(targetTimeline, selection[index])) selection[index].selected = true;
     }
   }
 
+  /** Restores the saved layer, frame, selected frames, and surviving elements.
+   * @param targetTimeline Timeline whose state is restored.
+   * @param layer Original layer object.
+   * @param frame Original zero-based current frame.
+   * @param selectedFrames Original selected-frame range.
+   * @param selection Original selected elements.
+   * @returns Nothing.
+   */
   function restoreTimelineState(targetTimeline, layer, frame, selectedFrames, selection) {
     if (selectedFrames && targetTimeline.setSelectedFrames) targetTimeline.setSelectedFrames(selectedFrames);
     var layerIndex = -1;
@@ -81,6 +112,11 @@
     restoreSelection(targetTimeline, selection);
   }
 
+  /** Writes a state-restoration failure to Animate's trace output.
+   * @param label Context for the failed restoration.
+   * @param error Error thrown while restoring state.
+   * @returns Nothing.
+   */
   function traceRestoreError(label, error) {
     fl.trace(label + ": " + String(error && error.message ? error.message : error));
   }
@@ -101,7 +137,11 @@
       }
     }
 
-    var session = withTimelineEdit(document, __timelineRef, function (targetTimeline) {
+    var session = withTimelineEdit(document, __timelineRef, /** Converts the requested elements in the target timeline.
+     * @param targetTimeline Timeline selected for the operation.
+     * @returns The serialized conversion result.
+     */
+    function (targetTimeline) {
     timeline = targetTimeline;
     targetLayer = timeline.layers[timeline.currentLayer];
     targetFrame = timeline.currentFrame;
@@ -142,6 +182,7 @@
       }
     timeline.currentFrame = frameIndex;
     timeline.currentLayer = resolved[0].layerIndex;
+    // Clear before selecting only the elements to convert (see docs/animate-quirks.md).
     if (document.selectNone) document.selectNone();
     for (var selectIndex = 0; selectIndex < resolved.length; selectIndex++) resolved[selectIndex].element.selected = true;
     var created = document.convertToSymbol(__request.type, __request.name, __request.registrationPoint);

@@ -1,4 +1,7 @@
 // `var __docName`, `var __timelineRef`, and `var __ops` are injected before this file.
+/** Applies text additions and edits to a timeline.
+ * @returns The serialized edit result.
+ */
 (function () {
   var document = selectDocument();
   var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.layers[originalTimeline.currentLayer];
@@ -11,6 +14,10 @@
   var TEXT_ATTR_FIELDS = ['face', 'size', 'fillColor', 'bold', 'italic'];
   var STYLE_FIELDS = TEXT_ATTR_FIELDS.concat(['alignment', 'textType', 'lineType']);
 
+  /** Validates a text element's bounds.
+   * @param rectangle Text bounds with left, top, right, and bottom values.
+   * @returns Nothing.
+   */
   function validateRectangle(rectangle) {
     if (!rectangle || typeof rectangle !== 'object' || rectangle instanceof Array) throw new Error('rectangle is required');
     var fields = ['left', 'top', 'right', 'bottom'];
@@ -20,6 +27,10 @@
     if (rectangle.right <= rectangle.left || rectangle.bottom <= rectangle.top) throw new Error('rectangle must have positive width and height');
   }
 
+  /** Validates supported text style fields and document-type restrictions.
+   * @param style Optional text style.
+   * @returns Nothing.
+   */
   function validateStyle(style) {
     if (style === undefined) return;
     if (!style || typeof style !== 'object' || style instanceof Array) throw new Error('style must be an object');
@@ -41,6 +52,12 @@
     if (document.type === 'htmlcanvas' && style.lineType === 'single line') throw new Error('Canvas does not support lineType: single line');
   }
 
+  /** Checks that line type is used only with supported dynamic text.
+   * @param style Requested text style.
+   * @param existingTextType Current text type when editing.
+   * @param isAdd Whether the operation creates new text.
+   * @returns Nothing.
+   */
   function validateLineType(style, existingTextType, isAdd) {
     if (!style || style.lineType === undefined) return;
     var textType = style.textType !== undefined ? style.textType : existingTextType;
@@ -49,6 +66,11 @@
     }
   }
 
+  /** Rejects text edits that target a tween span.
+   * @param layer Layer containing the target frame.
+   * @param frameIndex Zero-based frame index.
+   * @returns Nothing.
+   */
   function rejectTween(layer, frameIndex) {
     if (!layer || !layer.frames.length) return;
     var checkedIndex = Math.min(frameIndex, layer.frames.length - 1), frame = layer.frames[checkedIndex];
@@ -56,12 +78,20 @@
     if (span && (span.tweenType || 'none') !== 'none') throw new Error('Cannot edit text in a tween span');
   }
 
+  /** Adds a layer to the unlock list once.
+   * @param layer Layer to add.
+   * @returns Nothing.
+   */
   function addLayerToUnlock(layer) {
     if (!layer) return;
     for (var index = 0; index < layersToUnlock.length; index++) if (layersToUnlock[index] === layer) return;
     layersToUnlock.push(layer);
   }
 
+  /** Reads text content and supported style from an Animate element.
+   * @param element Text element to read.
+   * @returns Normalized text data.
+   */
   function readText(element) {
     return {
       type: 'text',
@@ -71,6 +101,11 @@
     };
   }
 
+  /** Applies text content and style fields from an operation.
+   * @param element Text element to update.
+   * @param op Text edit operation.
+   * @returns Nothing.
+   */
   function applyText(element, op) {
     if (op.text !== undefined) element.setTextString(op.text);
     var style = op.style || {};
@@ -85,7 +120,11 @@
 
   var session = null;
   try {
-    session = withTimelineEdit(document, __timelineRef, function (timeline) {
+    session = withTimelineEdit(document, __timelineRef, /** Applies the requested text edits in the target timeline.
+     * @param timeline Timeline selected for editing.
+     * @returns The serialized edit result.
+     */
+    function (timeline) {
     targetLayerState = timeline.layers[timeline.currentLayer];
     targetFrameState = timeline.currentFrame;
     targetSelection = document.selection ? document.selection.slice() : [];
@@ -126,7 +165,10 @@
       addLayerToUnlock(layer);
     }
 
-    withEditUnlockedLayers(layersToUnlock, function () {
+    withEditUnlockedLayers(layersToUnlock, /** Applies validated text operations while target layers are unlocked.
+     * @returns Nothing.
+     */
+    function () {
       for (var resolvedIndex = 0; resolvedIndex < resolved.length; resolvedIndex++) {
         var entry = resolved[resolvedIndex], operation = entry.op, targetLayer = entry.layer;
         if (entry.kind === 'add') {
@@ -189,6 +231,7 @@
     return serialize({ applied: resultElements.length, elements: resultElements });
     } finally {
     if (timeline && targetLayerState) {
+      // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
       if (document.selectNone) document.selectNone();
       var targetLayerIndex = editLayerPosition(timeline, targetLayerState);
       if (targetLayerIndex >= 0) timeline.currentLayer = targetLayerIndex;
@@ -204,6 +247,7 @@
     var originalLayerIndex = editLayerPosition(restoredTimeline, originalLayer);
     if (originalLayerIndex >= 0) restoredTimeline.currentLayer = originalLayerIndex;
     restoredTimeline.currentFrame = originalFrame;
+    // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
     if (document.selectNone) document.selectNone();
     for (var originalSelectionIndex = 0; originalSelectionIndex < originalSelection.length; originalSelectionIndex++) originalSelection[originalSelectionIndex].selected = true;
   }

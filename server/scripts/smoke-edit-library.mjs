@@ -7,7 +7,16 @@ import { toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
 const editLibrary = toolHandler(registerEditLibrary);
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts tool success and that no operation failed.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     const content = result.structuredContent;
@@ -30,23 +39,37 @@ try {
   throw __error;
 }`,
 });
-if (setup.isError) throw new Error(`Could not prepare linkage smoke document: ${message(setup)}`);
+if (setup.isError) {
+    throw new Error(`Could not prepare linkage smoke document: ${message(setup)}`);
+}
 const documentName = setup.structuredContent?.result;
-if (!documentName) throw new Error(`Setup did not return a document name: ${message(setup)}`);
+if (!documentName) {
+    throw new Error(`Setup did not return a document name: ${message(setup)}`);
+}
 
 const selected = await runJsfl({
     code: `var __smokeName = ${JSON.stringify(documentName)}; var __smokeDoc = null; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __smokeName) __smokeDoc = fl.documents[__index]; __smokeDoc.library.selectNone(); __smokeDoc.library.selectItem("EditLibrarySelectionSmokeSymbol"); __smokeDoc.name;`,
 });
-if (selected.isError) throw new Error(`Could not prepare Library selection: ${message(selected)}`);
+if (selected.isError) {
+    throw new Error(`Could not prepare Library selection: ${message(selected)}`);
+}
 
+/** Verifies an operation preserved the selected Library item.
+ * @param description Operation description for assertion errors.
+ */
 const assertSelectionPreserved = async (description) => {
     const result = await runJsfl({
         code: `var __smokeName = ${JSON.stringify(documentName)}; var __smokeDoc = null; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __smokeName) __smokeDoc = fl.documents[__index]; var __selected = __smokeDoc.library.getSelectedItems(); __selected.length === 1 ? __selected[0].name : "selection count: " + __selected.length;`,
     });
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
-    assert.equal(result.structuredContent?.result, "EditLibrarySelectionSmokeSymbol", `${description} changed Library selection`);
+    assert.equal(
+        result.structuredContent?.result,
+        "EditLibrarySelectionSmokeSymbol",
+        `${description} changed Library selection`,
+    );
 };
 
+let failure;
 try {
     const createdSymbols = verifyTool(
         await editLibrary({
@@ -103,7 +126,10 @@ try {
     console.log("symbol creation, duplication, and usage scan: passed");
 
     const initial = verifyTool(
-        await editLibrary({ document: documentName, ops: [{ op: "getLinkage", item: "EditLibraryLinkageSmokeSymbol" }] }),
+        await editLibrary({
+            document: documentName,
+            ops: [{ op: "getLinkage", item: "EditLibraryLinkageSmokeSymbol" }],
+        }),
         "read default linkage",
     );
     assert.deepEqual(initial.results[0].result, {
@@ -191,9 +217,21 @@ try {
     assert.deepEqual(disabledFirstFrame.results[0].result, disabled.results[0].result);
     await assertSelectionPreserved("disabled first-frame linkage");
     console.log("AS3 linkage read, write, read-back, and disabled defaults: passed");
+} catch (error) {
+    failure = error;
 } finally {
-    const cleanup = await runJsfl({
-        code: `var __closeName = ${JSON.stringify(documentName)}; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __closeName) { fl.documents[__index].close(false); break; } true;`,
-    });
-    if (cleanup.isError) throw new Error(`Could not close disposable linkage smoke document: ${message(cleanup)}`);
+    try {
+        const cleanup = await runJsfl({
+            code: `var __closeName = ${JSON.stringify(documentName)}; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __closeName) { fl.documents[__index].close(false); break; } true;`,
+        });
+        if (cleanup.isError) {
+            const error = new Error(`Could not close disposable linkage smoke document: ${message(cleanup)}`);
+            failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup failed") : error;
+        }
+    } catch (error) {
+        failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup failed") : error;
+    }
+}
+if (failure) {
+    throw failure;
 }

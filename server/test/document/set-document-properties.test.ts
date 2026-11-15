@@ -21,6 +21,13 @@ const jsflParts = {
     "get-document-info": readFileSync(new URL("../../jsfl/document/get-document-info.jsfl", import.meta.url), "utf8"),
 };
 
+/**
+ * Registers a document tool against selected fake globals.
+ * @param register Tool registration function under test
+ * @param globals Animate API globals exposed to JSFL
+ * @param expectedName Expected registered tool name
+ * @returns The captured tool registration
+ */
 function registerTool(
     register: (
         server: McpServer,
@@ -55,6 +62,13 @@ function registerTool(
     return registered;
 }
 
+/**
+ * Creates a fake Flash document with observable stage content.
+ * @param name Document name
+ * @param width Initial document width
+ * @param height Initial document height
+ * @returns Fake document fixture
+ */
 function makeDocument(name: string, width = 550, height = 400) {
     return {
         name,

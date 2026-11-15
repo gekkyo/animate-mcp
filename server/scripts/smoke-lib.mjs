@@ -20,11 +20,15 @@ const MODAL_QUERY = `tell application "System Events"
     return "CLEAR"
 end tell`;
 
+/** Checks macOS accessibility state for an Animate modal dialog or sheet.
+ * @returns Promise resolving to modal state and optional diagnostic reason.
+ */
 async function inspectAnimateModal() {
     if (process.platform !== "darwin") {
         return { state: "unavailable", reason: "macOS System Events is unavailable on this platform" };
     }
     try {
+        // Bound the accessibility probe so a stalled System Events query cannot hang a smoke run.
         const { stdout } = await execFileAsync("osascript", ["-e", MODAL_QUERY], { timeout: 3000, maxBuffer: 4096 });
         switch (stdout.trim()) {
             case "MODAL":
@@ -40,11 +44,17 @@ async function inspectAnimateModal() {
         const reason =
             error?.code === "ETIMEDOUT"
                 ? "osascript timed out after 3000 ms"
-                : String(error?.stderr || error?.message || error).trim().slice(0, 400) || "osascript failed";
+                : String(error?.stderr || error?.message || error)
+                      .trim()
+                      .slice(0, 400) || "osascript failed";
         return { state: "unavailable", reason };
     }
 }
 
+/** Formats a human-readable hint from the Animate modal diagnostic.
+ * @param diagnostic Modal state returned by inspectAnimateModal.
+ * @returns Diagnostic hint text.
+ */
 function modalHint(diagnostic) {
     switch (diagnostic?.state) {
         case "modal":
@@ -60,39 +70,57 @@ function modalHint(diagnostic) {
     }
 }
 
-/** Creates and saves a disposable AS3 document (Test Movie and publish need a saved path).
- * @param runJsfl run_jsfl tool handler
- * @param fileUri file:/// URI of the .fla to create, under a temp dir
- * @param actionScript frame-1 script
- * @returns {Promise<{ name: string, pathURI: string }>} pathURI is Animate's normalized URI (`/Macintosh%20HD` prefix on macOS)
+/** Creates and saves a disposable AS3 document for saved-path smoke operations.
+ * @param runJsfl run_jsfl tool handler.
+ * @param fileUri file URI where the temporary FLA will be saved.
+ * @param actionScript Frame-one ActionScript source.
+ * @returns Promise resolving to the document name and normalized path URI.
  */
 export async function createSavedAs3Document(runJsfl, fileUri, actionScript) {
     const result = await runJsfl({
         code: `(function () { var doc = null, created = false, existing = []; for (var i = 0; i < fl.documents.length; i++) existing.push(fl.documents[i]); try { fl.createDocument("timeline", 550, 400, 24); doc = fl.getDocumentDOM(); var wasExisting = false; for (var j = 0; j < existing.length; j++) if (existing[j] === doc) wasExisting = true; if (!doc || wasExisting) throw new Error("Animate did not create a new document"); created = true; if (doc.type !== "Flash" || String(doc.asVersion).indexOf("3") < 0) throw new Error("Created document is not AS3"); doc.getTimeline().layers[0].frames[0].actionScript = ${JSON.stringify(actionScript)}; if (fl.saveDocument(doc, ${JSON.stringify(fileUri)}) !== true) throw new Error("fl.saveDocument returned false"); if (!doc.name || !doc.pathURI) throw new Error("Saved document has no name or pathURI"); return doc.name + "\\t" + doc.pathURI; } catch (error) { if (created) { try { doc.close(false); } catch (cleanupError) { throw new Error(String(error) + "; closing disposable document also failed: " + String(cleanupError)); } } throw error; } })()`,
     });
-    if (result.isError) throw new Error(result.content?.[0]?.text ?? "run_jsfl failed");
+    if (result.isError) {
+        throw new Error(result.content?.[0]?.text ?? "run_jsfl failed");
+    }
     const value = result.structuredContent?.result;
-    if (typeof value !== "string") throw new Error("Could not read saved document details from Animate");
+    if (typeof value !== "string") {
+        throw new Error("Could not read saved document details from Animate");
+    }
     const separator = value.indexOf("\t");
     const name = value.slice(0, separator);
     const pathURI = value.slice(separator + 1);
-    if (separator < 1 || !pathURI) throw new Error("Animate returned invalid saved document details");
+    if (separator < 1 || !pathURI) {
+        throw new Error("Animate returned invalid saved document details");
+    }
     return { name, pathURI };
 }
 
-/** Closes only the document with this exact pathURI, discarding edits; never touches other documents.
- * @param runJsfl run_jsfl tool handler
- * @param pathURI URI returned by createSavedAs3Document
+/** Closes only the document with this exact path URI, discarding edits.
+ * @param runJsfl run_jsfl tool handler.
+ * @param pathURI Exact URI of the disposable document.
+ * @returns Promise resolving when Animate confirms the document is closed.
  */
 export async function closeDocumentByPath(runJsfl, pathURI) {
-    if (typeof pathURI !== "string" || !pathURI) throw new Error("A document pathURI is required for cleanup");
+    if (typeof pathURI !== "string" || !pathURI) {
+        throw new Error("A document pathURI is required for cleanup");
+    }
     const result = await runJsfl({
         code: `(function () { var hits = []; for (var i = 0; i < fl.documents.length; i++) if (fl.documents[i].pathURI === ${JSON.stringify(pathURI)}) hits.push(fl.documents[i]); if (hits.length !== 1) throw new Error("Expected exactly one disposable document at pathURI; found " + hits.length); hits[0].close(false); for (var j = 0; j < fl.documents.length; j++) if (fl.documents[j].pathURI === ${JSON.stringify(pathURI)}) throw new Error("Disposable document remained open after close"); return true; })()`,
     });
-    if (result.isError) throw new Error(result.content?.[0]?.text ?? "run_jsfl failed while closing disposable document");
-    if (result.structuredContent?.result !== true) throw new Error("Animate did not confirm disposable document cleanup");
+    if (result.isError) {
+        throw new Error(result.content?.[0]?.text ?? "run_jsfl failed while closing disposable document");
+    }
+    if (result.structuredContent?.result !== true) {
+        throw new Error("Animate did not confirm disposable document cleanup");
+    }
 }
 
+/** Registers a tool with a real-Animate runner and augments timeout errors with modal diagnostics.
+ * @param register Tool registration function.
+ * @param checkModal Function that reports Animate modal state.
+ * @returns Async handler for the registered tool.
+ */
 export function toolHandler(register, checkModal = inspectAnimateModal) {
     const runner = createRunner({
         dir: `${process.env.HOME}/.animate-mcp/runs`,

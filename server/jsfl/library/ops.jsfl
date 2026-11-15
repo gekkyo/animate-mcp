@@ -21,6 +21,11 @@
     var item = findLibraryItem(path), usages = [];
     if (!item) throw new Error("Library item not found: " + path);
 
+    /** Collects direct placements of the requested item on one timeline.
+     * @param timeline Timeline to scan.
+     * @param timelineName Name or index used in usage results.
+     * @returns Nothing.
+     */
     function scanTimeline(timeline, timelineName) {
       for (var layerIndex = 0; layerIndex < timeline.layers.length; layerIndex++) {
         var layer = timeline.layers[layerIndex];
@@ -51,6 +56,7 @@
       var symbol = libraryItems[itemIndex];
       if (symbol.itemType !== "movie clip" && symbol.itemType !== "button" && symbol.itemType !== "graphic") continue;
       libraryChanged = true;
+      // Entering each symbol timeline enables direct placement scanning; the caller restores edit state.
       document.library.editItem(symbol.name);
       scanTimeline(document.getTimeline(), symbol.name);
     }
@@ -103,7 +109,9 @@
     }
     if (copies.length !== 1) throw new Error("Could not identify the duplicated Library item: " + op.item);
     try {
-      withSelectedLibraryItem(copies[0], function () {
+      withSelectedLibraryItem(copies[0], /** Renames the duplicate while it is selected.
+       * @returns Nothing.
+       */ function () {
         document.library.renameItem(op.newName, copies[0].name);
       });
       if (!document.library.itemExists(targetPath)) throw new Error("Library item rename failed: " + targetPath);
@@ -223,7 +231,10 @@
         throw new Error("setLinkage requires at least one linkage setting");
       }
     }
-    return withSelectedLibraryItem(item, function () {
+    return withSelectedLibraryItem(item, /** Reads or updates linkage while the target item is selected.
+     * @returns The linkage values after the requested operation.
+     */
+    function () {
       var current = readLibraryLinkage(item);
       if (!set) {
         return current;

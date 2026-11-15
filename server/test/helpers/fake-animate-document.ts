@@ -31,6 +31,10 @@ const doc = (documentName, documentType) => {
     makeKeyframe(0, 2, { actionScript: process.env.FAKE_SCRIPT ?? "stop();\\n// 日本語", elements: [makeInstance("hero", Number(process.env.FAKE_INITIAL_X ?? 0))] }),
     makeKeyframe(2, 3, { name: "end", ...(process.env.FAKE_TWEEN ? { tweenType: process.env.FAKE_TWEEN } : {}), elements: [makeInstance(process.env.FAKE_INSTANCE_CONTINUES ? "hero" : "", Number(process.env.FAKE_INITIAL_X ?? 0))] }),
   ];
+  if (process.env.FAKE_AUDIT_FIXTURES) {
+    sceneFrames[0].soundLibraryItem = { name: "Sound", itemType: "sound" };
+    sceneFrames[0].elements.push(makeInstance("nested-symbol", 1, { name: "Folder/Symbol 3", itemType: "graphic" }));
+  }
   if (process.env.FAKE_FRAME_COUNT !== undefined && sceneFrames.length > 1) {
     sceneFrames[1].duration = Number(process.env.FAKE_FRAME_COUNT) - sceneFrames[0].duration;
   }
@@ -54,7 +58,14 @@ const doc = (documentName, documentType) => {
   });
   const sceneLayers = [layer("a/b", expand(sceneFrames), "normal", Boolean(process.env.FAKE_LOCK_DISTRIBUTE)),
     ...(process.env.FAKE_SECOND_LAYER ? [layer(process.env.FAKE_SECOND_LAYER, expand([secondFrame]))] : []),
+    ...(process.env.FAKE_AUDIT_FIXTURES ? [layer("Layer 1", expand([makeKeyframe(0, 5)]))] : []),
+    ...(process.env.FAKE_AUDIT_FIXTURES ? [layer("レイヤー 2", expand([makeKeyframe(0, 5, { elements: [makeInstance("occupied", 1)] })]))] : []),
     layer("dir", [], "folder")];
+  if (process.env.FAKE_AUDIT_FIXTURES) {
+    const audioOnlyLayer = layer("Audio only", expand([makeKeyframe(0, 1)]));
+    audioOnlyLayer.frames[0].soundLibraryItem = { name: "Sound", itemType: "sound" };
+    sceneLayers.push(audioOnlyLayer);
+  }
   if (process.env.FAKE_INNER_KEYFRAME) sceneLayers[0].frames[3] = makeKeyframe(3, 1);
   if (process.env.FAKE_AS_LAYER) {
     sceneLayers.unshift(layer(process.env.FAKE_AS_LAYER, expand([makeKeyframe(0, 5)]), "normal", Boolean(process.env.FAKE_LOCK_AS)));
@@ -63,8 +74,12 @@ const doc = (documentName, documentType) => {
   if (process.env.FAKE_INITIAL_CURRENT_LAYER !== undefined) sceneTimeline.currentLayer = Number(process.env.FAKE_INITIAL_CURRENT_LAYER);
   if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
   if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
-  const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href, width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, backgroundColor: "#FFFFFF", currentTimeline: 0, timelines: [sceneTimeline],
-    /** Simulates Test Movie while preserving the Output panel for the next Run. */
+  const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : (process.env.FAKE_VOLUME_URI ? pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href.replace("file:///", "file:///Macintosh%20HD/") : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href), width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, backgroundColor: "#FFFFFF", currentTimeline: 0, timelines: [sceneTimeline],
+    /**
+     * Simulates Test Movie while preserving the Output panel for the next Run.
+     * @param abortOnErrors Whether compilation errors should prevent launching the player
+     * @returns Nothing
+     */
     testMovie(abortOnErrors) {
       if (abortOnErrors !== true) throw new Error("Test Movie must abort on compiler errors");
       const compileError = Boolean(process.env.FAKE_TEST_MOVIE_COMPILE_ERROR);
@@ -74,7 +89,13 @@ const doc = (documentName, documentType) => {
       const runtimeOutput = compileError ? "" : process.env.FAKE_TEST_MOVIE_OUTPUT ?? "";
       writeFileSync(outputPath, output + (output && runtimeOutput ? "\\n" : "") + runtimeOutput);
     },
-    /** Writes a small PNG fixture for capture_frame tests. */
+    /**
+     * Writes a small PNG fixture for capture_frame tests.
+     * @param uri Destination file URI
+     * @param useCurrentSettings Whether to use current export settings
+     * @param currentFrameOnly Whether to capture only the current frame
+     * @returns Whether the fake export succeeded
+     */
     exportPNG(uri, useCurrentSettings, currentFrameOnly) {
       logCapture(JSON.stringify({ uri, useCurrentSettings, currentFrameOnly, frame: this.getTimeline().currentFrame }));
       if (process.env.FAKE_EXPORT_FALSE) return false;
@@ -247,7 +268,7 @@ if (!src.includes("HANG")) runInNewContext(src, {
      * @param uri Document URI
      * @returns The corresponding platform path
      */
-    uriToPlatformPath: (uri) => fileURLToPath(uri),
+     uriToPlatformPath: (uri) => fileURLToPath(process.env.FAKE_VOLUME_URI ? uri.replace("file:///Macintosh%20HD/", "file:///") : uri),
     /**
      * Writes content to a fake Animate file path.
      * @param path Destination path

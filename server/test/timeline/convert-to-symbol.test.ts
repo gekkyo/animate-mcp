@@ -12,6 +12,12 @@ const jsflParts = {
     "convert-to-symbol": readFileSync(new URL("../../jsfl/timeline/convert-to-symbol.jsfl", import.meta.url), "utf8"),
 };
 
+/**
+ * Register the tool against a minimal server and capture its bundle requests.
+ * @param runner Executes generated JSFL and returns its result.
+ * @param bundle Supplies the JSFL source bundle.
+ * @returns The registered tool and requested bundle names.
+ */
 function register(
     runner: { execute: (code: string) => Promise<unknown> },
     bundle: (...names: string[]) => string = () => "/* tool bundle */",
@@ -46,6 +52,11 @@ function register(
     return { tool: registered, bundleNames };
 }
 
+/**
+ * Build an Animate-like fixture for exercising the bundled JSFL.
+ * @param tweenInterior Whether the selected frame lies inside a tween span.
+ * @returns The registered app and mutable document fixture state.
+ */
 function setupAnimate(tweenInterior = false) {
     const targetA = { name: "targetA", elementType: "instance", selected: false };
     const targetB = { name: "targetB", elementType: "shape", selected: false };
@@ -56,6 +67,7 @@ function setupAnimate(tweenInterior = false) {
     const timeline = {
         currentLayer: 1,
         currentFrame: 1,
+        // Include duplicate layer indexes to exercise exact selection snapshot restoration.
         selectedFrames: [1, 1, 2],
         layers: [
             {
@@ -87,6 +99,7 @@ function setupAnimate(tweenInterior = false) {
             }
         },
     };
+    // Keep the original selection deliberately nontrivial to verify restoration.
     const libraryItems: { name: string; itemType: string }[] = [];
     let conversionCalls = 0;
     const document = {
@@ -266,6 +279,7 @@ test("convert_to_symbol executes bundled JSFL, converts elements across layers, 
     assert.equal(app.timeline.currentFrame, 1);
     assert.equal(app.timeline.currentLayer, 1);
     assert.deepEqual(app.timeline.getSelectedFrames(), [1, 1, 2]);
+    // The helper must restore pre-existing selection even though conversion temporarily selects targets.
     assert.equal(app.previousSelection.selected, true);
 });
 

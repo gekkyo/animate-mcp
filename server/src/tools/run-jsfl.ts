@@ -19,6 +19,11 @@ export const runJsflTool: ToolDefinition<typeof RUN_JSFL_INPUT> = {
     guidance: {
         notes: "- When a script fails with a null error, first check the layer's frame length and instance names with run_jsfl.\n- If you add debug traces, always remove them after checking and Apply again.\n- run_jsfl runs arbitrary code. Ask the user before any operation that modifies the document.",
     },
+    /** Executes arbitrary JSFL and returns Animate's result.
+     * @param args Validated JSFL input
+     * @param deps Tool runtime dependencies
+     * @returns Structured result and its text representation
+     */
     run: async ({ code }: Parameters<ToolCallback<typeof RUN_JSFL_INPUT>>[0], deps: ToolDeps) => {
         const { runner } = deps;
 
@@ -27,6 +32,11 @@ export const runJsflTool: ToolDefinition<typeof RUN_JSFL_INPUT> = {
     },
 };
 
+/** Registers the run_jsfl tool without requiring a JSFL bundle provider.
+ * @param server MCP server to register against
+ * @param deps Runner dependency
+ * @returns Nothing.
+ */
 export function registerRunJsfl(server: McpServer, deps: Pick<ToolDeps, "runner">): void {
     registerToolDefinition(server, runJsflTool, { ...deps, bundle: () => "" });
 }

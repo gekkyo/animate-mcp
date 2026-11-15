@@ -88,6 +88,14 @@ export const editElementsTool: ToolDefinition<typeof EDIT_ELEMENTS_INPUT> = {
     guidance: {
         basic: "- Use edit_elements to set instance properties on keyframes; tween interiors are refused, and the .fla is not saved.",
     },
+    /**
+     * Applies symbol-instance edits to the selected timeline.
+     * @param timeline Scene index or Library item path.
+     * @param document Optional document selector.
+     * @param ops Element operations to apply.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns The number of applied operations and updated element details.
+     */
     run: async (
         { timeline, document, ops }: Parameters<ToolCallback<typeof EDIT_ELEMENTS_INPUT>>[0],
         deps: ToolDeps,
@@ -107,6 +115,11 @@ export const editElementsTool: ToolDefinition<typeof EDIT_ELEMENTS_INPUT> = {
     },
 };
 
+/**
+ * Registers the edit_elements tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerEditElements(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, editElementsTool, deps);
 }

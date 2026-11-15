@@ -6,6 +6,10 @@ export const JSFL_FILES: Record<string, { path: string; deps: string[] }> = {
     "export-common": { path: "shared/export-common.jsfl", deps: [] },
     "document-runtime-info": { path: "document/document-runtime-info.jsfl", deps: [] },
     "get-document-info": { path: "document/get-document-info.jsfl", deps: ["export-common", "document-runtime-info"] },
+    "audit-document": {
+        path: "document/audit-document.jsfl",
+        deps: ["select-document", "edit-state", "export-common"],
+    },
     "export-scenes": { path: "scripts/export-scenes.jsfl", deps: ["select-document", "edit-state", "export-common"] },
     "export-library": { path: "scripts/export-library.jsfl", deps: ["select-document", "edit-state", "export-common"] },
     "apply-scenes": { path: "scripts/apply-scenes.jsfl", deps: ["select-document", "edit-state", "export-common"] },
@@ -62,6 +66,7 @@ export const JSFL_FILES: Record<string, { path: string; deps: string[] }> = {
 /**
  * Looks up a bundle name in the mapping.
  * @param name JSFL bundle name (e.g. "get-document-info")
+ * @param files Bundle mapping to search
  * @returns The mapped path and dependencies
  */
 function jsflFile(name: string, files = JSFL_FILES) {
@@ -83,10 +88,15 @@ export const loadJsfl = (name: string) =>
 /**
  * Resolves requested bundles and dependencies in stable topological order.
  * @param names JSFL bundle names (shared parts first, then tool-specific parts)
+ * @param files Bundle mapping whose dependencies should be resolved
  * @returns Ordered bundle names
  */
 export function resolveBundleNames(names: string[], files = JSFL_FILES): string[] {
     const included = new Set<string>();
+    /** Adds a bundle and all of its dependencies to the requested set.
+     * @param name Bundle name to include
+     * @returns Nothing.
+     */
     const include = (name: string) => {
         if (included.has(name)) {
             return;
@@ -101,6 +111,7 @@ export function resolveBundleNames(names: string[], files = JSFL_FILES): string[
     const remaining = new Set(included);
     const ordered: string[] = [];
     while (remaining.size) {
+        // Preserve mapping order while selecting only bundles whose dependencies are already emitted.
         const next = Object.keys(files).find(
             (name) =>
                 remaining.has(name) && jsflFile(name, files).deps.every((dependency) => !remaining.has(dependency)),
@@ -114,10 +125,18 @@ export function resolveBundleNames(names: string[], files = JSFL_FILES): string[
     return ordered;
 }
 
-/** Concatenates requested JSFL parts with their dependencies. */
+/** Concatenates requested JSFL parts with their dependencies.
+ * @param names JSFL bundle names to include
+ * @returns Combined JSFL source
+ */
 export const bundle = (...names: string[]) => resolveBundleNames(names).map(loadJsfl).join("\n");
 
-/** Serializes JSFL variables before concatenating the requested bundle. */
+/** Serializes JSFL variables before concatenating the requested bundle.
+ * @param names Bundle name or names to include
+ * @param vars Variables to declare before the bundle
+ * @param bundleFn Bundle source loader
+ * @returns JSFL source containing declarations and bundle code
+ */
 export function jsflRun(
     names: string | string[],
     vars: Record<string, unknown>,

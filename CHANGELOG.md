@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.0
+
+### Added
+
+- Added `audit_document` to suggest unused Library items, empty keyframes, and default-looking names. Findings are review hints, not proof that items are safe to delete.
+- Added `diff_captures` to compare two captured PNGs and report changed pixels with a highlighted difference image.
+- Added `verify_canvas_output` to publish HTML5 Canvas output, check it in Chrome for loading errors, and capture a screenshot. Publishing is the default and overwrites existing outputs; use `publish: false` to check existing output.
+- Added a tool reference in English and Japanese (`TOOLS.md` and `TOOLS.ja.md`) and included both in the npm package.
+
+### Changed
+
+- `publish` distinguishes verified AS3 compiler diagnostics from unavailable output and unchecked Canvas output; an empty error list does not always prove a clean build.
+- `audit_document` accepts an optional document selector when multiple documents are open.
+- Updated both READMEs with usage examples, architecture diagrams, and smoke-test instructions.
+
+### Fixed
+
+- Timeline edits report partial failures and restore the original layer by identity rather than by stale index.
+- Canvas verification uses platform-native paths and ignores the browser's favicon 404.
+
 ## 0.1.9
 
 ### Added

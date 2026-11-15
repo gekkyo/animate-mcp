@@ -1,19 +1,33 @@
 // Real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-edit-text.mjs`.
 // Creates and closes disposable AS3 and HTML5 Canvas documents; Animate must be running.
 import assert from "node:assert/strict";
+import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
 import { registerEditText } from "../dist/tools/timeline/edit-text.js";
 import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
 import { toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
 const editText = toolHandler(registerEditText);
 const inspectTimeline = toolHandler(registerInspectTimeline);
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts a successful tool response and returns its structured payload.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     return result.structuredContent;
 };
+/** Asserts that a tool response is a refusal matching the expected message.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @param expectedMessage Expected error-message pattern.
+ */
 const expectRefusal = (result, description, expectedMessage) => {
     assert.equal(result.isError, true, `${description} was not refused`);
     assert.match(message(result), expectedMessage, `${description} returned an unexpected error`);
@@ -47,9 +61,13 @@ const setup = await runJsfl({
   }
 })()`,
 });
-if (setup.isError) throw new Error(`Could not prepare text smoke documents: ${message(setup)}`);
+if (setup.isError) {
+    throw new Error(`Could not prepare text smoke documents: ${message(setup)}`);
+}
 const names = String(setup.structuredContent?.result ?? "").split("\t");
-if (names.length !== 2 || names.some((name) => !name)) throw new Error(`Setup returned invalid document names: ${message(setup)}`);
+if (names.length !== 2 || names.some((name) => !name)) {
+    throw new Error(`Setup returned invalid document names: ${message(setup)}`);
+}
 const [as3Document, canvasDocument] = names;
 let failure;
 
@@ -134,13 +152,21 @@ try {
     );
     assert.equal(as3Inspect.layers[0].locked, true, "AS3 text tool did not restore the layer lock");
     assert.equal(as3Inspect.layers[0].elements[0].text, "Updated AS3");
-    assert.equal(as3Inspect.layers[0].elements[1].style.lineType, null, "static text lineType was not safely reported as null");
+    assert.equal(
+        as3Inspect.layers[0].elements[1].style.lineType,
+        null,
+        "static text lineType was not safely reported as null",
+    );
     console.log("PASS AS3 dynamic lineType add/set, static lineType refusal/read-back, and locked-layer restoration.");
 
     const canvasActivation = await runJsfl({
         code: `(function () { var docs = fl.documents || [], doc = null; for (var i = 0; i < docs.length; i++) if (docs[i].name === ${JSON.stringify(canvasDocument)}) doc = docs[i]; if (!doc || doc.type !== "htmlcanvas") throw new Error("Disposable Canvas document not found"); fl.setActiveWindow(doc); return doc.name; })()`,
     });
-    assert.equal(canvasActivation.structuredContent?.result, canvasDocument, `Could not activate Canvas document: ${message(canvasActivation)}`);
+    assert.equal(
+        canvasActivation.structuredContent?.result,
+        canvasDocument,
+        `Could not activate Canvas document: ${message(canvasActivation)}`,
+    );
 
     const canvasAdded = verifyTool(
         await editText({
@@ -153,7 +179,13 @@ try {
                     frame: 1,
                     rectangle: { left: 30, top: 40, right: 250, bottom: 100 },
                     text: "Canvas text",
-                    style: { face: "Arial", size: 20, fillColor: "#654321", textType: "dynamic", lineType: "multiline" },
+                    style: {
+                        face: "Arial",
+                        size: 20,
+                        fillColor: "#654321",
+                        textType: "dynamic",
+                        lineType: "multiline",
+                    },
                 },
             ],
         }),
@@ -212,9 +244,13 @@ try {
     });
     if (cleanup.isError || cleanup.structuredContent?.result !== 2) {
         const cleanupError = new Error(`Could not close disposable text smoke documents: ${message(cleanup)}`);
-        failure = failure ? new AggregateError([failure, cleanupError], "Smoke test and cleanup both failed") : cleanupError;
+        failure = failure
+            ? new AggregateError([failure, cleanupError], "Smoke test and cleanup both failed")
+            : cleanupError;
     }
 }
 
-if (failure) throw failure;
+if (failure) {
+    throw failure;
+}
 console.log(`Text smoke passed (closed disposable documents ${as3Document} and ${canvasDocument}).`);

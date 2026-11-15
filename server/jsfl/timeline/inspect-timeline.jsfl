@@ -1,7 +1,10 @@
 // `var __docName`, `var __timelineRef`, `var __layers`, and `var __frame` are injected before this file.
+/** Inspects selected timeline layers and serializes their structure.
+ * @returns The serialized timeline inspection.
+ */
 (function () {
   var document = selectDocument(), timeline = null, originalTimeline = document.getTimeline();
-  var originalLayer = originalTimeline.currentLayer;
+  var originalLayerIndex = originalTimeline.currentLayer, originalLayer = originalTimeline.layers[originalLayerIndex];
   var originalFrame = originalTimeline.currentFrame, originalSelectedFrames = originalTimeline.getSelectedFrames ? originalTimeline.getSelectedFrames() : null;
   var resultLayers = [], restoreWarning = '';
   var targetSelectedFramesAfter = null;
@@ -45,6 +48,10 @@
     return 'none';
   }
 
+  /** Reads an element and includes text content and style when applicable.
+   * @param element Timeline element to read.
+   * @returns Normalized element data.
+   */
   function readTimelineElement(element) {
     var result = readElement(element);
     if (element.elementType === 'text') {
@@ -60,6 +67,7 @@
    * @returns Motion keyframes with 1-based frame positions and property values.
    */
   function readMotionKeyframes(frame, startFrame) {
+    // Animate exposes motion XML only when its owning span is selected.
     timeline.setSelectedFrames(startFrame, startFrame + 1);
     var xml = String(frame.getMotionObjectXML()), timeScaleMatch = xml.match(/TimeScale="([0-9]+)"/);
     var timeScale = timeScaleMatch ? Number(timeScaleMatch[1]) : 24000;
@@ -70,6 +78,7 @@
         var timeMatch = keyframeMatch[1].match(/timevalue="([^"]+)"/), anchorMatch = keyframeMatch[1].match(/anchor="[^,]*,([^"]+)"/);
         var valueMatch = keyframeMatch[1].match(/value="([^"]+)"/);
         var time = timeMatch ? Number(timeMatch[1]) : 0;
+        // Convert Animate's motion time units to the public 1-based frame numbering.
         var frameNumber = startFrame + Math.round(time * (document.frameRate || 24) / timeScale) + 1;
         var value = anchorMatch ? anchorMatch[1] : valueMatch ? valueMatch[1] : '';
         if (!channels[frameNumber]) channels[frameNumber] = { frame: frameNumber, values: {} };
@@ -137,7 +146,11 @@
 
   var session = null;
   try {
-    session = withTimelineEdit(document, __timelineRef, function (targetTimeline) {
+    session = withTimelineEdit(document, __timelineRef, /** Inspects the requested layers and frame in the target timeline.
+     * @param targetTimeline Timeline selected for inspection.
+     * @returns The inspected layer data.
+     */
+    function (targetTimeline) {
     timeline = targetTimeline;
     var indexes = requestedLayerIndexes(), frameIndex = __frame - 1;
     for (var requestIndex = 0; requestIndex < indexes.length; requestIndex++) resultLayers.push(inspectLayer(indexes[requestIndex], frameIndex));
@@ -146,9 +159,11 @@
     });
   } finally {
     var restoredTimeline = document.getTimeline();
-    if (originalLayer < restoredTimeline.layers.length) restoredTimeline.currentLayer = originalLayer;
     if (originalSelectedFrames && restoredTimeline.setSelectedFrames) restoredTimeline.setSelectedFrames(originalSelectedFrames);
-    if (originalLayer < restoredTimeline.layers.length) restoredTimeline.currentLayer = originalLayer;
+    // Restore by layer object identity because the target operation may reorder layers.
+    var restoredLayerIndex = editLayerPosition(restoredTimeline, originalLayer);
+    if (restoredLayerIndex >= 0) restoredTimeline.currentLayer = restoredLayerIndex;
+    else if (restoredTimeline.layers.length) restoredTimeline.currentLayer = Math.max(0, Math.min(originalLayerIndex, restoredTimeline.layers.length - 1));
     restoredTimeline.currentFrame = originalFrame;
   }
   if (timeline !== originalTimeline && targetSelectedFramesAfter && timeline.setSelectedFrames) timeline.setSelectedFrames(targetSelectedFramesAfter);

@@ -1,27 +1,27 @@
 // Disposable real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-canvas.mjs`.
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { registerApplyScripts } from "../dist/tools/scripts/apply-scripts.js";
-import { registerCaptureFrame } from "../dist/tools/output/capture-frame.js";
 import { registerCloseDocument } from "../dist/tools/document/close-document.js";
-import { registerConvertToSymbol } from "../dist/tools/timeline/convert-to-symbol.js";
-import { registerEditElements } from "../dist/tools/timeline/edit-elements.js";
-import { registerEditLibrary } from "../dist/tools/library/edit-library.js";
-import { registerEditTimeline } from "../dist/tools/timeline/edit-timeline.js";
-import { registerEditTween } from "../dist/tools/timeline/edit-tween.js";
-import { registerExportScripts } from "../dist/tools/scripts/export-scripts.js";
 import { registerGetDocumentInfo } from "../dist/tools/document/get-document-info.js";
-import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
-import { registerInstallGreensock } from "../dist/tools/scripts/install-greensock.js";
 import { registerOpenDocument } from "../dist/tools/document/open-document.js";
+import { registerSaveDocument } from "../dist/tools/document/save-document.js";
+import { registerEditLibrary } from "../dist/tools/library/edit-library.js";
+import { registerCaptureFrame } from "../dist/tools/output/capture-frame.js";
 import { registerPublish } from "../dist/tools/output/publish.js";
 import { registerReadOutput } from "../dist/tools/output/read-output.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
-import { registerSaveDocument } from "../dist/tools/document/save-document.js";
 import { registerTestMovie } from "../dist/tools/output/test-movie.js";
+import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
+import { registerApplyScripts } from "../dist/tools/scripts/apply-scripts.js";
+import { registerExportScripts } from "../dist/tools/scripts/export-scripts.js";
+import { registerInstallGreensock } from "../dist/tools/scripts/install-greensock.js";
+import { registerConvertToSymbol } from "../dist/tools/timeline/convert-to-symbol.js";
+import { registerEditElements } from "../dist/tools/timeline/edit-elements.js";
+import { registerEditTimeline } from "../dist/tools/timeline/edit-timeline.js";
+import { registerEditTween } from "../dist/tools/timeline/edit-tween.js";
+import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
 import { closeDocumentByPath, toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
@@ -43,12 +43,27 @@ const readOutput = toolHandler(registerReadOutput);
 const testMovie = toolHandler(registerTestMovie);
 const installGreensock = toolHandler(registerInstallGreensock);
 
+/** Extracts the first text result from a tool response.
+ * @param result Tool response.
+ * @returns Text content or an empty string.
+ */
 const message = (result) => result.content?.find((item) => item.type === "text")?.text ?? "";
+/** Asserts a successful tool response and returns its structured payload.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Structured tool response.
+ */
 const verifyTool = (result, description) => {
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     assert.ok(result.structuredContent, `${description} returned no structured content`);
     return result.structuredContent;
 };
+/** Asserts that a tool response is a refusal matching the expected message.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @param expectedMessage Expected error-message pattern.
+ * @returns Refusal message text.
+ */
 const expectRefusal = (result, description, expectedMessage) => {
     assert.equal(result.isError, true, `${description} was not refused`);
     const text = message(result);
@@ -56,6 +71,11 @@ const expectRefusal = (result, description, expectedMessage) => {
     console.log(`PASS ${description}: ${text}`);
     return text;
 };
+/** Asserts that a Library operation was refused for the expected Canvas limitation.
+ * @param result Tool response.
+ * @param description Operation description for assertion errors.
+ * @returns Refusal message text.
+ */
 const expectLibraryRefusal = (result, description) => {
     let text;
     if (result.isError) {
@@ -65,15 +85,28 @@ const expectLibraryRefusal = (result, description) => {
         assert.ok(failure, `${description} was not refused`);
         text = failure.error;
     }
-    assert.equal(text, "AS3 linkage is supported only for Flash/AS3 documents", `${description} returned an unexpected error`);
+    assert.equal(
+        text,
+        "AS3 linkage is supported only for Flash/AS3 documents",
+        `${description} returned an unexpected error`,
+    );
     console.log(`PASS ${description}: ${text}`);
     return text;
 };
+/** Runs JSFL and returns its result after checking for tool errors.
+ * @param code JSFL source to execute.
+ * @param description Operation description for assertion errors.
+ * @returns JSFL result value.
+ */
 const runValue = async (code, description) => {
     const result = await runJsfl({ code });
     assert.equal(result.isError, undefined, `${description}: ${message(result)}`);
     return result.structuredContent?.result;
 };
+/** Reads open Animate documents as sorted name/path rows.
+ * @param description Operation description for assertion errors.
+ * @returns Promise resolving to document rows.
+ */
 const documentRows = async (description) => {
     const result = await runValue(
         `var __smokeDocuments = fl.documents || []; var __smokeRows = []; for (var __i = 0; __i < __smokeDocuments.length; __i++) __smokeRows.push(__smokeDocuments[__i].name + "\\t" + (__smokeDocuments[__i].pathURI || "")); __smokeRows.join("\\n");`,
@@ -82,6 +115,11 @@ const documentRows = async (description) => {
     assert.equal(typeof result, "string", `${description} returned invalid document details`);
     return result ? result.split("\n").sort() : [];
 };
+/** Removes expected rows from a copy, failing if any expected row is missing.
+ * @param rows Original document rows.
+ * @param expected Rows that must be present and removed.
+ * @returns Remaining sorted rows.
+ */
 const withoutRows = (rows, expected) => {
     const remaining = [...rows];
     for (const row of expected) {
@@ -91,15 +129,28 @@ const withoutRows = (rows, expected) => {
     }
     return remaining.sort();
 };
+/** Recursively lists files beneath a directory.
+ * @param directory Directory to scan.
+ * @returns Promise resolving to file paths.
+ */
 const findFiles = async (directory) => {
     const files = [];
     for (const entry of await readdir(directory, { withFileTypes: true })) {
         const path = join(directory, entry.name);
-        if (entry.isDirectory()) files.push(...(await findFiles(path)));
-        else if (entry.isFile()) files.push(path);
+        if (entry.isDirectory()) {
+            files.push(...(await findFiles(path)));
+        } else if (entry.isFile()) {
+            files.push(path);
+        }
     }
     return files;
 };
+/** Inspects one layer at a specific frame in the main timeline.
+ * @param document Animate document name.
+ * @param layer Layer name.
+ * @param frame One-based frame number.
+ * @returns Inspected layer data.
+ */
 const inspect = async (document, layer, frame) =>
     verifyTool(
         await inspectTimeline({ timeline: 0, document, layers: [layer], frame }),
@@ -120,17 +171,28 @@ let tweenApplied = false;
 
 try {
     initialDocuments = await documentRows("read initial document list");
-    assert.ok(initialDocuments.length > 0, "Animate must already have the user's documents open; refusing to run in an empty session");
+    assert.ok(
+        initialDocuments.length > 0,
+        "Animate must already have the user's documents open; refusing to run in an empty session",
+    );
     console.log(`Initial documents (${initialDocuments.length}): ${initialDocuments.join(" | ")}`);
 
     const created = verifyTool(await openDocument({ type: "htmlcanvas" }), "create disposable HTML5 Canvas document");
     assert.equal(created.path, null, "new Canvas document unexpectedly has a saved path");
     assert.ok(created.name, "open_document returned no document name");
-    assert.ok(!initialDocuments.some((row) => row.startsWith(`${created.name}\t`)), "new document name conflicts with an existing open document");
+    assert.ok(
+        !initialDocuments.some((row) => row.startsWith(`${created.name}\t`)),
+        "new document name conflicts with an existing open document",
+    );
     documentNameForCleanup.value = created.name;
-    assert.deepEqual(withoutRows(await documentRows("verify created Canvas document"), initialDocuments), [`${created.name}\t`]);
+    assert.deepEqual(withoutRows(await documentRows("verify created Canvas document"), initialDocuments), [
+        `${created.name}\t`,
+    ]);
 
-    const saved = verifyTool(await saveDocument({ document: created.name, path: flaPath }), "save disposable Canvas FLA");
+    const saved = verifyTool(
+        await saveDocument({ document: created.name, path: flaPath }),
+        "save disposable Canvas FLA",
+    );
     savedPath = saved.path;
     assert.ok(savedPath, "save_document returned no path");
     const savedFile = await stat(flaPath);
@@ -174,8 +236,14 @@ try {
         await inspectTimeline({ timeline: 0, document: documentName, frame: 1 }),
         "inspect initial Canvas layers",
     ).layers;
-    assert.ok(initialLayers.some((layer) => layer.name === tweenLayerName), "tween layer was not added");
-    assert.ok(initialLayers.some((layer) => layer.name === actionsLayerName), "actions layer was not added");
+    assert.ok(
+        initialLayers.some((layer) => layer.name === tweenLayerName),
+        "tween layer was not added",
+    );
+    assert.ok(
+        initialLayers.some((layer) => layer.name === actionsLayerName),
+        "actions layer was not added",
+    );
     const tweenLayer = initialLayers.find((layer) => layer.name === tweenLayerName);
     assert.ok(tweenLayer, "could not locate the new tween layer");
 
@@ -292,10 +360,16 @@ try {
     assert.equal(tweenFrame1.elements[0].name, "CanvasSmokeInstance");
     assert.equal(tweenFrame1.elements[0].libraryItem, "CanvasSmokeRenamedSymbol");
     if (tweenApplied) {
-        assert.ok(tweenFrame1.spans.some((span) => span.tweenType === "classic"), "Canvas classic tween is absent from inspection");
+        assert.ok(
+            tweenFrame1.spans.some((span) => span.tweenType === "classic"),
+            "Canvas classic tween is absent from inspection",
+        );
     }
     const actionsFrame2 = await inspect(documentName, actionsLayerName, 2);
-    assert.ok(actionsFrame2.spans.some((span) => span.start === 2), "inserted Canvas actions keyframe is missing");
+    assert.ok(
+        actionsFrame2.spans.some((span) => span.start === 2),
+        "inserted Canvas actions keyframe is missing",
+    );
     console.log("PASS inspect_timeline: Canvas instance, renamed Library item, and keyframes verified.");
 
     const exported = verifyTool(
@@ -312,7 +386,10 @@ try {
     const scriptFile = join(exportDir, scene.dir, actionsMapping.dir, "1.js");
     await mkdir(dirname(scriptFile), { recursive: true });
     await writeFile(scriptFile, actionScript);
-    const applied = verifyTool(await applyScripts({ dir: exportDir, document: documentName }, { _meta: {} }), "apply_scripts Canvas frame script");
+    const applied = verifyTool(
+        await applyScripts({ dir: exportDir, document: documentName }, { _meta: {} }),
+        "apply_scripts Canvas frame script",
+    );
     assert.deepEqual(applied.failed, [], `apply_scripts failed: ${JSON.stringify(applied.failed)}`);
     const actionScriptCheck = await runValue(
         `(function () { var __doc = null, __docs = fl.documents || []; for (var __i = 0; __i < __docs.length; __i++) if (__docs[__i].pathURI === ${JSON.stringify(savedPath)}) __doc = __docs[__i]; if (!__doc || __doc.type !== "htmlcanvas") throw new Error("Saved Canvas document not found"); var __timeline = __doc.timelines[0], __found = null; for (__i = 0; __i < __timeline.layers.length; __i++) if (__timeline.layers[__i].name === ${JSON.stringify(actionsLayerName)}) __found = __timeline.layers[__i]; if (!__found || String(__found.frames[0].actionScript) !== ${JSON.stringify(actionScript)}) throw new Error("Canvas frame script did not apply"); return String(__found.frames[0].actionScript); })()`,
@@ -335,12 +412,18 @@ try {
     assert.equal(published.compilerOutput, "not_checked", "Canvas publish compilerOutput should be not_checked");
     const publishFiles = (await findFiles(outDir)).filter((path) => /\.(?:html|js)$/i.test(path));
     assert.ok(publishFiles.length > 0, "Canvas publish produced no HTML/JS output in the disposable directory");
-    console.log(`PASS publish: ok=${published.ok}, compilerOutput=${published.compilerOutput}; outputs: ${publishFiles.join(" | ")}`);
+    console.log(
+        `PASS publish: ok=${published.ok}, compilerOutput=${published.compilerOutput}; outputs: ${publishFiles.join(" | ")}`,
+    );
 
     const output = verifyTool(await readOutput(), "read_output after Canvas publish");
     console.log(`PASS read_output: compiler diagnostics status=${output.compilerDiagnostics.status}.`);
 
-    expectRefusal(await testMovie({ document: documentName }), "test_movie refusal on Canvas", /test_movie supports AS3 documents only/i);
+    expectRefusal(
+        await testMovie({ document: documentName }),
+        "test_movie refusal on Canvas",
+        /test_movie supports AS3 documents only/i,
+    );
     expectRefusal(
         await installGreensock({ document: documentName }),
         "install_greensock refusal on Canvas",
@@ -361,7 +444,9 @@ try {
     const reopened = verifyTool(await openDocument({ path: flaPath }), "reopen saved Canvas FLA");
     assert.ok(reopened.name && reopened.path, "open_document did not return reopened Canvas document details");
     documentNameForCleanup.value = reopened.name;
-    assert.deepEqual(withoutRows(await documentRows("verify reopened Canvas FLA"), initialDocuments), [`${reopened.name}\t${reopened.path}`]);
+    assert.deepEqual(withoutRows(await documentRows("verify reopened Canvas FLA"), initialDocuments), [
+        `${reopened.name}\t${reopened.path}`,
+    ]);
     await runValue(
         `(function () { var __docs = fl.documents || [], __matches = []; for (var __i = 0; __i < __docs.length; __i++) if (__docs[__i].pathURI === ${JSON.stringify(reopened.path)}) __matches.push(__docs[__i]); if (__matches.length !== 1) throw new Error("Expected exactly one reopened Canvas document"); fl.setActiveWindow(__matches[0]); return __matches[0].type; })()`,
         "activate reopened Canvas document before get_document_info",
@@ -375,13 +460,24 @@ try {
     assert.equal(persistedType, "htmlcanvas");
     const reopenedTweenFrame1 = await inspect(reopened.name, tweenLayerName, 1);
     const reopenedTweenFrame5 = await inspect(reopened.name, tweenLayerName, 5);
-    assert.ok(reopenedTweenFrame1.elements.length === 1 && reopenedTweenFrame1.elements[0].name === "CanvasSmokeInstance");
+    assert.ok(
+        reopenedTweenFrame1.elements.length === 1 && reopenedTweenFrame1.elements[0].name === "CanvasSmokeInstance",
+    );
     assert.equal(reopenedTweenFrame1.elements[0].libraryItem, "CanvasSmokeRenamedSymbol");
-    assert.ok(reopenedTweenFrame1.elements[0].x > 0 && reopenedTweenFrame1.elements[0].y > 0, "Canvas instance transform did not persist");
+    assert.ok(
+        reopenedTweenFrame1.elements[0].x > 0 && reopenedTweenFrame1.elements[0].y > 0,
+        "Canvas instance transform did not persist",
+    );
     assert.ok(reopenedTweenFrame5.elements.length === 1, "Canvas tween end-frame instance did not persist");
     if (tweenApplied) {
-        assert.ok(reopenedTweenFrame1.spans.some((span) => span.tweenType === "classic"), "Canvas classic tween did not persist after reopen");
-        assert.ok(Math.abs(reopenedTweenFrame5.elements[0].x - 162) < 1, `Canvas tween end x did not persist: ${reopenedTweenFrame5.elements[0].x}`);
+        assert.ok(
+            reopenedTweenFrame1.spans.some((span) => span.tweenType === "classic"),
+            "Canvas classic tween did not persist after reopen",
+        );
+        assert.ok(
+            Math.abs(reopenedTweenFrame5.elements[0].x - 162) < 1,
+            `Canvas tween end x did not persist: ${reopenedTweenFrame5.elements[0].x}`,
+        );
     }
     const reopenedActions = await inspect(reopened.name, actionsLayerName, 1);
     assert.ok(reopenedActions, "Canvas actions layer did not persist");
@@ -390,7 +486,9 @@ try {
         "verify persisted Canvas Library and frame script",
     );
     assert.equal(persistedScript, `htmlcanvas\tCanvasSmokeRenamedSymbol\tCanvasSmokeFolder\t${actionScript}`);
-    console.log(`PASS reopen persistence: type=${persistedType}, asVersion=${reopenedInfo.asVersion}, layers, symbol, transform, and frame script survived.${tweenApplied ? " Classic tween also survived." : " Tween refusal was recorded above; instance edits survived."}`);
+    console.log(
+        `PASS reopen persistence: type=${persistedType}, asVersion=${reopenedInfo.asVersion}, layers, symbol, transform, and frame script survived.${tweenApplied ? " Classic tween also survived." : " Tween refusal was recorded above; instance edits survived."}`,
+    );
 
     verifyTool(
         await closeDocument({ document: reopened.path, discardUnsavedChanges: true }),
@@ -407,7 +505,9 @@ try {
                 `(function () { var __wantedPath = ${JSON.stringify(savedPath)}, __wantedName = ${JSON.stringify(documentNameForCleanup.value)}, __matches = [], __docs = fl.documents || []; for (var __i = 0; __i < __docs.length; __i++) { var __doc = __docs[__i]; if ((__wantedPath && __doc.pathURI === __wantedPath) || (!__doc.pathURI && __wantedName && __doc.name === __wantedName)) __matches.push(__doc); } if (__matches.length > 1) throw new Error("Found multiple matching disposable documents: " + __matches.length); if (!__matches.length) return ""; if (__matches[0].pathURI) return __matches[0].pathURI; __matches[0].close(false); for (var __j = 0; __j < (fl.documents || []).length; __j++) if (fl.documents[__j] === __matches[0]) throw new Error("Disposable Canvas document remained open after cleanup"); return ""; })()`,
                 "locate disposable Canvas document for cleanup",
             );
-            if (ownedPath) await closeDocumentByPath(runJsfl, ownedPath);
+            if (ownedPath) {
+                await closeDocumentByPath(runJsfl, ownedPath);
+            }
         } catch (error) {
             console.error("Disposable Canvas document cleanup failed:", error);
             failure = failure ? new AggregateError([failure, error], "Smoke test and cleanup both failed") : error;
@@ -416,10 +516,16 @@ try {
         try {
             const finalDocuments = await documentRows("read final document list");
             finalCount = finalDocuments.length;
-            assert.deepEqual(finalDocuments, initialDocuments, "existing open documents changed or a disposable Canvas document remains open");
+            assert.deepEqual(
+                finalDocuments,
+                initialDocuments,
+                "existing open documents changed or a disposable Canvas document remains open",
+            );
         } catch (error) {
             console.error("Final document-state verification failed:", error);
-            failure = failure ? new AggregateError([failure, error], "Smoke test and final-state verification failed") : error;
+            failure = failure
+                ? new AggregateError([failure, error], "Smoke test and final-state verification failed")
+                : error;
         }
     }
 
@@ -428,11 +534,17 @@ try {
         await assert.rejects(stat(outDir), { code: "ENOENT" });
     } catch (error) {
         console.error("Temporary Canvas directory cleanup failed:", error);
-        failure = failure ? new AggregateError([failure, error], "Smoke test and temporary cleanup both failed") : error;
+        failure = failure
+            ? new AggregateError([failure, error], "Smoke test and temporary cleanup both failed")
+            : error;
     }
     console.log(`Document count: initial ${initialDocuments?.length ?? "unknown"}; final ${finalCount}.`);
-    console.log(`Leftover state: temporary directory ${outDir} removed; disposable document ${finalCount === initialDocuments?.length ? "closed" : "may remain open"}.`);
+    console.log(
+        `Leftover state: temporary directory ${outDir} removed; disposable document ${finalCount === initialDocuments?.length ? "closed" : "may remain open"}.`,
+    );
 }
 
-if (failure) throw failure;
+if (failure) {
+    throw failure;
+}
 console.log(`Canvas document smoke passed (disposable FLA: ${flaPath})`);

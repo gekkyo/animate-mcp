@@ -15,6 +15,11 @@ type FakeDocument = {
 const targetJSFL = readFileSync(new URL("../../jsfl/document/document-target.jsfl", import.meta.url), "utf8");
 const closeJSFL = readFileSync(new URL("../../jsfl/document/close-document.jsfl", import.meta.url), "utf8");
 
+/**
+ * Captures the close-document tool and records the JSFL bundle requested.
+ * @param runner Executes bundled JSFL against the test's fake Animate globals
+ * @returns Registered tool and bundle-call history
+ */
 function register(runner: { execute: (code: string) => Promise<unknown> }) {
     let registered:
         | {
@@ -86,6 +91,7 @@ test("close_document closes only the exact target without prompting or saving", 
         },
     };
     documents.push(first, other);
+    // The extra open document proves the script closes only the exact target.
     const globals = {
         FLfile: {
             platformPathToURI: (path: string) => pathToFileURL(path).href,

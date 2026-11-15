@@ -72,6 +72,13 @@ export const editLibraryTool: ToolDefinition<typeof EDIT_LIBRARY_INPUT> = {
     guidance: {
         basic: "- Use edit_library to organize library folders and items. Re-export with export_scripts before apply_scripts; deleteItem requires confirm: true and refuses items in use.\n- edit_library can also create/duplicate symbols and find direct usages; edit_elements can swap a symbol and set graphic loop/firstFrame.",
     },
+    /**
+     * Applies library operations in order and stops at the first failure.
+     * @param ops Library operations to apply.
+     * @param document Optional document selector.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns Operation results, failures, skipped operations, and warnings.
+     */
     run: async ({ ops, document }: Parameters<ToolCallback<typeof EDIT_LIBRARY_INPUT>>[0], deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -90,6 +97,11 @@ export const editLibraryTool: ToolDefinition<typeof EDIT_LIBRARY_INPUT> = {
     },
 };
 
+/**
+ * Registers the edit_library tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerEditLibrary(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, editLibraryTool, deps);
 }

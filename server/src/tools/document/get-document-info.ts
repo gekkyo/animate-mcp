@@ -11,6 +11,12 @@ export const getDocumentInfoTool: ToolDefinition = {
     guidance: {
         notes: "- When several documents are open, document is required. get_document_info returns the name.\n- AS3 and HTML5 Canvas have different APIs. Check the document type before trying things with run_jsfl.",
     },
+    /**
+     * Reads metadata for the active Animate document.
+     * @param _args No input arguments.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns Document metadata and GreenSock installation status.
+     */
     run: async (_args: never, deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -31,6 +37,11 @@ export const getDocumentInfoTool: ToolDefinition = {
     },
 };
 
+/**
+ * Registers the get_document_info tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerGetDocumentInfo(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, getDocumentInfoTool, deps);
 }

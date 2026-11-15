@@ -2,11 +2,20 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { toolHandler } from "../scripts/smoke-lib.mjs";
 
+/** Builds a smoke-tool wrapper around a callback and modal diagnostic.
+ * @param callback Registered tool implementation
+ * @param checkModal Diagnostic invoked after timeout failures
+ * @returns The wrapped handler
+ */
 function makeHandler(callback: (...args: unknown[]) => unknown, checkModal: () => unknown) {
     const wrapped = toolHandler((server) => server.registerTool("test", {}, callback), checkModal);
     return (...args: unknown[]) => wrapped(...args);
 }
 
+/** Extracts the first text block from a tool result.
+ * @param result Result whose content may contain text
+ * @returns First text block, or an empty string when absent
+ */
 const message = (result: { content?: Array<{ type: string; text?: string }> }) =>
     result.content?.find((item) => item.type === "text")?.text ?? "";
 const timeoutMessage =

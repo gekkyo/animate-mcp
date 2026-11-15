@@ -12,6 +12,13 @@ type FakeDocument = { name: string; pathURI?: string };
 const targetJSFL = readFileSync(new URL("../../jsfl/document/document-target.jsfl", import.meta.url), "utf8");
 const saveJSFL = readFileSync(new URL("../../jsfl/document/save-document.jsfl", import.meta.url), "utf8");
 
+/**
+ * Registers save_document against fake documents and file/save behavior.
+ * @param initial Documents initially open
+ * @param files Existing file URIs
+ * @param options Fake save result and reported path overrides
+ * @returns Tool-call helpers and recorded save/bundle calls
+ */
 function setup(
     initial: FakeDocument[],
     files: string[] = [],
@@ -75,6 +82,11 @@ function setup(
     };
 }
 
+/**
+ * Asserts an MCP result is an error and returns its text.
+ * @param result Result to inspect
+ * @returns Error message text
+ */
 function toolError(result: unknown) {
     const value = result as { isError: boolean; content: { text: string }[] };
     assert.equal(value.isError, true);

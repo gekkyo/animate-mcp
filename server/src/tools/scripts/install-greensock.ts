@@ -22,6 +22,11 @@ export const installGreensockTool: ToolDefinition<typeof INSTALL_GREENSOCK_INPUT
     guidance: {
         basic: "- If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).\n- For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.",
     },
+    /** Installs GreenSock-AS3 beside the selected saved AS3 document after confirmation.
+     * @param args Validated confirmation and document options
+     * @param deps Runtime runner and JSFL bundler
+     * @returns Installation status and path
+     */
     run: async ({ confirm, document }: Parameters<ToolCallback<typeof INSTALL_GREENSOCK_INPUT>>[0], deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -71,6 +76,11 @@ export const installGreensockTool: ToolDefinition<typeof INSTALL_GREENSOCK_INPUT
     },
 };
 
+/** Registers the install_greensock tool.
+ * @param server MCP server to register against
+ * @param deps Runtime dependencies passed to the tool
+ * @returns Nothing.
+ */
 export function registerInstallGreensock(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, installGreensockTool, deps);
 }

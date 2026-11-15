@@ -148,6 +148,7 @@
     spanLength = sourceFrame.duration;
     sourceLayer.locked = false;
     try {
+      // Prefer Animate's native split, but use verified copies when the API is unavailable without mutations.
       var nativeLayers = originalElements.length ? distributeWithNative(sourceLayer, sourceFrame, originalElements, names, parent, wasLocked) : null;
       if (nativeLayers) { created = nativeLayers; nativeDistribution = true; }
       else if (originalElements.length) distributeWithCopies(sourceLayer, sourceFrame, originalElements, names, parent, wasLocked, spanLength, created);

@@ -1,5 +1,6 @@
   var document = selectDocument(), timeline = null;
-  var originalTimeline = document.getTimeline(), originalLayer = originalTimeline.currentLayer;
+  var originalTimeline = document.getTimeline(), originalLayerIndex = originalTimeline.currentLayer;
+  var originalLayer = originalTimeline.layers[originalLayerIndex];
   var originalFrame = originalTimeline.currentFrame, applied = [], failed = null, skipped = [], warnings = [];
   var targetSelectedFramesAfter = null;
 
@@ -21,7 +22,11 @@
   }
 
   try {
-    var session = withTimelineEdit(document, __timelineRef, function (targetTimeline) {
+    var session = withTimelineEdit(document, __timelineRef, /** Applies requested layer and frame operations.
+     * @param targetTimeline Timeline selected for editing.
+     * @returns Nothing.
+     */
+    function (targetTimeline) {
       timeline = targetTimeline;
 
     for (var opIndex = 0; opIndex < __ops.length; opIndex++) {
@@ -35,6 +40,7 @@
         applied.push(op);
       } catch (error) {
         failed = { op: op, error: String(error && error.message ? error.message : error) };
+        warnings.push('Operation ' + (opIndex + 1) + ' (' + op.op + ') failed and may have been partially applied; check the timeline or use Undo.');
         for (var skippedIndex = opIndex + 1; skippedIndex < __ops.length; skippedIndex++) skipped.push(__ops[skippedIndex]);
         break;
       }
@@ -45,7 +51,9 @@
     if (targetSelectedFramesAfter && timeline.setSelectedFrames) timeline.setSelectedFrames(targetSelectedFramesAfter);
   } finally {
     var restoredTimeline = document.getTimeline();
-    if (originalLayer < restoredTimeline.layers.length) restoredTimeline.currentLayer = originalLayer;
+    var restoredLayerIndex = editLayerPosition(restoredTimeline, originalLayer);
+    if (restoredLayerIndex >= 0) restoredTimeline.currentLayer = restoredLayerIndex;
+    else if (restoredTimeline.layers.length) restoredTimeline.currentLayer = Math.max(0, Math.min(originalLayerIndex, restoredTimeline.layers.length - 1));
     restoredTimeline.currentFrame = originalFrame;
   }
 

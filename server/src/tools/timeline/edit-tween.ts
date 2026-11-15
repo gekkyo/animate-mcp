@@ -132,6 +132,14 @@ export const editTweenTool: ToolDefinition<typeof EDIT_TWEEN_INPUT> = {
     guidance: {
         basic: "- Use edit_tween to animate instances; motion is the default and ease presets include quad, cubic, quart, quint, sine, expo, circ and back.",
     },
+    /**
+     * Applies tween creation and easing operations to the selected timeline.
+     * @param timeline Scene index or Library item path.
+     * @param ops Tween operations to apply.
+     * @param document Optional document selector.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns Applied, failed, and skipped operations with current layer metadata.
+     */
     run: async ({ timeline, ops, document }: Parameters<ToolCallback<typeof EDIT_TWEEN_INPUT>>[0], deps: ToolDeps) => {
         const { runner, bundle } = deps;
 
@@ -147,6 +155,11 @@ export const editTweenTool: ToolDefinition<typeof EDIT_TWEEN_INPUT> = {
     },
 };
 
+/**
+ * Registers the edit_tween tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerEditTween(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, editTweenTool, deps);
 }

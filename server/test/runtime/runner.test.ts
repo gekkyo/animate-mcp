@@ -20,6 +20,7 @@ test("run_jsfl success, JSFL error, cleanup", { timeout: 20_000 }, () =>
         assert.equal(failure.isError, true);
         assert.equal(text(failure), "JSFL exploded");
 
+        // Run and Result are transient protocol files and must be removed after both outcomes.
         assert.deepEqual(await readdir(runsDir), [], "Run and Result files are removed");
     }),
 );
@@ -63,6 +64,7 @@ test("concurrent Runs are serialized", { timeout: 20_000 }, () =>
         await Promise.all(
             [1, 2, 3].map((runNumber) => client.callTool({ name: "run_jsfl", arguments: { code: String(runNumber) } })),
         );
+        // Each launch must finish before the next starts, despite concurrent requests.
         assert.equal(
             (await readFile(join(tempDir, "log"), "utf8")).trim().split("\n").join(","),
             "start,end,start,end,start,end",

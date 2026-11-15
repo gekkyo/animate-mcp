@@ -44,6 +44,18 @@ export const convertToSymbolTool: ToolDefinition<typeof CONVERT_TO_SYMBOL_INPUT>
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     inputSchema: CONVERT_TO_SYMBOL_INPUT,
     guidance: {},
+    /**
+     * Converts the requested elements into one Library symbol.
+     * @param timeline Scene index or Library item path.
+     * @param document Optional document selector.
+     * @param frame 1-based frame containing the elements.
+     * @param elements Layer and element references to convert.
+     * @param name New Library symbol name.
+     * @param type Symbol type to create.
+     * @param registrationPoint Symbol registration point.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns The created symbol name, type, and registration point.
+     */
     run: async (
         {
             timeline,
@@ -76,6 +88,11 @@ export const convertToSymbolTool: ToolDefinition<typeof CONVERT_TO_SYMBOL_INPUT>
     },
 };
 
+/**
+ * Registers the convert_to_symbol tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerConvertToSymbol(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, convertToSymbolTool, deps);
 }

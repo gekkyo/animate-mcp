@@ -62,7 +62,10 @@ const layer = (name, frames, layerType = "normal", locked = false, parentLayer =
  */
 const makeTimeline = (name, frames, layers, libraryItem) => {
   const timeline = { name, frameCount: frames, currentLayer: 0, currentFrame: 0, selectedFrames: null, clipboard: null, layers, libraryItem,
-    /** Recalculates the timeline frame count from its layers. */
+     /**
+      * Recalculates the timeline frame count from its layers.
+      * @returns Nothing
+      */
     recalculateFrameCount() { this.frameCount = Math.max(0, ...this.layers.map((candidate) => candidate.frames.length)); },
     /**
      * Recalculates keyframe spans on a layer and updates the timeline frame count.
@@ -85,6 +88,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
      * @param count Number of frames to insert
      * @param allLayers Whether to insert into every non-folder layer
      * @param frameNumberIndex Zero-based insertion frame index
+     * @returns Nothing
      */
     insertFrames(count, allLayers, frameNumberIndex) {
       const targets = allLayers ? this.layers.filter((candidate) => candidate.layerType !== "folder") : [this.layers[this.currentLayer]];
@@ -102,6 +106,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
      * Removes a range of frames from the current layer.
      * @param startFrameIndex Zero-based start frame index
      * @param endFrameIndex Exclusive end frame index
+     * @returns Nothing
      */
     removeFrames(startFrameIndex, endFrameIndex) {
       const target = this.layers[this.currentLayer];
@@ -112,6 +117,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
     /**
      * Inserts a keyframe at the requested frame on the current layer.
      * @param frameNumber Zero-based frame index for the new keyframe
+     * @returns Nothing
      */
     insertKeyframe(frameNumber) {
       const currentLayer = this.layers[this.currentLayer];
@@ -133,6 +139,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
     /**
      * Converts the requested frame on the current layer to a keyframe.
      * @param frameNumber Zero-based frame index to convert
+     * @returns Nothing
      */
     convertToKeyframes(frameNumber) {
       this.insertKeyframe(frameNumber);
@@ -140,6 +147,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
     /**
      * Clears a keyframe on the current layer and merges its span with the prior span.
      * @param frameNumber Zero-based frame index of the keyframe to clear
+     * @returns Nothing
      */
     clearKeyframes(frameNumber) {
       const currentLayer = this.layers[this.currentLayer];
@@ -162,6 +170,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
      * @param value New property value
      * @param startFrameIndex Zero-based start frame index
      * @param endFrameIndex Exclusive end frame index, or undefined for one frame
+     * @returns Nothing
      */
     setFrameProperty(property, value, startFrameIndex, endFrameIndex) {
       const target = this.layers[this.currentLayer];
@@ -172,17 +181,27 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
     /**
      * Selects the current layer by index.
      * @param layerIndex Zero-based layer index
+     * @returns Nothing
      */
     setSelectedLayers(layerIndex) {
       this.currentLayer = layerIndex;
     },
     /**
-     * Selects a frame range on the current layer.
-     * @param startFrameIndex Zero-based start frame index
-     * @param endFrameIndex Exclusive end frame index
+     * Returns the selected frame range.
+     * @returns A copy of the selected frame range, or an empty array
+     * @returns Nothing
      */
-    getSelectedFrames() { return this.selectedFrames ? this.selectedFrames.slice() : []; },
-    setSelectedFrames(startFrameIndex, endFrameIndex) {
+     getSelectedFrames() { return this.selectedFrames ? this.selectedFrames.slice() : []; },
+     /**
+      * Sets the selected frame range, or restores a full selection tuple.
+      * @param startFrameIndex Zero-based start frame index or selection tuple
+      * @param endFrameIndex Exclusive end frame index when selecting a range
+      * @returns Nothing
+      */
+     setSelectedFrames(startFrameIndex, endFrameIndex) {
+      if (process.env.FAKE_AUDIT_RESTORE_FAIL && Array.isArray(startFrameIndex) && startFrameIndex.length === 0 && this.libraryItem) {
+        throw new Error("fake audit selection restore failure");
+      }
       if (Array.isArray(startFrameIndex)) {
         this.selectedFrames = startFrameIndex.slice();
         if (this.selectedFrames.length) this.currentLayer = this.selectedFrames[0];
@@ -215,7 +234,10 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
       frame.duration = endFrameIndex - startFrameIndex;
       this.recalculateLayer(target);
     },
-    /** Cuts the selected range from its layer into the timeline clipboard. */
+     /**
+      * Cuts the selected range from its layer into the timeline clipboard.
+      * @returns Nothing
+      */
     cutFrames() {
       const [layerIndex, startFrameIndex, endFrameIndex] = this.selectedFrames;
       const target = this.layers[layerIndex];
@@ -227,6 +249,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
     /**
      * Pastes the clipboard into the current layer at the given frame.
      * @param startFrameIndex Zero-based frame index for the paste
+     * @returns Nothing
      */
     pasteFrames(startFrameIndex) {
       const target = this.layers[this.currentLayer];
@@ -248,6 +271,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
     /**
      * Deletes a layer and clears child references to it.
      * @param layerIndex Zero-based index of the layer to delete
+     * @returns Nothing
      */
     deleteLayer(layerIndex) {
       const removed = this.layers.splice(layerIndex, 1)[0];
@@ -260,6 +284,7 @@ const makeTimeline = (name, frames, layers, libraryItem) => {
      * @param layerToMove Zero-based index of the layer to move
      * @param layerToPutItBy Zero-based index of the reference layer
      * @param addBefore Whether to place the moved layer before the reference layer
+     * @returns Nothing
      */
     reorderLayer(layerToMove, layerToPutItBy, addBefore = true) {
       const moved = this.layers.splice(layerToMove, 1)[0];

@@ -26,7 +26,11 @@ try {
     const result = await testMovie({ document: document.name });
     assert.equal(result.isError, undefined, result.content?.[0]?.text ?? "test_movie failed");
     assert.ok(result.structuredContent, "test_movie returned no structured content");
-    assert.match(result.structuredContent.runtimeOutput, /TEST_MOVIE_SMOKE_OK/, "runtime output is missing the trace marker");
+    assert.match(
+        result.structuredContent.runtimeOutput,
+        /TEST_MOVIE_SMOKE_OK/,
+        "runtime output is missing the trace marker",
+    );
     assert.match(result.structuredContent.runtimeOutput, /Error #1009/, "runtime output is missing Error #1009");
 } catch (error) {
     failure = error;
@@ -35,12 +39,17 @@ try {
         try {
             await closeDocumentByPath(runJsfl, savedPathURI);
         } catch (error) {
-            if (failure) console.error("Disposable document cleanup also failed:", error);
-            else failure = error;
+            if (failure) {
+                console.error("Disposable document cleanup also failed:", error);
+            } else {
+                failure = error;
+            }
         }
     }
     console.log("The Test Movie Player is not automatically closed; close it manually with its window button if open.");
 }
 
-if (failure) throw failure;
+if (failure) {
+    throw failure;
+}
 console.log(`test_movie smoke passed (disposable FLA: ${flaPath})`);

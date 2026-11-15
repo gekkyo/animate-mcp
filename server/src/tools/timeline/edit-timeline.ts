@@ -112,6 +112,14 @@ export const editTimelineTool: ToolDefinition<typeof EDIT_TIMELINE_INPUT> = {
     guidance: {
         basic: "- Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.",
     },
+    /**
+     * Applies layer and frame operations to the selected timeline in order.
+     * @param timeline Scene index or Library item path.
+     * @param ops Timeline operations to apply.
+     * @param document Optional document selector.
+     * @param deps Tool dependencies for executing Animate commands.
+     * @returns Applied, failed, and skipped operations with current layer metadata.
+     */
     run: async (
         { timeline, ops, document }: Parameters<ToolCallback<typeof EDIT_TIMELINE_INPUT>>[0],
         deps: ToolDeps,
@@ -134,6 +142,11 @@ export const editTimelineTool: ToolDefinition<typeof EDIT_TIMELINE_INPUT> = {
     },
 };
 
+/**
+ * Registers the edit_timeline tool with the MCP server.
+ * @param server MCP server to register with.
+ * @param deps Tool dependencies used by the tool.
+ */
 export function registerEditTimeline(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, editTimelineTool, deps);
 }

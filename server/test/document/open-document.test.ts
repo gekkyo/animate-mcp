@@ -11,6 +11,12 @@ type FakeDocument = { name: string; pathURI?: string; type: string; asVersion?: 
 const targetJSFL = readFileSync(new URL("../../jsfl/document/document-target.jsfl", import.meta.url), "utf8");
 const openJSFL = readFileSync(new URL("../../jsfl/document/open-document.jsfl", import.meta.url), "utf8");
 
+/**
+ * Registers the open-document tool against a minimal in-memory Animate API.
+ * @param initial Documents already open in the fake application
+ * @param files File URIs and whether each can be opened
+ * @returns Tool-call helpers and the fake application's observable state
+ */
 function setup(initial: FakeDocument[] = [], files: Record<string, "valid" | "invalid"> = {}) {
     const documents = [...initial];
     const knownFiles = new Map(Object.entries(files));
@@ -59,6 +65,7 @@ function setup(initial: FakeDocument[] = [], files: Record<string, "valid" | "in
         },
     } as unknown as McpServer;
     registerOpenDocument(server, {
+        // Execute the actual JSFL in a VM while keeping all Animate APIs in this fixture.
         runner: { execute: async (code: string) => runInNewContext(code, globals) },
         bundle: (...names: string[]) =>
             names.map((name) => (name === "document-target" ? targetJSFL : openJSFL)).join("\n"),
@@ -111,6 +118,7 @@ test("open_document creates default AS3 and HTML5 Canvas documents", async () =>
     assert.deepEqual(as3.structuredContent, { name: "Untitled-1", path: null });
     const canvas = await app.call({ type: "htmlcanvas" });
     assert.deepEqual(canvas.structuredContent, { name: "Untitled-2", path: null });
+    // Timeline creation maps to Flash/AS3 in Animate; Canvas uses its own document type.
     assert.equal(app.documents[0].type, "Flash");
     assert.equal(app.documents[1].type, "htmlcanvas");
 });

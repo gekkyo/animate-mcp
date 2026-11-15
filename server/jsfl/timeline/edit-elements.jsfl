@@ -8,6 +8,10 @@
   var targetLayerState = null, targetFrameState = null, targetSelection = [];
   var resolved = [], resultElements = [], layersToUnlock = [], plannedLayers = [];
 
+  /** Finds a Library item by its exact name.
+   * @param name Library item name.
+   * @returns The matching item, or null when absent.
+   */
   function findLibraryItem(name) {
     for (var index = 0; index < document.library.items.length; index++) {
       if (document.library.items[index].name === name) return document.library.items[index];
@@ -15,12 +19,23 @@
     return null;
   }
 
+  /** Requires a finite number within an inclusive range.
+   * @param value Number to validate.
+   * @param name Field name used in the error.
+   * @param minimum Inclusive lower bound.
+   * @param maximum Inclusive upper bound.
+   * @returns Nothing.
+   */
   function numberInRange(value, name, minimum, maximum) {
     if (typeof value !== 'number' || !isFinite(value) || value < minimum || value > maximum) {
       throw new Error(name + ' must be between ' + minimum + ' and ' + maximum);
     }
   }
 
+  /** Validates a color-effect operation and its mode-specific fields.
+   * @param effect Requested color effect.
+   * @returns Nothing.
+   */
   function validateColorEffect(effect) {
     if (effect.mode === 'none') return;
     if (effect.mode === 'alpha') numberInRange(effect.alphaPercent, 'alphaPercent', 0, 100);
@@ -42,6 +57,10 @@
     } else throw new Error('Unsupported colorEffect mode: ' + effect.mode);
   }
 
+  /** Validates supported Animate filter objects and their field values.
+   * @param filters Requested filters.
+   * @returns Nothing.
+   */
   function validateFilters(filters) {
     for (var filterIndex = 0; filterIndex < filters.length; filterIndex++) {
       var filter = filters[filterIndex];
@@ -68,6 +87,10 @@
     }
   }
 
+  /** Determines and validates the frame count of a graphic Library item.
+   * @param item Graphic Library item.
+   * @returns Number of frames in its timeline.
+   */
   function graphicFrameCount(item) {
     var symbolTimeline = item.timeline;
     if (symbolTimeline && typeof symbolTimeline.frameCount === 'number') {
@@ -92,6 +115,11 @@
     return count;
   }
 
+  /** Validates instance properties against the target symbol type.
+   * @param set Requested instance properties.
+   * @param reference Target instance or Library item.
+   * @returns Nothing.
+   */
   function validateSet(set, reference) {
     var numeric = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'skewX', 'skewY'];
     for (var index = 0; index < numeric.length; index++) {
@@ -124,8 +152,14 @@
     }
   }
 
+  /** Applies requested properties, effects, filters, or a symbol swap.
+   * @param element Symbol instance to update.
+   * @param set Properties to apply.
+   * @returns Nothing.
+   */
   function applySet(element, set) {
     if (set.swapSymbol !== undefined) {
+      // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
       document.selectNone();
       element.selected = true;
       document.swapElement(set.swapSymbol);
@@ -142,14 +176,17 @@
       var effect = set.colorEffect;
       if (effect.mode === 'none') element.colorMode = 'none';
       else if (effect.mode === 'alpha') {
+        // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
         document.selectNone();
         element.selected = true;
         document.setInstanceAlpha(effect.alphaPercent);
       } else if (effect.mode === 'brightness') {
+        // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
         document.selectNone();
         element.selected = true;
         document.setInstanceBrightness(effect.brightnessPercent);
       } else if (effect.mode === 'tint') {
+        // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
         document.selectNone();
         element.selected = true;
         document.setInstanceTint(effect.tintColor, effect.tintPercent);
@@ -166,7 +203,11 @@
 
   var session = null;
   try {
-    session = withTimelineEdit(document, __timelineRef, function (targetTimeline) {
+    session = withTimelineEdit(document, __timelineRef, /** Applies the requested symbol operations in the target timeline.
+     * @param targetTimeline Timeline selected for editing.
+     * @returns The serialized edit result.
+     */
+    function (targetTimeline) {
     timeline = targetTimeline;
     targetLayerState = timeline.layers[timeline.currentLayer];
     targetFrameState = timeline.currentFrame;
@@ -236,7 +277,10 @@
       }
     }
 
-    withEditUnlockedLayers(layersToUnlock, function () {
+    withEditUnlockedLayers(layersToUnlock, /** Applies validated symbol operations while target layers are unlocked.
+     * @returns Nothing.
+     */
+    function () {
       for (var resolvedIndex = 0; resolvedIndex < resolved.length; resolvedIndex++) {
         var entry = resolved[resolvedIndex];
         if (entry.kind === 'add') {
@@ -307,6 +351,7 @@
     return serialize({ applied: resultElements.length, elements: resultElements });
     } finally {
     if (timeline && targetLayerState) {
+      // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
       if (document.selectNone) document.selectNone();
       var targetLayerIndex = layerPosition(targetLayerState);
       if (targetLayerIndex >= 0) timeline.currentLayer = targetLayerIndex;
@@ -322,6 +367,7 @@
     var originalLayerIndex = editLayerPosition(restoredTimeline, originalLayer);
     if (originalLayerIndex >= 0) restoredTimeline.currentLayer = originalLayerIndex;
     restoredTimeline.currentFrame = originalFrame;
+    // Clear first because Animate selection assignment adds to the current selection (see docs/animate-quirks.md).
     if (document.selectNone) document.selectNone();
     for (var originalSelectionIndex = 0; originalSelectionIndex < originalSelection.length; originalSelectionIndex++) {
       originalSelection[originalSelectionIndex].selected = true;

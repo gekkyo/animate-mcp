@@ -2,7 +2,7 @@
 
 # animate-mcp
 
-MCP 対応の AI エージェントから、Adobe Animate のスクリプトとタイムライン構造を編集します。
+AI エージェントから Adobe Animate を操作するための MCP サーバー。
 
 [English](README.md) | 日本語
 
@@ -21,32 +21,26 @@ MCP 対応の AI エージェントから、Adobe Animate のスクリプトと�
 
 `animate-mcp` は、Claude CodeやCodexなどのAIエージェントからAdobe Animateを直接操作できるMCPサーバーです。
 
-AIに自然な言葉で指示するだけで、フレームスクリプトの作成・編集やアニメーションの操作、繰り返し作業の自動化ができます。
+AIに自然な言葉で指示するだけで、フレームスクリプトの編集やアニメーションの操作、繰り返し作業の自動化ができます。
 
 シーンやライブラリシンボルの構造・スクリプトを読み取り、既存の内容を理解したうえで編集できるほか、レイヤーやフレーム、トゥイーン、インスタンスのプロパティ、ライブラリ内のアセットなど、幅広い操作に対応しています。さらに、ドキュメントのパブリッシュやフレームのPNG画像取得も可能です。
 
 ## 主な機能
 
-- AI エージェントがシーンやライブラリシンボルのフレームスクリプトと構造をファイル経由で読み取り、編集したスクリプトを Animate に書き戻せます。
-- レイヤー、キーフレーム、インスタンス、トゥイーンの状態を確認できます。
-- テキストの追加・編集と、フォント・サイズ・色・揃えなどの設定ができます。
-- キーフレーム上のインスタンスの変形、色効果、フィルター、名前、ブレンドモード、表示状態を編集できます。
-- レイヤーやフレームの構造、ラベルを編集できます。
-- モーション／クラシックトゥイーンを作成し、プリセットやベジェ曲線によるカスタムイーズを設定できます。
-- ライブラリのフォルダやアイテムを整理し、未使用アイテムを確認できます。
-- 画像・音声の取り込み、直接の使用箇所の検索、シンボルの作成・複製、ステージ設定の変更ができます。
-- AS3 と HTML5 Canvas のドキュメントを Publish し、AS3 のコンパイルエラーと警告を受け取れます。
-- Animate の診断パネルを読み取り、AS3 の Test Movie を実行してランタイム出力を取得できます。
-- 1 フレームを PNG 画像として取得できます。
-- GreenSock-AS3 をプロンプトから簡単に導入できます。
-- ActionScript 3 と HTML5 Canvas に対応し、任意の JSFL も実行できます。
+- シーン・ライブラリシンボルの構造とフレームスクリプトの読み込み・編集
+- レイヤー、キーフレーム、インスタンス、テキスト、トゥイーンの確認・編集
+- ライブラリの整理、素材の取り込み、シンボルの作成・配置、ステージ設定
+- 使われていないライブラリ項目・中身のないキーフレーム等のチェック
+- AS3／HTML5 Canvas の Publish、AS3 のコンパイル診断・Test Movie（起動直後の出力を取得）
+- Canvas 出力の Chrome での確認、フレームの PNG 取得・差分比較
+- GreenSock-AS3 の導入（保存済み AS3 のみ・ライセンス確認が必要）、任意の JSFL の実行
 
 ## 動作環境
 
 - Node.js
 - Adobe Animate（起動しておく必要があります）
 - MCP 対応のクライアント（Claude Code、Claude Desktop など）
-- 動作確認は Animate 2024 / macOS のみです。他の最近のバージョンでも動く見込みです。Windows は未検証です。
+- Animate 2027 / Mac / Windows
 
 ## インストール
 
@@ -82,6 +76,12 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 開いているドキュメントのスクリプトを書き出して、エラーの原因を調べて
 ```
 
+#### スクリプト編集
+
+```text
+シーン1の1フレーム目のスクリプトに stop() を追加して反映して
+```
+
 #### タイムライン確認
 
 ```text
@@ -100,10 +100,34 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 シーン1の『ボール』インスタンスを1〜24フレームで右へ200px動かし、イーズに backOut（少し行き過ぎて戻る）を使って
 ```
 
+#### テキストの追加
+
+```text
+シーン1の『テキスト』レイヤーの30フレーム目に、48pt・太字で「GAME OVER」というテキストを追加して
+```
+
+#### シンボル化
+
+```text
+シーン1の1フレーム目の『ボール』を、ムービークリップ ball_mc に変換して
+```
+
 #### インスタンスのプロパティ編集
 
 ```text
 シーン1の1フレーム目の『ボール』インスタンスを透明度50%にして、ぼかしフィルターを付けて
+```
+
+#### ステージ設定の変更
+
+```text
+ステージを 1280×720、30fps、背景を黒にして
+```
+
+#### 素材の取り込み
+
+```text
+/path/to/hero.png と /path/to/bgm.mp3 をライブラリに取り込んで
 ```
 
 #### Publish
@@ -111,6 +135,20 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 ```text
 開いているドキュメントを Publish して、コンパイルエラーを教えて
 ```
+
+#### Test Movie
+
+```text
+開いている AS3 ドキュメントを Test Movie で実行して、コンパイルエラーと起動直後の出力を教えて
+```
+
+#### Canvas 出力の確認
+
+```text
+Canvas 出力を Chrome で開いて、コンソールエラーがないか確認して
+```
+
+既定で Publish して出力を上書きします。既存の出力で確認するだけなら「Publish せずに」と指示してください。
 
 #### フレームの取得
 
@@ -127,7 +165,7 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 #### GreenSock 導入
 
 ```text
-開いているドキュメントに GreenSock-AS3 を導入して
+保存済みの AS3 ドキュメントに GreenSock-AS3 を導入して（ライセンスは確認済み）
 ```
 
 ## 利用時のポイント
@@ -142,73 +180,34 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 
 ## ツール
 
-| ツール | できること | 入力・注意点 |
-|--------|------------|--------------|
-| `get_document_info` | 開いているドキュメントの名前、サイズ、フレームレート、背景色、タイムライン名、ActionScript のバージョン、GreenSock の導入状況を確認します。 | 引数は不要です。 |
-| `open_document` | 既存の `.fla` を開くか、Animate の標準サイズ・フレームレートで AS3 / HTML5 Canvas ドキュメントを新規作成します。 | `path`（既存 `.fla`）か `type`（`timeline` / `htmlcanvas`）をどちらか一方指定します。ドキュメント名と保存済みならパスを返します。 |
-| `save_document` | 明示的に指定したドキュメントを現在のパスまたは新しいパスに保存します。 | `document`（正確な名前またはパス）が必要です。未保存文書には `path` が必要です。現在のファイルや別の既存ファイルの上書きには、ユーザーへの確認後に `confirm: true` を指定します。アクティブ文書を自動選択しません。 |
-| `close_document` | 明示的に指定したドキュメントを保存せず閉じます。 | `document`（正確な名前またはパス）と `discardUnsavedChanges: true` が必要で、未保存の編集は破棄されます。必要なら先に保存してください。アクティブ文書を自動選択せず、Test Movie Player も閉じません。 |
-| `export_scripts` | シーンとライブラリシンボルの構造・フレームスクリプトを書き出し、`index.md` と各タイムラインの `structure.md` も生成します。 | 既定の出力先は `~/.animate-mcp/exports/<ドキュメント名>/`。未適用の編集があると再 Export を拒否します。`force: true` はその編集を破棄します。 |
-| `apply_scripts` | 書き出したスクリプトの編集を Animate に反映します。空ファイルはそのフレームのスクリプト削除を意味します。 | Export 先の `dir` を指定します。Animate 側で変更されたフレームは上書きしません。`.fla` は保存しません。 |
-| `read_output` | 現在の Output / Compiler Errors パネルを生テキストで読み、コンパイラー診断を解析します。 | 読み取り専用です。Animate は出所のドキュメントや実行を示さないため、内容は古いものや混在したものの可能性があります。`compilerDiagnostics.status: "unavailable"` はパネルが空・不完全・未対応のいずれかを示し、コンパイル成功を意味しません。 |
-| `test_movie` | 保存済み AS3 ドキュメントを現在メモリー上にある内容で Test Movie 実行します。コンパイルエラー時は Player の起動を中止し、コンパイラー診断と Output パネルの差分を返します。 | `.fla` は保存・Publish・クローズしません。起動した Player は開いたままなので手動で閉じてください。Output パネルは起動から2秒後に一度だけ取得するため、それ以降のメッセージは取得されず、同時出力が混在する場合があります。差分が空でもランタイムエラーがなかった証明にはなりません。 |
-| `publish` | AS3 または HTML5 Canvas ドキュメントを Publish し、Build result を返します。 | Publish 設定の出力を上書きします。未保存の編集も Publish されますが、`.fla` は保存しません。`compilerOutput` は解析済みの AS3 出力なら `verified`、空出力を1回再試行しても取得できなければ `unavailable`、Canvas なら `not_checked` です。取得不能・未確認の場合、`errors` が空でもエラーなしとは断定できません。サマリー行がある場合、位置やコードを解析できない診断もメッセージとして返します。Canvas のコンパイルエラーは未検証で、`ok: true` は Publish が実行されたことだけを示します。 |
-| `capture_frame` | アクティブなタイムライン（編集中のライブラリシンボルを含む）の1フレームまたは範囲を PNG 画像で返します。 | `frame`（1始まり、省略時は現在のフレーム）または `range: { start, end, step? }`（1始まり、昇順・終端を含む。`step` は省略時1、正の整数。最大24フレーム）のどちらかを指定します。範囲の結果はフレーム順の画像・メタデータの組で、`structuredContent.captures` にも含まれます。各画像を `~/.animate-mcp/captures/<ドキュメント名>/` または `dir` に保存します。未保存ドキュメントにも対応します。現在のフレームは復元しますが、変更すると選択が解除される場合があります。長辺が2048pxを超えるステージは縮小せずエラーにします。 |
-| `inspect_timeline` | シーンやライブラリシンボルのレイヤー、キーフレーム範囲、指定フレームのインスタンス・テキスト・トゥイーンを読み取ります。 | `timeline` は 0 始まりのシーン番号かライブラリアイテムのパス。フレーム番号は 1 始まりで、レイヤーも絞り込めます。テキストの文字列と全体スタイルも返します。 |
-| `edit_elements` | キーフレーム上のシンボルインスタンスを編集・配置します。 | 更新ではレイヤー・要素を名前または 0 始まりの番号で指定します。`{ op: "add", item, layer, frame, x?, y?, set? }` は名前付きレイヤーの 1 始まりのフレームに配置し、必要ならレイヤー・フレームを増やします。座標省略時はステージ中央です。`set.swapSymbol` は既存シンボルに置換し、`set.loop` と `set.firstFrame` はグラフィックのみ設定できます。変形、色効果、フィルター、名前、ブレンド、表示も設定可能です。インスタンス以外とトゥイーン途中は拒否し、書き込み前に全操作を検証します。`filters` は既存を置き換え、`[]` はクリアします。rotation と skew は同時指定できません。`.fla` は保存されません。 |
-| `edit_text` | シーンやシンボルのタイムラインにテキストを追加し、既存テキストを編集します。 | `timeline` を指定し、`ops` に `{ op: "add", layer, frame, rectangle: { left, top, right, bottom }, text, style? }` または `{ op: "set", layer, frame, element, text?, style? }` を渡します。`style` はフォント、サイズ、色、太字・斜体、揃え、種類、行形式を全体に設定します。Canvas は入力テキストと単一行を拒否します。文字単位の装飾や `.fla` の保存はしません。 |
-| `import_assets` | 画像・音声をステージに配置せずライブラリに取り込みます。 | `paths` に PNG/JPEG/GIF/WAV/MP3 の絶対ファイルパスを1つ以上渡します。同名のライブラリアイテム・入力内重複は取り込み前に拒否します。上書き・自動改名なし。`document` は省略可。`.fla` は保存しません。 |
-| `set_document_properties` | ステージの幅・高さ・フレームレート・背景色を変更します。 | `width` / `height`（整数 1〜3840px。3840pxは受け入れ確認済みで、本ツールの保守的な上限。Animate自体の最大値は未確認）、`frameRate`（0.01〜120）、`backgroundColor`（`#RRGGBB`）を1つ以上指定します。配置済みの内容は拡大・移動せず、`.fla` も保存しません。`document` は省略可。 |
-| `convert_to_symbol` | タイムラインの同一フレーム上にある指定要素を、ムービークリップ・ボタン・グラフィックのいずれかに変換します。 | シーンまたはライブラリのタイムライン、1 始まりのフレーム、要素参照、一意のシンボル名、必要に応じて基準点（既定は中央）を指定します。トゥイーン途中は拒否します。リンケージの設定や `.fla` の保存はせず、AS3 リンケージには別途 `edit_library` の `setLinkage` を使います。 |
-| `edit_timeline` | レイヤー・フレーム・キーフレーム・ラベルを編集し、インスタンスをレイヤーに分配します。操作は `ops` の順に実行します。 | `deleteLayer` と `removeFrames` は `confirm: true` が必要です。`shiftLayerFrames` はクリップボードを上書きし、失敗時に Undo が必要な場合があります。 |
-| `edit_tween` | モーション／クラシックトゥイーンの作成とイージングの変更を行います。プリセット、数値、4 つの数値によるカスタムイーズに対応します。 | 対象の名前付きインスタンスはレイヤー上で単独である必要があります。既存のトゥイーン範囲は置換しません。 |
-| `edit_library` | フォルダ・シンボルの作成、アイテムの移動・名前変更・複製・削除、直接の使用箇所と未使用アイテムの確認、AS3 リンケージの読み書きを行います。 | `findUsages` はシーン・シンボル上の直接配置のみ返します（`timeline` はシーン番号またはシンボルパス、サウンドの使用は `element: null`）。`createSymbol` は一意の名前と種類、`duplicateItem` は `newName` が必要です。`getLinkage` と `setLinkage` は Flash/AS3 のみ対応します。`setLinkage` は `exportForAS`、`className`、`baseClass`、`exportInFirstFrame` を受け付けます。Export 無効時の値は `{ exportForAS: false, className: "", baseClass: "", exportInFirstFrame: false }`。class/base と first-frame export には `exportForAS: true` が必要です。リンケージを変更したら `export_scripts` を再実行してください。古い Export の `apply_scripts` は拒否されます。削除は `confirm: true` が必要で、使用中は削除できません。移動・名前変更でコード内の文字列参照は更新されません。 |
-| `install_greensock` | 保存済みの AS3 ドキュメントの隣に GreenSock-AS3 12.1.5 を GitHub から取得・配置します。 | [ライセンス](https://gsap.com/standard-license/)の確認後に `confirm: true` が必要です。`.fla` は変更・保存せず、AS2・HTML5 Canvas は対象外です。 |
-| `run_jsfl` | 任意の JSFL コードを Animate で実行して結果を返します。オブジェクトの返却値は文字列になります。 | ドキュメントやファイルを変更するコードも実行できます。変更操作の前にユーザーの確認が必要です。 |
+引数や注意点の詳細は [TOOLS.ja.md](TOOLS.ja.md) を参照してください。
 
-### `ops` で指定できる操作
-
-`edit_timeline`、`edit_tween`、`edit_library` は、以下の操作を `ops` に並べて指定できます。`edit_elements` は既存インスタンスの更新に `{ layer, frame, element, set }`、ライブラリアイテム配置に `{ op: "add", item, layer, frame, x?, y?, set? }` を使います。詳しくは上のツール表を参照してください。
-
-#### `edit_timeline`
-
-| 操作 | 内容 |
-|------|------|
-| `addLayer` | レイヤーを追加する |
-| `deleteLayer` | レイヤーを削除する（`confirm: true` 必須） |
-| `moveLayer` | レイヤーを移動する |
-| `renameLayer` | レイヤー名を変更する |
-| `setLayerType` | レイヤーの種類を変更する |
-| `distributeToLayers` | 1 スパンのレイヤーにあるシンボルインスタンスを、それぞれ別のレイヤーに分配する |
-| `insertFrames` | フレームを挿入する |
-| `removeFrames` | フレームを削除する（`confirm: true` 必須） |
-| `insertKeyframe` | キーフレームを挿入する |
-| `clearKeyframe` | キーフレームを解除する |
-| `setLabel` | フレームラベルを設定する |
-| `setSpanLength` | フレームスパンの長さを変更する |
-| `shiftLayerFrames` | ほかのレイヤーを動かさず、1 つのレイヤーの内容を後ろへ移動する |
-
-#### `edit_tween`
-
-| 操作 | 内容 |
-|------|------|
-| `createTween` | 指定インスタンスにモーション／クラシックトゥイーンを作成する |
-| `setEase` | 既存トゥイーンのイージングを変更する |
-
-#### `edit_library`
-
-| 操作 | 内容 |
-|------|------|
-| `createFolder` | フォルダを作成する |
-| `moveItem` | アイテムを別のフォルダへ移動する |
-| `renameItem` | アイテム名を変更する |
-| `deleteItem` | アイテムを削除する（`confirm: true` 必須。使用中は削除不可） |
-| `findUsages` | シーン・シンボルのタイムライン上でアイテムの直接配置を探す |
-| `createSymbol` | 一意の名前でムービークリップ・ボタン・グラフィックを作成する |
-| `duplicateItem` | `newName` を指定してアイテムを複製する |
-| `listUnused` | 未使用アイテムを一覧にする |
-| `getLinkage` | アイテムの AS3 リンケージ設定を読み取る（Flash/AS3 のみ） |
-| `setLinkage` | AS3 リンケージ設定を1つ以上更新し、読み戻し値を返す（Flash/AS3 のみ） |
+| 分類 | ツール | できること |
+|------|--------|------------|
+| ドキュメント | `get_document_info` | 名前・サイズ・フレームレート・AS バージョンを確認 |
+|  | `open_document` | `.fla` を開く／新規ドキュメントを作成 |
+|  | `save_document` | ドキュメントを保存 |
+|  | `close_document` | 保存せずにドキュメントを閉じる |
+|  | `set_document_properties` | ステージサイズ・フレームレート・背景色を変更 |
+|  | `audit_document` | 未使用のライブラリ項目や空キーフレームを一覧化 |
+| スクリプト | `export_scripts` | フレームスクリプトと構造をファイルに書き出す |
+|  | `apply_scripts` | 編集したスクリプトを Animate に反映 |
+| タイムライン・要素 | `inspect_timeline` | レイヤー・キーフレーム・インスタンス・トゥイーンを確認 |
+|  | `edit_timeline` | レイヤー・フレーム・キーフレーム・ラベルを編集 |
+|  | `edit_tween` | トゥイーンの作成とイージング変更 |
+|  | `edit_elements` | シンボルインスタンスの編集・配置 |
+|  | `edit_text` | テキストの追加・編集 |
+|  | `convert_to_symbol` | 要素をシンボルに変換 |
+| ライブラリ | `edit_library` | 整理・使用箇所の検索・AS3 リンケージ編集 |
+|  | `import_assets` | 画像・音声をライブラリに取り込む |
+| 出力・確認 | `publish` | Publish して Build result を返す |
+|  | `read_output` | Output / Compiler Errors パネルを読む |
+|  | `test_movie` | AS3 の Test Movie を実行してコンパイル診断と起動直後の出力を取得 |
+|  | `verify_canvas_output` | Canvas 出力を Chrome で開いてエラーを確認 |
+|  | `capture_frame` | フレームまたは範囲を PNG で取得 |
+|  | `diff_captures` | キャプチャ PNG 2枚を比較 |
+| その他 | `install_greensock` | GreenSock-AS3 を導入（保存済み AS3 のみ・ライセンス確認が必要） |
+|  | `run_jsfl` | 任意の JSFL を実行 |
 
 ## 環境変数
 
@@ -218,6 +217,31 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 | `ANIMATE_MCP_RUNS_DIR`        | 作業ディレクトリ                     | `~/.animate-mcp/runs` |
 | `ANIMATE_MCP_LAUNCH_COMMAND`  | `.jsfl` を開くための独自起動コマンド | OS 既定               |
 | `ANIMATE_MCP_PROCESS_PATTERN` | 起動判定用の独自プロセスパターン     | OS 既定               |
+
+## 仕組み
+
+```mermaid
+%%{init: {'themeVariables': {'fontSize': '13px'}, 'flowchart': {'nodeSpacing': 30, 'rankSpacing': 30, 'diagramPadding': 8}}}%%
+flowchart TB
+  Agent(["AI agent<br/>Claude Code / Codex"])
+  subgraph Server["animate-mcp (Node.js)"]
+    Tools["MCP tools ×24"]
+    Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
+    Runner["Runner<br/>serial + timeout"]
+  end
+  Files["exports/<br/>scripts + structure.md"]
+  Chrome(["Chrome"])
+  Animate(["Adobe Animate<br/>(running)"])
+  Agent -->|"edit files"| Files
+  Agent -->|"MCP stdio"| Tools
+  Tools -->|"export / apply"| Files
+  Tools -->|"verify_canvas_output"| Chrome
+  Tools --> Bundle --> Runner
+  Runner -->|"1. open Run.jsfl"| Animate
+  Animate -.->|"2. write Result.json"| Runner
+```
+
+各ツールは JSFL スクリプトを生成して `~/.animate-mcp/runs/` に書き出し、起動中の Animate で開いて実行します。スクリプトは結果を JSON で書き出し、サーバーがそれを読み取ります。実行は直列で、Animate が応答しない場合はタイムアウトします。
 
 ## 不具合報告
 
@@ -230,18 +254,32 @@ AIに自然な言葉で指示するだけで、フレームスクリプトの作
 
 クライアント設定: `node /path/to/animate-mcp/server/dist/index.js`（stdio）。
 
-### 手動スモークテスト（実機の Animate）
+### スモークテスト（実機の Animate）
 
-1. ドキュメントを開いた状態で Animate を起動します。
-2. `fl.trace('hi'); 'ok'` で `run_jsfl` を実行します。出力パネルに `hi` が表示され、ツールは `"ok"` を返します。Animate が前面に出ます（既知の挙動）。
-3. `get_document_info` を実行します。名前、サイズ、フレームレート、タイムライン名が返ります。
-4. すべてのドキュメントを閉じて `get_document_info` を実行します。"No document open" が返ります。
-5. Animate を終了して `run_jsfl` を実行します。"Animate not running" が返ります。
-6. 保存済みの AS3 ドキュメントを開いた状態で `publish` を実行します。`ok: true` と空の `errors` が返ります。構文エラーを入れて再実行すると `errors` に出ます。
-7. `capture_frame` を実行します。PNG 画像と保存先のパスが返ります。
-8. 未確認: モーダルダイアログが開いているときの挙動。
+下記のスクリプトでは確認できない手動チェック:
 
-手順 6〜7 と各ツールのスクリプト検証: `npm run build` の後、Animate を起動して `node server/scripts/smoke-publish.mjs`、`smoke-capture-frame.mjs`、`smoke-edit-elements.mjs`、`smoke-edit-library.mjs`、`smoke-edit-text.mjs`、`smoke-import-document-properties.mjs` を実行します。`node server/scripts/smoke-test-movie.mjs` は使い捨ての AS3 FLA を作成・クローズしますが、Test Movie Player は開いたままなので手動で閉じてください。`smoke-document-ops.mjs`（AS3）と `smoke-canvas.mjs`（HTML5 Canvas）は、使い捨ての保存済み FLA を作成して操作し、クローズします。
+1. ドキュメントを開いた状態で `fl.trace('hi'); 'ok'` を `run_jsfl` で実行します。出力パネルに `hi` が表示され、ツールは `"ok"` を返します。Animate が前面に出ます（既知の挙動）。
+2. `get_document_info` を実行します。名前、サイズ、フレームレート、タイムライン名が返ります。
+3. すべてのドキュメントを閉じて `get_document_info` を実行します。"No document open" が返ります。
+4. Animate を終了して `run_jsfl` を実行します。"Animate not running" が返ります。
+
+スクリプトでの検証: `npm run build` の後、Animate を起動して、下記のスクリプトを `node server/scripts/<スクリプト>` で実行します。
+
+多くのスクリプトは使い捨ての FLA を作成して操作し、クローズします。手持ちのドキュメントには触れません。例外は `smoke-publish.mjs` で、名前を渡したドキュメントを Publish します。
+
+| スクリプト | 確認内容 | 備考 |
+| --- | --- | --- |
+| `smoke-publish.mjs <name.fla>...` | `publish` | 開いているドキュメントを使用 |
+| `smoke-capture-frame.mjs` | `capture_frame` | 使い捨ての FLA |
+| `smoke-edit-elements.mjs` | レイヤー・フレーム・トゥイーン・インスタンスの編集 | 使い捨ての FLA |
+| `smoke-edit-library.mjs` | ライブラリの編集 | 使い捨ての AS3 FLA |
+| `smoke-edit-text.mjs` | `edit_text` | 使い捨ての AS3・HTML5 Canvas FLA |
+| `smoke-import-document-properties.mjs` | 素材の取り込み・ステージ設定 | 使い捨ての FLA |
+| `smoke-document-ops.mjs` | open・save・close | 使い捨ての保存済み AS3 FLA |
+| `smoke-canvas.mjs` | HTML5 Canvas 機能 | 使い捨ての保存済み FLA |
+| `smoke-isolated-publish.mjs` | `publish` と出力 | 使い捨ての保存済み AS3 FLA。Animate は事前に起動しておく |
+| `smoke-verification-tools.mjs` | `audit_document`・`verify_canvas_output`・`capture_frame`・`diff_captures` | 使い捨ての保存済み FLA |
+| `smoke-test-movie.mjs` | `test_movie` | 使い捨ての AS3 FLA。**Test Movie Player は開いたままなので手動で閉じる** |
 
 ## ライセンス
 

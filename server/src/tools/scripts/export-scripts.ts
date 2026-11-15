@@ -27,6 +27,12 @@ export const exportScriptsTool: ToolDefinition<typeof EXPORT_SCRIPTS_INPUT> = {
     guidance: {
         basic: "- To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.",
     },
+    /** Exports scene and library scripts and writes the workspace files.
+     * @param args Validated export options
+     * @param deps Runtime runner and JSFL bundler
+     * @param extra MCP callback metadata and notification helpers
+     * @returns Export result and any warnings
+     */
     run: async (
         { document, dir, force }: Parameters<ToolCallback<typeof EXPORT_SCRIPTS_INPUT>>[0],
         deps: ToolDeps,
@@ -118,6 +124,11 @@ export const exportScriptsTool: ToolDefinition<typeof EXPORT_SCRIPTS_INPUT> = {
     },
 };
 
+/** Registers the export_scripts tool.
+ * @param server MCP server to register against
+ * @param deps Runtime dependencies passed to the tool
+ * @returns Nothing.
+ */
 export function registerExportScripts(server: McpServer, deps: ToolDeps): void {
     registerToolDefinition(server, exportScriptsTool, deps);
 }

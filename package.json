@@ -1,6 +1,6 @@
 {
   "name": "animate-mcp",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "Inspect Adobe Animate documents and edit frame scripts, timelines, tweens, and library items.",
   "mcpName": "io.github.gekkyo/animate-mcp",
   "license": "MIT",
@@ -26,7 +26,9 @@
   },
   "files": [
     "server/dist",
-    "server/jsfl"
+    "server/jsfl",
+    "TOOLS.md",
+    "TOOLS.ja.md"
   ],
   "scripts": {
     "prepare": "npm run build",
@@ -40,11 +42,14 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@types/node": "^25.0.0",
+    "playwright-core": "^1.65.1",
+    "pngjs": "^7.0.0",
     "typescript": "^5.9.3",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
+    "@types/pngjs": "^6.0.5",
     "tsx": "^4.20.6"
   }
 }

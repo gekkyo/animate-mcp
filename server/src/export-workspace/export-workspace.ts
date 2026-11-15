@@ -31,17 +31,29 @@ type SuccessfulApply = {
 
 const MANIFEST = ".export.json";
 
-/** Reads the manifest of an export directory. */
+/** Reads and parses the manifest of an export directory.
+ * @param dir Export directory
+ * @returns Parsed export manifest
+ */
 const readManifest = async (dir: string) => JSON.parse(await readFile(join(dir, MANIFEST), "utf8")) as ExportManifest;
 
+/** Converts an unknown caught value to displayable text.
+ * @param error Caught value
+ * @returns Error message or string representation
+ */
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-/** Resolves a manifest path only when it stays inside the export directory. */
+/** Resolves a manifest path only when it stays inside the export directory.
+ * @param dir Export directory
+ * @param file Relative manifest path
+ * @returns Absolute path within the export directory
+ */
 function insideDir(dir: string, file: string): string {
     const root = resolve(dir);
     const absolutePath = resolve(root, file);
+    // Require a separator after root so similarly prefixed sibling paths are rejected too.
     if (!absolutePath.startsWith(root + sep)) {
         throw new Error(`Path outside the export directory: ${file}`);
     }
@@ -55,7 +67,11 @@ export async function writeManifest(dir: string, manifest: ExportManifest): Prom
     await rename(`${path}.tmp`, path);
 }
 
-/** Reads the previous workspace, refuses unapplied changes unless forced, and removes only its tracked scripts. */
+/** Reads the previous workspace, refuses unapplied changes unless forced, and removes only its tracked scripts.
+ * @param dir Export directory
+ * @param force Whether to replace unapplied edits
+ * @returns Nothing.
+ */
 export async function prepareExport(dir: string, force: boolean): Promise<void> {
     let manifest: ExportManifest;
     try {
@@ -80,7 +96,10 @@ export async function prepareExport(dir: string, force: boolean): Promise<void> 
     }
 }
 
-/** Collects existing edits and new scripts found in files belonging to manifested timelines. */
+/** Collects existing edits and new scripts found in files belonging to manifested timelines.
+ * @param dir Export directory
+ * @returns Collected edits, additions, failures, warnings, and timeline fingerprints
+ */
 export async function collectChanges(dir: string) {
     const manifest = await readManifest(dir);
     const edits: (ManifestFile & { file: string; expected: string })[] = [];
@@ -135,6 +154,7 @@ export async function collectChanges(dir: string) {
                 if (!scriptEntry.isFile()) {
                     continue;
                 }
+                // Only numbered frame scripts with the document's script extension are candidates.
                 const match = /^(\d+)\.(as|js)$/i.exec(scriptEntry.name);
                 const extension = manifest.type === "htmlcanvas" ? "js" : "as";
                 if (!match || match[2].toLowerCase() !== extension) {
@@ -195,7 +215,11 @@ export async function collectChanges(dir: string) {
     };
 }
 
-/** Records only successful Apply results so later collection sees the new manifest state. */
+/** Records only successful Apply results so later collection sees the new manifest state.
+ * @param dir Export directory
+ * @param successful Successfully applied edits, scripts, and fingerprints
+ * @returns Nothing.
+ */
 export async function recordApplied(dir: string, successful: SuccessfulApply): Promise<void> {
     const { edits, newScripts, fingerprints } = successful;
     if (edits.length === 0 && newScripts.length === 0) {
@@ -203,6 +227,11 @@ export async function recordApplied(dir: string, successful: SuccessfulApply): P
     }
     const manifest = await readManifest(dir);
     // Scene numbers can repeat for library symbols, so pair scene with item to identify a timeline.
+    /** Finds the manifest timeline for a scene or library symbol.
+     * @param scene Scene index
+     * @param item Library item path, or undefined for a scene
+     * @returns Matching timeline, if present
+     */
     const findTimeline = (scene: number, item: string | undefined) =>
         manifest.timelines?.find((entry) => entry.scene === scene && entry.item === item);
     for (const edit of edits) {
