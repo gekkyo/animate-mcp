@@ -75,7 +75,7 @@ const callEditText = async (
     context: ReturnType<typeof createContext>;
 }> => {
     const context = fakeDocument(options);
-    let handler: ((input: never) => Promise<unknown>) | undefined;
+    let handler: ((input: unknown) => Promise<unknown>) | undefined;
     let inputSchema: z.ZodRawShape = {};
     const bundlePaths: Record<string, string> = {
         "select-document": "server/jsfl/shared/select-document.jsfl",
@@ -95,9 +95,9 @@ const callEditText = async (
         {
             registerTool: (_name: string, config: { inputSchema: unknown }, callback: (input: unknown) => unknown) => {
                 inputSchema = config.inputSchema as z.ZodRawShape;
-                handler = callback as (input: never) => Promise<unknown>;
+                handler = callback as unknown as (input: unknown) => Promise<unknown>;
             },
-        } as never,
+        } as unknown as Parameters<typeof registerEditText>[0],
         {
             runner: { execute: async (code) => runInContext(code, context) },
             bundle,
@@ -108,7 +108,7 @@ const callEditText = async (
         // Return schema failures in the same shape as an MCP tool error.
         return { isError: true, content: [{ type: "text", text: parsed.error.message }], context };
     }
-    return { ...((await handler?.(parsed.data as never)) as Record<string, unknown>), context };
+    return { ...((await handler?.(parsed.data)) as Record<string, unknown>), context };
 };
 
 test("edit_text adds styled text to a locked layer and restores frame and selection", async () => {

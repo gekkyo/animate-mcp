@@ -151,7 +151,7 @@ var __doc = { name: "text.fla", type: "Flash", currentTimeline: 0, timelines: [_
 var fl = { documents: [__doc], trace: function () {} };`,
         context,
     );
-    let handler: ((input: never) => Promise<unknown>) | undefined;
+    let handler: ((input: unknown) => Promise<unknown>) | undefined;
     const bundlePaths: Record<string, string> = {
         "select-document": "server/jsfl/shared/select-document.jsfl",
         "edit-state": "server/jsfl/shared/edit-state.jsfl",
@@ -169,16 +169,16 @@ var fl = { documents: [__doc], trace: function () {} };`,
     registerInspectTimeline(
         {
             registerTool: (_name: string, _config: unknown, callback: (input: unknown) => unknown) => {
-                handler = callback as (input: never) => Promise<unknown>;
+                handler = callback as unknown as (input: unknown) => Promise<unknown>;
             },
-        } as never,
+        } as unknown as Parameters<typeof registerInspectTimeline>[0],
         {
             runner: { execute: async (code) => runInContext(code, context) },
             bundle,
         },
     );
 
-    const result = (await handler?.({ timeline: 0, frame: 1 } as never)) as {
+    const result = (await handler?.({ timeline: 0, frame: 1 })) as {
         structuredContent: { layers: { elements: { type: string; text: string; style: Record<string, unknown> }[] }[] };
     };
     const element = result.structuredContent.layers[0].elements[0];
@@ -196,7 +196,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
     });
 
     runInContext('__text.textType = "static";', context);
-    const staticResult = (await handler?.({ timeline: 0, frame: 1 } as never)) as {
+    const staticResult = (await handler?.({ timeline: 0, frame: 1 })) as {
         structuredContent: { layers: { elements: { style: { textType: string; lineType: null } }[] }[] };
     };
     assert.deepEqual(staticResult.structuredContent.layers[0].elements[0].style, {
@@ -226,7 +226,7 @@ var __doc = { name: "geometry.fla", type: "Flash", currentTimeline: 0, timelines
 var fl = { documents: [__doc], trace: function () {} };`,
         context,
     );
-    let handler: ((input: never) => Promise<unknown>) | undefined;
+    let handler: ((input: unknown) => Promise<unknown>) | undefined;
     const bundlePaths: Record<string, string> = {
         "select-document": "server/jsfl/shared/select-document.jsfl",
         "edit-state": "server/jsfl/shared/edit-state.jsfl",
@@ -244,16 +244,16 @@ var fl = { documents: [__doc], trace: function () {} };`,
     registerInspectTimeline(
         {
             registerTool: (_name: string, _config: unknown, callback: (input: unknown) => unknown) => {
-                handler = callback as (input: never) => Promise<unknown>;
+                handler = callback as unknown as (input: unknown) => Promise<unknown>;
             },
-        } as never,
+        } as unknown as Parameters<typeof registerInspectTimeline>[0],
         {
             runner: { execute: async (code) => runInContext(code, context) },
             bundle,
         },
     );
 
-    const legacy = (await handler?.({ timeline: 0, frame: 2 } as never)) as {
+    const legacy = (await handler?.({ timeline: 0, frame: 2 })) as {
         structuredContent: { layers: { elements: Record<string, unknown>[] }[] };
     };
     assert.equal(legacy.structuredContent.layers[0].elements[0].x, 123);
@@ -262,14 +262,14 @@ var fl = { documents: [__doc], trace: function () {} };`,
     assert.deepEqual(JSON.parse(JSON.stringify(runInContext("timeline.selectedFrames", context))), []);
 
     runInContext("__frameAssignments.length = 0; timeline.failMotion = true;", context);
-    const legacyFailed = (await handler?.({ timeline: 0, frame: 2 } as never)) as { isError?: boolean };
+    const legacyFailed = (await handler?.({ timeline: 0, frame: 2 })) as { isError?: boolean };
     assert.equal(legacyFailed.isError, true);
     assert.equal(runInContext("timeline.currentFrame", context), 0);
     assert.deepEqual(JSON.parse(JSON.stringify(runInContext("__frameAssignments", context))), [1, 0]);
     assert.deepEqual(JSON.parse(JSON.stringify(runInContext("timeline.selectedFrames", context))), []);
     runInContext("timeline.failMotion = false; __frameAssignments.length = 0;", context);
 
-    const result = (await handler?.({ timeline: 0, frame: 2, geometry: true } as never)) as {
+    const result = (await handler?.({ timeline: 0, frame: 2, geometry: true })) as {
         structuredContent: { layers: { elements: Record<string, unknown>[] }[] };
     };
     const element = result.structuredContent.layers[0].elements[0];
@@ -285,7 +285,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
     assert.deepEqual(JSON.parse(JSON.stringify(runInContext("__frameAssignments", context))), [1, 1, 0]);
 
     runInContext("__keyframe.tweenType = 'shape'; __frameAssignments.length = 0;", context);
-    const shapeTween = (await handler?.({ timeline: 0, frame: 2, geometry: true } as never)) as {
+    const shapeTween = (await handler?.({ timeline: 0, frame: 2, geometry: true })) as {
         structuredContent: { layers: { elements: Record<string, unknown>[] }[] };
     };
     assert.equal("interpolated" in shapeTween.structuredContent.layers[0].elements[0], false);
@@ -293,7 +293,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
 
     runInContext("__keyframe.tweenType = 'motion object'; __frameAssignments.length = 0;", context);
     runInContext("timeline.failRead = true; __frameAssignments.length = 0;", context);
-    const failed = (await handler?.({ timeline: 0, frame: 2, geometry: true } as never)) as { isError?: boolean };
+    const failed = (await handler?.({ timeline: 0, frame: 2, geometry: true })) as { isError?: boolean };
     assert.equal(failed.isError, true);
     assert.equal(runInContext("timeline.currentFrame", context), 0);
     assert.deepEqual(JSON.parse(JSON.stringify(runInContext("__frameAssignments", context))), [1, 1, 0]);

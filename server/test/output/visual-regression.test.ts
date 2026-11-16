@@ -9,6 +9,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PNG } from "pngjs";
 import { registerVisualRegression, visualRegressionTool } from "../../src/tools/output/visual-regression.js";
+import type { ToolExtra } from "../../src/tools/shared.js";
 
 /**
  * Encodes a single opaque pixel for baseline comparison tests.
@@ -74,7 +75,8 @@ async function fixture() {
         fail: (error?: Error) => {
             failure = error;
         },
-        run: (args: unknown) => visualRegressionTool.run(args as never, deps, {} as never),
+        // eslint-disable-next-line no-restricted-syntax -- ToolDefinition erases its schema-derived input type to `never`.
+        run: (args: unknown) => visualRegressionTool.run(args as never, deps, {} as ToolExtra),
         close: async () => {
             if (oldHome === undefined) {
                 delete process.env.HOME;

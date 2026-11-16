@@ -41,7 +41,7 @@ function register(runner: { execute: (code: string) => Promise<unknown> }) {
         },
     };
     const bundleNames: string[][] = [];
-    registerCloseDocument(server as never, {
+    registerCloseDocument(server as unknown as Parameters<typeof registerCloseDocument>[0], {
         runner,
         bundle: (...names) => {
             bundleNames.push(names);

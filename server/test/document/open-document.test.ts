@@ -77,7 +77,7 @@ function setup(initial: FakeDocument[] = [], files: Record<string, "valid" | "in
             if (!handler) {
                 throw new Error("open_document handler was not registered");
             }
-            return handler(input as never);
+            return (handler as unknown as (input: Record<string, unknown>) => Promise<unknown>)(input);
         },
         active: () => activeDocument,
         openCalls: () => openCalls,

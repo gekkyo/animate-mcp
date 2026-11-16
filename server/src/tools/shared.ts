@@ -48,6 +48,8 @@ export function registerToolDefinition(server: McpServer, tool: ToolDefinition, 
      */
     const invoke = async (args: unknown, extra: ToolExtra) => {
         try {
+            // The SDK exposes a dynamic schema, while ToolDefinition erases its concrete input to `never`.
+            // eslint-disable-next-line no-restricted-syntax -- Bridge the SDK's runtime-validated input to the erased tool type.
             const { data, text, content } = await tool.run(args as never, deps, extra);
             return {
                 content: content ?? [{ type: "text" as const, text: text ?? JSON.stringify(data) ?? "null" }],
@@ -70,11 +72,13 @@ export function registerToolDefinition(server: McpServer, tool: ToolDefinition, 
 
     server.registerTool(
         tool.name,
+        // eslint-disable-next-line no-restricted-syntax -- The SDK requires schema-specific generics that ToolDefinition erases.
         {
             description: tool.description,
             ...(tool.annotations ? { annotations: tool.annotations } : {}),
             ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}),
         } as never,
+        // eslint-disable-next-line no-restricted-syntax -- The SDK callback type must remain paired with the runtime schema.
         handler as never,
     );
 }

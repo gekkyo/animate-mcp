@@ -45,7 +45,7 @@ Object.defineProperty(__doc, "selection", { get: function () { return __element.
 var fl = { documents: [__doc], trace: function () {} };`,
         context,
     );
-    let handler: ((input: never) => Promise<unknown>) | undefined;
+    let handler: ((input: unknown) => Promise<unknown>) | undefined;
     let inputSchema: z.ZodRawShape = {};
     const bundlePaths: Record<string, string> = {
         "select-document": "server/jsfl/shared/select-document.jsfl",
@@ -66,9 +66,9 @@ var fl = { documents: [__doc], trace: function () {} };`,
         {
             registerTool: (_name: string, config: { inputSchema: unknown }, callback: (input: unknown) => unknown) => {
                 inputSchema = config.inputSchema as z.ZodRawShape;
-                handler = callback as (input: never) => Promise<unknown>;
+                handler = callback as unknown as (input: unknown) => Promise<unknown>;
             },
-        } as never,
+        } as unknown as Parameters<typeof registerEditElements>[0],
         {
             runner: { execute: async (code) => runInContext(code, context) },
             bundle,
@@ -79,7 +79,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
         // Preserve the normal tool-error shape for schema failures.
         return { isError: true, content: [{ type: "text", text: parsed.error.message }], context };
     }
-    return { ...((await handler?.(parsed.data as never)) as Record<string, unknown>), context };
+    return { ...((await handler?.(parsed.data)) as Record<string, unknown>), context };
 };
 
 test("edit_elements updates instances and returns the values read back from Animate", { timeout: 30_000 }, async () => {

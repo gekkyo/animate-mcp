@@ -42,7 +42,7 @@ function register(
         },
     };
     const bundleNames: string[][] = [];
-    registerConvertToSymbol(server as never, {
+    registerConvertToSymbol(server as unknown as Parameters<typeof registerConvertToSymbol>[0], {
         runner,
         bundle: (...names) => {
             bundleNames.push(names);

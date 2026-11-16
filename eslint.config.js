@@ -49,5 +49,14 @@ export default [
   {
     languageOptions: { parser: tsParser },
     files: ["server/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "TSAsExpression[typeAnnotation.type='TSNeverKeyword']",
+          message: "Do not use `as never` to bypass type checking; use a properly typed adapter.",
+        },
+      ],
+    },
   },
 ];

@@ -34,7 +34,7 @@ function setup(document: object) {
         },
     };
     const bundleNames: string[][] = [];
-    registerImportAssets(server as never, {
+    registerImportAssets(server as unknown as Parameters<typeof registerImportAssets>[0], {
         runner: {
             execute: async (code) =>
                 runInNewContext(code, {
