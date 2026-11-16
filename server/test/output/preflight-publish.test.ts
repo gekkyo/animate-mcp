@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { preflightPublishTool } from "../../src/tools/output/preflight-publish.js";
+import { fileURLToPath } from "node:url";
+import { runPreflightPublish } from "../../src/tools/output/preflight-publish.js";
+import type { ToolDeps } from "../../src/tools/shared.js";
 
 const fixture = JSON.parse(await readFile("server/test/fixtures/preflight-publish/active-canvas.json", "utf8")) as {
     document: { name: string; pathURI: string; type: string; profile: string };
@@ -21,40 +23,36 @@ function fakeBundle(...names: string[]) {
 
 test("preflight reports documented checks and existing audit findings without publishing or writing", async () => {
     const calls: string[] = [];
-    const result = await preflightPublishTool.run(
-        { document: undefined } as never,
-        {
-            bundle: (...names) => {
-                calls.push(`bundle:${names.join(",")}`);
-                return fakeBundle(...names);
-            },
-            runner: {
-                execute: async (script) => {
-                    calls.push(script);
-                    if (script.includes("audit-document")) {
-                        return JSON.stringify(fixture.audit);
-                    }
-                    if (script.includes("__expectedName")) {
-                        const requested = JSON.parse(script.match(/var __outputFiles = (.*?);\n/)?.[1] ?? "[]") as {
-                            name: string;
-                        }[];
-                        return JSON.stringify({
-                            ...fixture.document,
-                            sameDocument: true,
-                            outputFiles: requested.map(({ name }) => ({
-                                name,
-                                exists: fixture.existingOutputs.includes(name),
-                            })),
-                        });
-                    }
-                    return JSON.stringify(fixture.document);
-                },
+    const result = await runPreflightPublish(undefined, {
+        bundle: (...names) => {
+            calls.push(`bundle:${names.join(",")}`);
+            return fakeBundle(...names);
+        },
+        runner: {
+            execute: async (script) => {
+                calls.push(script);
+                if (script.includes("audit-document")) {
+                    return JSON.stringify(fixture.audit);
+                }
+                if (script.includes("__expectedName")) {
+                    const requested = JSON.parse(script.match(/var __outputFiles = (.*?);\n/)?.[1] ?? "[]") as {
+                        name: string;
+                    }[];
+                    return JSON.stringify({
+                        ...fixture.document,
+                        sameDocument: true,
+                        outputFiles: requested.map(({ name }) => ({
+                            name,
+                            exists: fixture.existingOutputs.includes(name),
+                        })),
+                    });
+                }
+                return JSON.stringify(fixture.document);
             },
         },
-        {} as never,
-    );
+    });
 
-    assert.deepEqual(result.data, {
+    assert.deepEqual(result, {
         document: "animation.fla",
         type: "htmlcanvas",
         checks: {
@@ -116,43 +114,35 @@ test("preflight does not fail an HTML5 Canvas profile without recognized format 
         ...fixture.document,
         profile: "<profile><PublishFormatProperties></PublishFormatProperties></profile>",
     };
-    const result = await preflightPublishTool.run(
-        { document: undefined } as never,
-        {
-            bundle: fakeBundle,
-            runner: {
-                execute: async (script) => {
-                    if (script.includes("audit-document")) {
-                        return JSON.stringify({ ...fixture.audit, findings: [] });
-                    }
-                    if (script.includes("__expectedName")) {
-                        return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
-                    }
-                    return JSON.stringify(info);
-                },
+    const result = await runPreflightPublish(undefined, {
+        bundle: fakeBundle,
+        runner: {
+            execute: async (script) => {
+                if (script.includes("audit-document")) {
+                    return JSON.stringify({ ...fixture.audit, findings: [] });
+                }
+                if (script.includes("__expectedName")) {
+                    return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
+                }
+                return JSON.stringify(info);
             },
         },
-        {} as never,
-    );
-    assert.equal(result.data.checks.publishFormats.status, "unchecked");
-    assert.deepEqual(result.data.checks.publishFormats.formats, []);
+    });
+    assert.equal(result.checks.publishFormats.status, "unchecked");
+    assert.deepEqual(result.checks.publishFormats.formats, []);
 });
 
 test("preflight marks unsaved and unsupported documents without guessing a publish result", async () => {
     const info = { name: "untitled", pathURI: "", type: "Unknown", profile: "" };
-    const result = await preflightPublishTool.run(
-        { document: undefined } as never,
-        {
-            bundle: fakeBundle,
-            runner: {
-                execute: async (script) =>
-                    script.includes("audit-document") ? JSON.stringify(fixture.audit) : JSON.stringify(info),
-            },
+    const result = await runPreflightPublish(undefined, {
+        bundle: fakeBundle,
+        runner: {
+            execute: async (script) =>
+                script.includes("audit-document") ? JSON.stringify(fixture.audit) : JSON.stringify(info),
         },
-        {} as never,
-    );
+    });
 
-    assert.deepEqual(result.data.checks, {
+    assert.deepEqual(result.checks, {
         saved: { status: "unchecked", detail: "Unsupported type: Unknown." },
         documentType: { status: "unchecked", detail: "Unsupported type: Unknown." },
         publishFormats: { status: "unchecked", detail: "Unsupported type: Unknown.", formats: [] },
@@ -171,44 +161,36 @@ test("preflight fails an all-disabled publish profile and rejects a document swi
         ...fixture.document,
         profile: `<PublishFormatProperties><publishFormat id="svg-id">0</publishFormat><publishFormat id="js-id">0</publishFormat></PublishFormatProperties><PublishProperties id="svg-id" name="SVG Image"></PublishProperties><PublishProperties id="js-id" name="JavaScript/HTML"></PublishProperties>`,
     };
-    const allDisabled = await preflightPublishTool.run(
-        { document: undefined } as never,
-        {
-            bundle: (...names) => names.join(" "),
-            runner: {
-                execute: async (script) => {
-                    if (script.includes("audit-document")) {
-                        return JSON.stringify(fixture.audit);
-                    }
-                    if (script.includes("__expectedName")) {
-                        return JSON.stringify({
-                            ...info,
-                            sameDocument: true,
-                            outputFiles: [{ name: "animation.html", exists: false }],
-                        });
-                    }
-                    return JSON.stringify(info);
-                },
+    const allDisabled = await runPreflightPublish(undefined, {
+        bundle: (...names) => names.join(" "),
+        runner: {
+            execute: async (script) => {
+                if (script.includes("audit-document")) {
+                    return JSON.stringify(fixture.audit);
+                }
+                if (script.includes("__expectedName")) {
+                    return JSON.stringify({
+                        ...info,
+                        sameDocument: true,
+                        outputFiles: [{ name: "animation.html", exists: false }],
+                    });
+                }
+                return JSON.stringify(info);
             },
         },
-        {} as never,
-    );
-    assert.equal(allDisabled.data.checks.publishFormats.status, "fail");
+    });
+    assert.equal(allDisabled.checks.publishFormats.status, "fail");
 
     await assert.rejects(
-        preflightPublishTool.run(
-            { document: undefined } as never,
-            {
-                bundle: fakeBundle,
-                runner: {
-                    execute: async (script) =>
-                        script.includes("audit-document")
-                            ? JSON.stringify({ ...fixture.audit, document: "another.fla" })
-                            : JSON.stringify(info),
-                },
+        runPreflightPublish(undefined, {
+            bundle: fakeBundle,
+            runner: {
+                execute: async (script) =>
+                    script.includes("audit-document")
+                        ? JSON.stringify({ ...fixture.audit, document: "another.fla" })
+                        : JSON.stringify(info),
             },
-            {} as never,
-        ),
+        }),
         /Document changed during preflight/,
     );
 });
@@ -220,27 +202,23 @@ test("preflight leaves traversal-like profile filenames unchecked without probin
         profile: "<PublishProfile><html>1</html><htmlFileName>%2e%2e/secret.html</htmlFileName></PublishProfile>",
     };
     const scripts: string[] = [];
-    const result = await preflightPublishTool.run(
-        { document: undefined } as never,
-        {
-            bundle: fakeBundle,
-            runner: {
-                execute: async (script) => {
-                    scripts.push(script);
-                    if (script.includes("audit-document")) {
-                        return JSON.stringify({ ...fixture.audit, findings: [] });
-                    }
-                    if (script.includes("__expectedName")) {
-                        return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
-                    }
-                    return JSON.stringify(info);
-                },
+    const result = await runPreflightPublish(undefined, {
+        bundle: fakeBundle,
+        runner: {
+            execute: async (script) => {
+                scripts.push(script);
+                if (script.includes("audit-document")) {
+                    return JSON.stringify({ ...fixture.audit, findings: [] });
+                }
+                if (script.includes("__expectedName")) {
+                    return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
+                }
+                return JSON.stringify(info);
             },
         },
-        {} as never,
-    );
+    });
 
-    assert.equal(result.data.checks.outputFiles.status, "unchecked");
+    assert.equal(result.checks.outputFiles.status, "unchecked");
     const probeScript = scripts.find((script) => script.includes("__outputFiles ="));
     assert.ok(probeScript);
     assert.match(probeScript, /__outputFiles = \[\]/);
@@ -256,33 +234,29 @@ test("preflight probes only enabled format filenames and leaves default or incom
     async function runWithProfile(profile: string) {
         const scripts: string[] = [];
         const info = { ...fixture.document, type: "Flash", profile };
-        const result = await preflightPublishTool.run(
-            { document: undefined } as never,
-            {
-                bundle: fakeBundle,
-                runner: {
-                    execute: async (script) => {
-                        scripts.push(script);
-                        if (script.includes("audit-document")) {
-                            return JSON.stringify({ ...fixture.audit, findings: [] });
-                        }
-                        if (script.includes("__expectedName")) {
-                            const requested = JSON.parse(script.match(/var __outputFiles = (.*?);\n/)?.[1] ?? "[]") as {
-                                name: string;
-                            }[];
-                            return JSON.stringify({
-                                ...info,
-                                sameDocument: true,
-                                outputFiles: requested.map(({ name }) => ({ name, exists: false })),
-                            });
-                        }
-                        return JSON.stringify(info);
-                    },
+        const result = await runPreflightPublish(undefined, {
+            bundle: fakeBundle,
+            runner: {
+                execute: async (script) => {
+                    scripts.push(script);
+                    if (script.includes("audit-document")) {
+                        return JSON.stringify({ ...fixture.audit, findings: [] });
+                    }
+                    if (script.includes("__expectedName")) {
+                        const requested = JSON.parse(script.match(/var __outputFiles = (.*?);\n/)?.[1] ?? "[]") as {
+                            name: string;
+                        }[];
+                        return JSON.stringify({
+                            ...info,
+                            sameDocument: true,
+                            outputFiles: requested.map(({ name }) => ({ name, exists: false })),
+                        });
+                    }
+                    return JSON.stringify(info);
                 },
             },
-            {} as never,
-        );
-        return { result: result.data, scripts };
+        });
+        return { result, scripts };
     }
 
     const enabledOnly = await runWithProfile(
@@ -319,4 +293,102 @@ test("preflight probes only enabled format filenames and leaves default or incom
     );
     assert.equal(ambiguous.result.checks.outputFiles.status, "unchecked");
     assert.deepEqual(ambiguous.result.checks.outputFiles.candidates, ["animation.html"]);
+});
+
+test("preflight checks AIR descriptors, icons, and target-specific assets", async () => {
+    const directory = new URL("../fixtures/preflight-publish/air/", import.meta.url);
+    const cases = [
+        ["desktop", "desktop", "pass", "pass"],
+        ["mismatched-icon", "desktop", "unchecked", "pass"],
+        ["malformed-xml", "android", "unchecked", "unchecked"],
+        ["comment-only-fields", "android", "unchecked", "warning"],
+        ["wrong-size", "desktop", "fail", "pass"],
+        ["missing-icon", "desktop", "fail", "pass"],
+        ["escaping-icon", "desktop", "unchecked", "pass"],
+        ["missing-descriptor", "desktop", "unchecked", "unchecked"],
+        ["ios-missing-assets", "ios", "unchecked", "fail"],
+        ["ios-assets", "ios", "unchecked", "pass"],
+        ["android-no-resdir", "android", "unchecked", "warning"],
+        ["android-missing-resdir", "android", "unchecked", "fail"],
+        ["android-present-resdir", "android", "unchecked", "pass"],
+        ["android-wrong-name-resdir", "android", "unchecked", "warning"],
+    ] as const;
+
+    for (const [name, target, iconStatus, targetStatus] of cases) {
+        const nested = ["ios-assets", "android-present-resdir", "android-wrong-name-resdir"].includes(name);
+        const path = new URL(`${name}.fla`, nested ? new URL(`${name}/`, directory) : directory);
+        const info = {
+            name: `${name}.fla`,
+            pathURI: path.href,
+            platformPath: fileURLToPath(path),
+            type: "Flash",
+            playerTarget: `AIR 51.3.1.2 for ${target === "ios" ? "iOS" : target[0].toUpperCase() + target.slice(1)}`,
+            profile: "",
+        };
+        const deps: ToolDeps = {
+            bundle: fakeBundle,
+            runner: {
+                execute: async (script) => {
+                    if (script.includes("audit-document")) {
+                        return JSON.stringify({ ...fixture.audit, document: info.name, findings: [] });
+                    }
+                    if (script.includes("__expectedName")) {
+                        return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
+                    }
+                    return JSON.stringify(info);
+                },
+            },
+        };
+        const result = await runPreflightPublish(undefined, deps);
+        assert.equal(result.checks.air.target.target, target, name);
+        assert.equal(result.checks.air.icons.status, iconStatus, name);
+        if (target === "ios") {
+            assert.equal(result.checks.air.iosAssetsCar.status, targetStatus, name);
+        }
+        if (target === "android") {
+            assert.equal(result.checks.air.androidAdaptiveIcon.status, targetStatus, name);
+        }
+        if (name === "missing-descriptor") {
+            assert.equal(result.checks.air.descriptor.status, "unchecked");
+            assert.equal(result.checks.air.identity.status, "unchecked");
+            assert.equal(result.checks.air.signing.status, "unchecked");
+        }
+        if (name === "mismatched-icon" || name === "malformed-xml") {
+            assert.equal(result.checks.air.descriptor.status, "fail");
+            assert.equal(result.checks.air.identity.status, "unchecked");
+            assert.equal(result.checks.air.icons.status, "unchecked");
+        }
+        if (name === "comment-only-fields") {
+            assert.equal(result.checks.air.descriptor.status, "pass");
+            assert.equal(result.checks.air.identity.status, "fail");
+            assert.equal(result.checks.air.icons.status, "unchecked");
+            assert.equal(result.checks.air.androidAdaptiveIcon.status, "warning");
+        }
+        if (name === "desktop") {
+            assert.equal(result.checks.air.descriptor.status, "pass");
+            assert.equal(result.checks.air.identity.status, "pass");
+            assert.equal(result.checks.air.icons.items[0].status, "pass");
+            assert.equal(result.checks.air.signing.status, "unchecked");
+        }
+    }
+});
+
+test("non-AIR Flash preflight does not add AIR checks", async () => {
+    const info = { ...fixture.document, type: "Flash" };
+    const deps: ToolDeps = {
+        bundle: fakeBundle,
+        runner: {
+            execute: async (script) => {
+                if (script.includes("audit-document")) {
+                    return JSON.stringify({ ...fixture.audit, findings: [] });
+                }
+                if (script.includes("__expectedName")) {
+                    return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
+                }
+                return JSON.stringify(info);
+            },
+        },
+    };
+    const result = await runPreflightPublish(undefined, deps);
+    assert.equal("air" in result.checks, false);
 });

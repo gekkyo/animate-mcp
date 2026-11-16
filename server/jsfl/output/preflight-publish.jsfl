@@ -3,7 +3,7 @@
  * @returns Serialized document metadata and profile XML.
  */
 (function () {
-  var document = selectPreflightDocument(), profile = "", sameDocument = true, outputFiles = [];
+  var document = selectPreflightDocument(), profile = "", playerTarget = "", sameDocument = true, outputFiles = [];
   if (typeof __expectedName !== "undefined" && typeof __expectedPath !== "undefined") {
     sameDocument = document.name === __expectedName && String(document.pathURI || "") === __expectedPath;
   }
@@ -11,6 +11,11 @@
     profile = document.exportPublishProfileString();
   } catch (profileError) {
     profile = "";
+  }
+  try {
+    playerTarget = document.playerTarget || "";
+  } catch (playerTargetError) {
+    playerTarget = "";
   }
   if (sameDocument && typeof __outputFiles !== "undefined") {
     for (var outputIndex = 0; outputIndex < __outputFiles.length; outputIndex++) {
@@ -20,14 +25,20 @@
       });
     }
   }
-  return serialize({
+  var info = {
     name: document.name || "",
     pathURI: document.pathURI || "",
     type: document.type || "",
     profile: profile,
     sameDocument: sameDocument,
     outputFiles: outputFiles
-  });
+  };
+  if (document.type === "Flash" && playerTarget.indexOf("AIR ") === 0) {
+    info.playerTarget = playerTarget;
+    // macOS pathURI includes the volume name (file:///Macintosh%20HD/...), so Node cannot convert it.
+    info.platformPath = document.pathURI ? FLfile.uriToPlatformPath(document.pathURI) : "";
+  }
+  return serialize(info);
 })()
 
 /** Selects the requested open document without filtering unsupported document types.

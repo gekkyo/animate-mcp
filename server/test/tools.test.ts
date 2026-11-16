@@ -30,7 +30,7 @@ Basic flow:
 - Use diff_captures with absolute before/after paths returned by capture_frame. It creates a non-overwriting red-highlight PNG alongside the earlier Capture.
 - Use audit_document for read-only document hygiene suggestions. Review every finding before changing content; unused Library items may be intentional, especially when linkage is enabled.
 - Use verify_canvas_output to check a published HTML5 Canvas page in Chrome. By default Publish overwrites the document's configured outputs; use publish: false to avoid publishing or htmlPath to specify custom output. Page scripts run in Chrome.
-- Use preflight_publish to review known risks before Publish. Ambiguous output-file paths and compilation are not verified.
+- Use preflight_publish to review known risks before Publish. AIR signing, ambiguous output-file paths, and compilation are not verified.
 - Save a named Baseline, then compare the same timeline and frames later. Saving over an existing Baseline requires overwrite: true.
 
 Notes:

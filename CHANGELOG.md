@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `preflight_publish` checks AIR Desktop, Android and iOS documents: the adjacent application descriptor (well-formed, `<id>`, `<versionNumber>`), declared icon PNGs and sizes, iOS `Assets.car` presence and the Android `<resdir>` adaptive icon (`mipmap-anydpi-v26/icon.xml`). Signing files, `Assets.car` contents and packaging remain unchecked.
+- Added `npm run call -- <tool> '<json>'` to call a tool on the locally built server.
+
 ## 0.3.1
 
 ### Fixed

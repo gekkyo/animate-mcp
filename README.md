@@ -215,7 +215,7 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 | Library | `edit_library` | Organize items, find usages, edit AS3 linkage |
 |  | `import_assets` | Import images and audio into the Library |
 | Output and verification | `publish` | Publish and return the Build result |
-|  | `preflight_publish` | Check publish readiness without publishing |
+|  | `preflight_publish` | Check publish readiness (including AIR descriptor and icons) without publishing |
 |  | `read_output` | Read the Output and Compiler Errors panels |
 |  | `test_movie` | Run an AS3 Test Movie and capture compile diagnostics and early output |
 |  | `verify_canvas_output` | Open Canvas output in Chrome and check for errors |
