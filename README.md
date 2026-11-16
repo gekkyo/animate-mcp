@@ -270,6 +270,8 @@ Please open an [issue](https://github.com/gekkyo/animate-mcp/issues) with your A
 
 Client config: `node /path/to/animate-mcp/server/dist/index.js` (stdio).
 
+To call one tool on the locally built server (not a separately registered one): `npm run call -- <tool> '<json object>'`, e.g. `npm run call -- get_status '{}'`.
+
 ### Smoke tests (real Animate)
 
 Manual checks not covered by the scripts below:

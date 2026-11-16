@@ -262,6 +262,8 @@ flowchart TB
 
 クライアント設定: `node /path/to/animate-mcp/server/dist/index.js`（stdio）。
 
+ローカルでビルドしたサーバー（別に登録したサーバーではない）のツールを1回呼ぶ: `npm run call -- <ツール名> '<JSONオブジェクト>'`（例: `npm run call -- get_status '{}'`）。
+
 ### スモークテスト（実機の Animate）
 
 下記のスクリプトでは確認できない手動チェック:
