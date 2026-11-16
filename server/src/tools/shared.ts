@@ -24,6 +24,9 @@ export type ToolDefinition<S = unknown> = {
     run: (args: never, deps: ToolDeps, extra: ToolExtra) => Promise<ToolRunResult>;
 };
 
+// Keep catalog previews small enough for the initial tools/list + instructions byte budget.
+export const TOOL_DESCRIPTION_PREVIEW_LENGTH = 60;
+
 /**
  * Converts a tool exception into an MCP error result.
  * @param error The caught value
@@ -34,6 +37,27 @@ export const failure = (error: unknown) => ({
     isError: true,
 });
 
+/** Invokes a validated tool definition and converts its result or error to MCP's response envelope.
+ * @param tool Tool definition to invoke
+ * @param args Validated tool arguments
+ * @param deps Runtime dependencies passed to the tool
+ * @param extra MCP callback metadata and notification helpers
+ * @returns MCP response envelope
+ */
+export async function invokeToolDefinition(tool: ToolDefinition, args: unknown, deps: ToolDeps, extra: ToolExtra) {
+    try {
+        // Runtime schema validation precedes this bridge; ToolDefinition erases each concrete input type.
+        // eslint-disable-next-line no-restricted-syntax -- Dispatch bridge after runtime validation.
+        const { data, text, content } = await tool.run(args as never, deps, extra);
+        return {
+            content: content ?? [{ type: "text" as const, text: text ?? JSON.stringify(data) ?? "null" }],
+            structuredContent: data,
+        };
+    } catch (error) {
+        return failure(error);
+    }
+}
+
 /** Registers a tool definition and converts its result to the MCP response envelope.
  * @param server MCP server to register against
  * @param tool Tool definition to register
@@ -41,24 +65,6 @@ export const failure = (error: unknown) => ({
  * @returns Nothing.
  */
 export function registerToolDefinition(server: McpServer, tool: ToolDefinition, deps: ToolDeps): void {
-    /** Invokes a tool and converts thrown errors to MCP error results.
-     * @param args Tool arguments
-     * @param extra MCP callback metadata and notification helpers
-     * @returns MCP response envelope
-     */
-    const invoke = async (args: unknown, extra: ToolExtra) => {
-        try {
-            // The SDK exposes a dynamic schema, while ToolDefinition erases its concrete input to `never`.
-            // eslint-disable-next-line no-restricted-syntax -- Bridge the SDK's runtime-validated input to the erased tool type.
-            const { data, text, content } = await tool.run(args as never, deps, extra);
-            return {
-                content: content ?? [{ type: "text" as const, text: text ?? JSON.stringify(data) ?? "null" }],
-                structuredContent: data,
-            };
-        } catch (error) {
-            return failure(error);
-        }
-    };
     /**
      * Creates the schema-appropriate callback that invokes this registered tool.
      * @param args Tool arguments, when the tool has an input schema
@@ -67,8 +73,8 @@ export function registerToolDefinition(server: McpServer, tool: ToolDefinition, 
      */
     const handler =
         tool.inputSchema === undefined
-            ? (extra: ToolExtra) => invoke({}, extra)
-            : (args: unknown, extra: ToolExtra) => invoke(args, extra);
+            ? (extra: ToolExtra) => invokeToolDefinition(tool, {}, deps, extra)
+            : (args: unknown, extra: ToolExtra) => invokeToolDefinition(tool, args, deps, extra);
 
     server.registerTool(
         tool.name,

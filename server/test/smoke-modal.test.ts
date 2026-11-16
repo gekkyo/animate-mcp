@@ -8,7 +8,11 @@ import { toolHandler } from "../scripts/smoke-lib.mjs";
  * @returns The wrapped handler
  */
 function makeHandler(callback: (...args: unknown[]) => unknown, checkModal: () => unknown) {
-    const wrapped = toolHandler((server) => server.registerTool("test", {}, callback), checkModal);
+    const wrapped = toolHandler(
+        (server) => server.registerTool("test", {}, callback),
+        checkModal,
+        async (_name, args) => callback(args),
+    );
     return (...args: unknown[]) => wrapped(...args);
 }
 

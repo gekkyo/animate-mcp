@@ -1,0 +1,22 @@
+{
+    "shape": {
+        "document": "string",
+        "findings": {
+            "unusedLibraryItems": ["empty"],
+            "emptyKeyframes": [
+                {
+                    "category": "string",
+                    "severity": "string",
+                    "location": "string",
+                    "message": "string"
+                }
+            ],
+            "defaultNames": ["empty"]
+        },
+        "warnings": ["empty"]
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "document": "animate-mcp-verification-tools-V6aMZk.fla"
+    }
+}

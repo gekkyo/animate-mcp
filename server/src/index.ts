@@ -69,7 +69,7 @@ export const TOOLS = [
     preflightPublishTool,
     visualRegressionTool,
 ] as const;
-const registry = createToolRegistry(TOOLS);
+const registry = createToolRegistry(TOOLS, { entrances: true });
 export const INSTRUCTIONS = registry.instructions;
 
 /** Reads the package version from the location shared by src/ and dist/. */
@@ -82,31 +82,43 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
  * Builds the Runner, registers the MCP tools and listens on stdio.
+ * @param activeRegistry Registry to expose over stdio
  * @returns Resolves once connected; rejects on failure so the caller can set the exit code.
  */
-async function main() {
+export async function serve(activeRegistry: ReturnType<typeof createToolRegistry>) {
     const runner = createRunner({
         dir: runsDir(),
         launch: launcher(),
         isRunning: isAnimateRunning,
         timeoutMs: Number(process.env.ANIMATE_MCP_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
     });
-    const server = new McpServer({ name: "animate-mcp", version: PACKAGE_VERSION }, { instructions: INSTRUCTIONS });
-    registry.register(server, { runner, bundle });
+    const server = new McpServer(
+        { name: "animate-mcp", version: PACKAGE_VERSION },
+        { instructions: activeRegistry.instructions },
+    );
+    activeRegistry.register(server, { runner, bundle });
 
     const transport = new StdioServerTransport();
     await server.connect(transport);
 }
 
+/**
+ * Starts the production server with its compact Entrance registry.
+ * @returns Resolves once connected; rejects on failure so the caller can set the exit code.
+ */
+export async function startServer() {
+    await serve(registry);
+}
+
+/** Reports startup failures and sets a failing process exit code.
+ * @param error Startup failure to report
+ * @returns Nothing
+ */
+export function reportStartupError(error: unknown): void {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+}
+
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-    main().catch(
-        /** Reports startup failures and sets a failing process exit code.
-         * @param error Startup failure to report
-         * @returns Nothing
-         */
-        (error: unknown) => {
-            console.error(error instanceof Error ? error.message : String(error));
-            process.exitCode = 1;
-        },
-    );
+    startServer().catch(reportStartupError);
 }

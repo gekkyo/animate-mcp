@@ -1,11 +1,27 @@
 // Shared setup for real-Animate smoke scripts (not in CI). Run `npm run build` first.
 import { execFile } from "node:child_process";
+import { appendFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { isAnimateRunning, launcher } from "../dist/runtime/animate-launcher.js";
-import { bundle } from "../dist/runtime/jsfl-bundle.js";
-import { createRunner } from "../dist/runtime/runner.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const execFileAsync = promisify(execFile);
+const serverPath = fileURLToPath(new URL("../dist/index.js", import.meta.url));
+let client;
+let clientTransport;
+let connecting;
+
+/** Keeps stdio handles alive only while an MCP request is pending.
+ * @param ref Whether to reference or unreference the child process handles.
+ */
+function refClientProcess(ref) {
+    const method = ref ? "ref" : "unref";
+    clientTransport?._process?.[method]();
+    clientTransport?._process?.stdin?._handle?.[method]();
+    clientTransport?._process?.stdout?._handle?.[method]();
+}
 const MODAL_QUERY = `tell application "System Events"
     set animateProcesses to every application process whose name contains "Animate"
     if (count of animateProcesses) is 0 then return "UNKNOWN"
@@ -116,22 +132,127 @@ export async function closeDocumentByPath(runJsfl, pathURI) {
     }
 }
 
-/** Registers a tool with a real-Animate runner and augments timeout errors with modal diagnostics.
+/** Starts the shared production MCP client on its first request.
+ * @returns Promise resolving to the connected MCP client.
+ */
+function getClient() {
+    if (!connecting) {
+        client = new Client({ name: "animate-mcp-smoke", version: "1.0.0" });
+        clientTransport = new StdioClientTransport({ command: process.execPath, args: [serverPath], env: process.env });
+        connecting = client.connect(clientTransport).then(() => {
+            refClientProcess(false);
+            return client;
+        });
+        process.once("beforeExit", () => {
+            void client?.close();
+        });
+    }
+    return connecting.then(() => client);
+}
+
+/** Replaces HOME in string values before recording smoke arguments.
+ * @param value Value to sanitize.
+ * @returns Sanitized value.
+ */
+function sanitizeArguments(value) {
+    if (typeof value === "string") {
+        return process.env.HOME ? value.replaceAll(process.env.HOME, `\${HOME}`) : value;
+    }
+    if (Array.isArray(value)) {
+        return value.map(sanitizeArguments);
+    }
+    if (value && typeof value === "object") {
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizeArguments(item)]));
+    }
+    return value;
+}
+
+/** Describes the value-free type shape of structured tool output.
+ * @param value Structured output value.
+ * @returns Type shape.
+ */
+function shapeOf(value) {
+    if (value === null) {
+        return "null";
+    }
+    if (Array.isArray(value)) {
+        return value.length ? [shapeOf(value[0])] : ["empty"];
+    }
+    if (typeof value === "object") {
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shapeOf(item)]));
+    }
+    return typeof value;
+}
+
+/** Appends a values-free result shape to the optional smoke recording directory.
+ * @param tool Registered tool name.
+ * @param args Tool arguments.
+ * @param result MCP tool result.
+ * @returns Promise resolving when the recording is written.
+ */
+async function recordResult(tool, args, result) {
+    const directory = process.env.SMOKE_RECORD_DIR;
+    if (!directory || result.isError) {
+        return;
+    }
+    await mkdir(directory, { recursive: true });
+    const entry = {
+        tool,
+        isError: result.isError ?? false,
+        arguments: sanitizeArguments(args),
+        shape: shapeOf(result.structuredContent),
+    };
+    await appendFile(join(directory, `${tool}.jsonl`), `${JSON.stringify(entry)}\n`);
+}
+
+/** Registers an Entrance-routed tool and augments timeout errors with modal diagnostics.
  * @param register Tool registration function.
  * @param checkModal Function that reports Animate modal state.
+ * @param call Optional Entrance call implementation, primarily for tests.
  * @returns Async handler for the registered tool.
  */
-export function toolHandler(register, checkModal = inspectAnimateModal) {
-    const runner = createRunner({
-        dir: `${process.env.HOME}/.animate-mcp/runs`,
-        launch: launcher(),
-        isRunning: isAnimateRunning,
-        timeoutMs: 120000,
-    });
-    let handle;
-    register({ registerTool: (_name, _config, callback) => (handle = callback) }, { runner, bundle });
-    return async (...args) => {
-        const result = await handle(...args);
+export function toolHandler(register, checkModal = inspectAnimateModal, call) {
+    let tool;
+    let readOnly;
+    register(
+        {
+            registerTool: (name, config) => {
+                tool = name;
+                readOnly = config.annotations?.readOnlyHint === true;
+            },
+        },
+        {},
+    );
+    return async (args) => {
+        let name = "execute_write";
+        if (tool === "run_jsfl") {
+            name = tool;
+        } else if (readOnly) {
+            name = "execute_readonly";
+        }
+        const requestArgs = tool === "run_jsfl" ? args : { name: tool, arguments: args };
+        const invoke =
+            call ??
+            (async (entranceName, requestArguments) => {
+                const client = await getClient();
+                refClientProcess(true);
+                try {
+                    const result = await client.callTool(
+                        { name: entranceName, arguments: requestArguments },
+                        undefined,
+                        { timeout: 130000 },
+                    );
+                    await recordResult(
+                        tool,
+                        tool === "run_jsfl" ? requestArguments : requestArguments.arguments,
+                        result,
+                    );
+                    return result;
+                } finally {
+                    refClientProcess(false);
+                }
+            });
+        const result = await invoke(name, requestArgs);
         const errorText = result?.content?.find((item) => item?.type === "text" && typeof item.text === "string")?.text;
         if (
             !result?.isError ||

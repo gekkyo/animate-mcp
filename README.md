@@ -185,18 +185,29 @@ Install GreenSock-AS3 into the saved AS3 document (I have reviewed the license)
 ## Usage tips
 
 - If multiple documents are open, specify the target document.
-- Changes made in Animate after Export are detected as conflicts during Apply. Apply is refused if the library has changed.
-- Re-exporting is refused when unapplied edits exist. Use `force: true` only if you are willing to discard them.
-- After changing the timeline, tweens, or library, re-export before editing or applying scripts.
-- Deleting a layer, frames, or a library item requires `confirm: true`. Library items in use cannot be deleted.
-- Save with `save_document` after confirming any overwrite, or save in Animate. Use `edit_library`'s `getLinkage` and `setLinkage` operations to inspect or edit AS3 linkage; renaming or moving an item still does not automatically update linkage names or string references in code.
-- `edit_elements` rejects tween interiors and validates all operations before writing; it does not save the `.fla`.
+- Script editing runs Export → edit → Apply. Re-export after changing Animate following an Export, or after changing the timeline or library.
+- Edited `.fla` files are not saved automatically. Use `save_document` or save in Animate.
 
 ## Tools
 
-Full inputs and caveats are in [TOOLS.md](TOOLS.md).
+### Public MCP tools
 
-| Area | Tool | What it does |
+The server exposes these four MCP tools by default:
+
+| MCP tool | Purpose |
+|----------|---------|
+| `search_tools` | Search operation schemas and caveats |
+| `execute_readonly` | Run read-only operations |
+| `execute_write` | Run all other operations (read-only operations are rejected) |
+| `run_jsfl` | Run JSFL directly (can be denied separately) |
+
+Permissions apply per `execute_readonly` / `execute_write`; “always allow” covers everything under that entrance. Existing permission rules for individual operation names (such as `mcp__animate__publish`) no longer match. See [TOOLS.md](TOOLS.md) for the operations and details.
+
+### Operations
+
+The operations below are not separate MCP tools; pass them as `name` to `execute_readonly` / `execute_write`.
+
+| Area | Operation | What it does |
 |------|------|--------------|
 | Document | `get_document_info` | Show name, size, frame rate, and AS version |
 |  | `get_status` | Check Animate response and list open documents |
@@ -226,7 +237,6 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 |  | `diff_captures` | Compare two captured PNGs |
 |  | `visual_regression` | Save and compare named frame baselines |
 | Other | `install_greensock` | Install GreenSock-AS3 (saved AS3 only; license review required) |
-|  | `run_jsfl` | Run arbitrary JSFL |
 
 ## Environment variables
 
@@ -254,39 +264,18 @@ Please open an [issue](https://github.com/gekkyo/animate-mcp/issues) with your A
 
 ## Development
 
+From the repository root, install dependencies, build, and run the tests:
+
     npm install && npm run build
     npm test
 
-Client config: `node /path/to/animate-mcp/server/dist/index.js` (stdio).
+To register the built server with an MCP client, set its launch command to `node /path/to/animate-mcp/server/dist/index.js`. Replace `/path/to/animate-mcp` with the actual path to this repository.
 
-To call one tool on the locally built server (not a separately registered one): `npm run call -- <tool> '<json object>'`, e.g. `npm run call -- get_status '{}'`.
+To try one operation on the built server without registering it with a client, run this from the repository root (`get_status` example):
 
-### Smoke tests (real Animate)
+    npm run -s call -- execute_readonly '{"name":"get_status","arguments":{}}'
 
-Manual checks not covered by the scripts below:
-
-1. With a document open, run `run_jsfl` with `fl.trace('hi'); 'ok'`. `hi` appears in the Output panel and the tool returns `"ok"`. Animate comes to the front (known behavior).
-2. Run `get_document_info`. It returns name, size, frame rate and timeline names.
-3. Close all documents and run `get_document_info`. It returns "No document open".
-4. Quit Animate and run `run_jsfl`. It returns "Animate not running".
-
-Scripted checks: run `npm run build`, then start Animate and run the scripts below as `node server/scripts/<script>`.
-
-Most scripts create a disposable FLA, exercise it and close it without touching your documents. `smoke-publish.mjs` is the exception: it publishes the documents you pass by name.
-
-| Script | Checks | Notes |
-| --- | --- | --- |
-| `smoke-publish.mjs <name.fla>...` | `publish` | Uses your open documents |
-| `smoke-capture-frame.mjs` | `capture_frame` | Disposable FLA |
-| `smoke-edit-elements.mjs` | Layer, frame, tween and instance edits | Disposable FLA |
-| `smoke-edit-library.mjs` | Library edits | Disposable AS3 FLA |
-| `smoke-edit-text.mjs` | `edit_text` | Disposable AS3 and HTML5 Canvas FLAs |
-| `smoke-import-document-properties.mjs` | Import and stage settings | Disposable FLA |
-| `smoke-document-ops.mjs` | open, save, close | Disposable saved AS3 FLA |
-| `smoke-canvas.mjs` | HTML5 Canvas features | Disposable saved FLA |
-| `smoke-isolated-publish.mjs` | `publish` and its output | Disposable saved AS3 FLA; Animate must already be running |
-| `smoke-verification-tools.mjs` | `audit_document`, `verify_canvas_output`, `capture_frame`, `diff_captures` | Disposable saved FLA |
-| `smoke-test-movie.mjs` | `test_movie` | Disposable AS3 FLA; **leaves the Test Movie Player open, so close it manually** |
+For release checks with real Animate, see [Smoke tests](SMOKE_TESTS.md).
 
 ## License
 

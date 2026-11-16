@@ -49,13 +49,17 @@ ${elementsRuntime}${timelineRuntime}${documentRuntime}`;
  * Starts the Server over stdio with env, passes an MCP client to fn, and closes it afterwards.
  * @param env Extra environment variables for the Server
  * @param fn Test body; receives the MCP client, a temp directory and the Runs directory
+ * @param options Server registry options
+ * @param options.entrances Whether to start the production Entrance registry instead of the internal direct registry
  * @returns Promise<void> that resolves when fn completes
  */
 export async function withServer(
-    env: Record<string, string>,
+    env: Record<string, string> | ((tempDir: string) => Record<string, string>),
     fn: (client: Client, tempDir: string, runsDir: string) => Promise<void>,
+    options: { entrances?: boolean } = {},
 ) {
     const tempDir = await mkdtemp(join(tmpdir(), "animate-mcp-test-"));
+    const extraEnv = typeof env === "function" ? env(tempDir) : env;
     const launcher = join(tempDir, "fake-animate.cjs");
     await writeFile(launcher, fakeAnimate);
     await chmod(launcher, 0o755);
@@ -63,7 +67,7 @@ export async function withServer(
     const client = new Client({ name: "animate-mcp-test", version: "0.1.0" });
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: ["--import", "tsx", "server/src/index.ts"],
+        args: ["--import", "tsx", options.entrances ? "server/src/index.ts" : "server/test/helpers/direct-server.ts"],
         cwd: resolve("."),
         env: {
             ...process.env,
@@ -73,7 +77,7 @@ export async function withServer(
             ANIMATE_MCP_PROCESS_PATTERN: "node",
             FAKE_LOG: join(tempDir, "log"),
             FAKE_DOCUMENT_DIR: join(tempDir, "document"),
-            ...env,
+            ...extraEnv,
         },
     });
     try {

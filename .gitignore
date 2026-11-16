@@ -3,6 +3,7 @@ server/dist/
 .idea/
 .DS_Store
 *.log
+smoke-report.json
 .scratch/
 docs/*
 !docs/animate-quirks.md

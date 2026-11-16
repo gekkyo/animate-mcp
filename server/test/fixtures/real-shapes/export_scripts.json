@@ -1,0 +1,15 @@
+{
+    "shape": {
+        "dir": "string",
+        "exported": ["string"],
+        "failed": ["empty"],
+        "linkedClasses": ["empty"],
+        "warnings": ["empty"]
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "document": "animate-mcp-canvas-THrsjZ.fla",
+        "dir": "${TMP}/recorded-path",
+        "force": true
+    }
+}

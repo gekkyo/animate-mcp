@@ -1,0 +1,13 @@
+{
+    "shape": {
+        "applied": ["string"],
+        "failed": ["empty"],
+        "unchanged": "number",
+        "warnings": ["empty"]
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "dir": "${TMP}/recorded-path",
+        "document": "animate-mcp-canvas-THrsjZ.fla"
+    }
+}

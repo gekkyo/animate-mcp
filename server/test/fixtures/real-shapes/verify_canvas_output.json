@@ -1,0 +1,25 @@
+{
+    "shape": {
+        "buildResult": {
+            "ok": "boolean",
+            "compilerOutput": "string",
+            "errors": ["empty"],
+            "warnings": ["empty"],
+            "note": "string"
+        },
+        "htmlPath": "string",
+        "browserOutput": {
+            "ok": "boolean",
+            "consoleErrors": ["empty"],
+            "pageErrors": ["empty"],
+            "failedRequests": ["empty"],
+            "observationWindowMs": "number",
+            "observationComplete": "boolean",
+            "note": "string"
+        }
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "document": "animate-mcp-verification-tools-V6aMZk.fla"
+    }
+}

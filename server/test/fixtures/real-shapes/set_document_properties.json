@@ -1,0 +1,19 @@
+{
+    "shape": {
+        "document": "string",
+        "properties": {
+            "width": "number",
+            "height": "number",
+            "frameRate": "number",
+            "backgroundColor": "string"
+        }
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "document": "import_document_properties_YcUl7A.fla",
+        "width": 640,
+        "height": 360,
+        "frameRate": 30,
+        "backgroundColor": "#123456"
+    }
+}

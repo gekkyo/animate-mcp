@@ -1,0 +1,19 @@
+{
+    "shape": {
+        "animate": "string",
+        "documents": [
+            {
+                "name": "string",
+                "path": "string",
+                "type": "string"
+            }
+        ],
+        "activeDocument": {
+            "name": "string",
+            "path": "string",
+            "type": "string"
+        }
+    },
+    "optionalKeys": [],
+    "arguments": {}
+}

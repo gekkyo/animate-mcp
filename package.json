@@ -37,6 +37,7 @@
     "test:coverage": "tsx --test --experimental-test-coverage \"server/test/**/*.test.ts\"",
     "start": "node server/dist/index.js",
     "call": "node server/scripts/call-tool.mjs",
+    "smoke": "node server/scripts/smoke-all.mjs",
     "lint": "biome check && eslint \"server/**/*.ts\" \"server/**/*.mjs\" \"server/jsfl/**/*.jsfl\"",
     "format": "biome check --write"
   },

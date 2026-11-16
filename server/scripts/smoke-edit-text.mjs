@@ -221,7 +221,7 @@ try {
                     frame: 1,
                     rectangle: { left: 0, top: 0, right: 10, bottom: 10 },
                     text: "unsupported line type",
-                    style: { lineType: "single line" },
+                    style: { textType: "dynamic", lineType: "single line" },
                 },
             ],
         }),

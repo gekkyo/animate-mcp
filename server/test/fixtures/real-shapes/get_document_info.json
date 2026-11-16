@@ -1,0 +1,13 @@
+{
+    "shape": {
+        "name": "string",
+        "width": "number",
+        "height": "number",
+        "frameRate": "number",
+        "backgroundColor": "string",
+        "timelines": ["string"],
+        "asVersion": "null|string",
+        "greensock": "boolean"
+    },
+    "optionalKeys": []
+}

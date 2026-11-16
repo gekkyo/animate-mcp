@@ -12,7 +12,7 @@ import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "./smok
  * @returns Nothing.
  */
 function usage() {
-    console.error("Usage: node server/scripts/smoke-run.mjs <steps.json>");
+    console.error("Usage: node server/scripts/smoke-run.mjs [--entrances] <steps.json>");
     process.exitCode = 2;
 }
 
@@ -39,10 +39,16 @@ async function readSteps(stepsPath) {
     return steps;
 }
 
-if (!process.argv[2]) {
+const entrances = process.argv[2] === "--entrances";
+const stepsPath = process.argv[entrances ? 3 : 2];
+
+if (!stepsPath || process.argv.length > (entrances ? 4 : 3)) {
     usage();
 } else {
-    const steps = await readSteps(process.argv[2]);
+    const steps = await readSteps(stepsPath);
+    if (entrances && steps.some((step) => step.tool === "run_jsfl")) {
+        throw new Error("run_jsfl is direct-only and cannot be used with --entrances");
+    }
     if (!(await isAnimateRunning())) {
         throw new Error("Animate must already be running; refusing to launch it");
     }

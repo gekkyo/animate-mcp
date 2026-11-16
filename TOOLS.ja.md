@@ -2,7 +2,22 @@
 
 [English](TOOLS.md) | 日本語
 
-| ツール | できること | 入力・注意点 |
+## 公開している MCP ツール
+
+| MCP ツール | 用途 | 呼び出し例 |
+|------------|------|------------|
+| `search_tools` | 操作のスキーマ・説明・注意点を検索 | `{"query":"publish"}` |
+| `execute_readonly` | 読み取り専用の操作を実行 | `{"name":"get_status","arguments":{}}` |
+| `execute_write` | それ以外の操作を実行（読み取り専用の操作は拒否） | `{"name":"publish","arguments":{}}` |
+| `run_jsfl` | JSFL を直接実行（入口経由では実行不可・個別に禁止可能） | 下の一覧を参照 |
+
+許可・権限ルールは `execute_readonly` / `execute_write` 単位です。許可前に内部の `name` と `arguments` を確認してください。`execute_write` の「常に許可」は、ほかの書き込み系操作にも適用されます。「読み取り専用」はドキュメントの内容やファイルを変更しないという意味です。`inspect_timeline` と `audit_document` は実行中にタイムラインやプレイヘッドを一時的に切り替え、終了後に元へ戻します。
+
+## 操作一覧
+
+次の操作は独立した MCP ツールではなく、`execute_readonly` / `execute_write` の `name` に指定して実行します。ただし `run_jsfl` は直接呼ぶ MCP ツールで、注意点のためにここへ載せています。
+
+| 操作 | できること | 入力・注意点 |
 |--------|------------|--------------|
 | `get_document_info` | 開いているドキュメントの名前、サイズ、フレームレート、背景色、タイムライン名、ActionScript のバージョン、GreenSock の導入状況を確認します。 | 引数は不要です。 |
 | `get_status` | Animate の応答を確認し、開いているドキュメントとアクティブ文書の名前・パス・種類を返します。 | 引数不要。約5秒以内に応答しない、または起動していない場合は `animate: "not_responding"` を返します。未保存の編集状態は推測しません。 |

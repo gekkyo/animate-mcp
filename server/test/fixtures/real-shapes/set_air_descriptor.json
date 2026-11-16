@@ -1,0 +1,15 @@
+{
+    "shape": {
+        "path": "string",
+        "dryRun": "boolean",
+        "diff": "string",
+        "playerTarget": "string",
+        "backup": "string"
+    },
+    "optionalKeys": ["diff", "backup"],
+    "arguments": {
+        "document": "desktop.fla",
+        "versionLabel": "Smoke",
+        "dryRun": true
+    }
+}

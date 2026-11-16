@@ -1,0 +1,49 @@
+{
+    "shape": {
+        "document": "string",
+        "type": "string",
+        "checks": {
+            "saved": {
+                "status": "string",
+                "detail": "string"
+            },
+            "documentType": {
+                "status": "string",
+                "detail": "string"
+            },
+            "publishFormats": {
+                "status": "string",
+                "formats": [
+                    {
+                        "name": "string",
+                        "enabled": "boolean"
+                    }
+                ]
+            },
+            "outputFiles": {
+                "status": "string",
+                "candidates": ["empty"],
+                "warnings": ["empty"],
+                "detail": "string"
+            },
+            "compilation": {
+                "status": "string",
+                "detail": "string"
+            }
+        },
+        "audit": {
+            "status": "string",
+            "document": "string",
+            "findings": {
+                "unusedLibraryItems": ["empty"],
+                "emptyKeyframes": ["empty"],
+                "defaultNames": ["empty"]
+            },
+            "warnings": ["empty"]
+        }
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "document": "animate-mcp-v021-ErV7ud.fla"
+    }
+}

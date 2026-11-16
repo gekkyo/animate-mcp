@@ -2,7 +2,22 @@
 
 [English](TOOLS.md) | [日本語](TOOLS.ja.md)
 
-| Tool | What it does | Inputs and caveats |
+## Public MCP tools
+
+| MCP tool | Purpose | Example call |
+|----------|---------|--------------|
+| `search_tools` | Search operation schemas, descriptions, and caveats | `{"query":"publish"}` |
+| `execute_readonly` | Run read-only operations | `{"name":"get_status","arguments":{}}` |
+| `execute_write` | Run all other operations (read-only operations are rejected) | `{"name":"publish","arguments":{}}` |
+| `run_jsfl` | Run JSFL directly (cannot run through the entrances; can be denied separately) | See the list below |
+
+Approvals and permission rules apply per `execute_readonly` / `execute_write`. Check the inner `name` and `arguments` before approving; “always allow” for `execute_write` also applies to other write operations. “Read-only” means no saved or document content changes; `inspect_timeline` and `audit_document` may switch the timeline or playhead temporarily and restore it afterwards.
+
+## Operations
+
+The operations below are not separate MCP tools; pass them as `name` to `execute_readonly` / `execute_write`. The exception is `run_jsfl`, a direct MCP tool that is listed here only for its caveats.
+
+| Operation | What it does | Inputs and caveats |
 |------|--------------|--------------------|
 | `get_document_info` | Reports the open document's name, dimensions, frame rate, background color, timeline names, ActionScript version, and GreenSock status. | Takes no arguments. |
 | `get_status` | Checks whether Animate responds; lists open documents and the active document's name, path, and type. | Takes no arguments; the probe times out after about five seconds and reports `animate: "not_responding"` if Animate is not running or does not respond. Does not infer unsaved changes. |

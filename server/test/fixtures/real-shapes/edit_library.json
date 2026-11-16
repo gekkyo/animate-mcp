@@ -1,0 +1,39 @@
+{
+    "shape": {
+        "applied": [
+            {
+                "op": "string",
+                "path": "string"
+            }
+        ],
+        "results": [
+            {
+                "op": {
+                    "op": "string",
+                    "path": "string"
+                },
+                "result": {
+                    "path": "string"
+                }
+            }
+        ],
+        "failed": "null",
+        "skipped": ["empty"],
+        "warnings": ["empty"]
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "document": "animate-mcp-canvas-THrsjZ.fla",
+        "ops": [
+            {
+                "op": "createFolder",
+                "path": "CanvasSmokeFolder"
+            },
+            {
+                "op": "renameItem",
+                "item": "CanvasSmokeSymbol",
+                "newName": "CanvasSmokeRenamedSymbol"
+            }
+        ]
+    }
+}

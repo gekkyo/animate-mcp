@@ -176,18 +176,29 @@ Canvas 出力を Chrome で開いて、コンソールエラーがないか確�
 ## 利用時のポイント
 
 - 複数のドキュメントを開いている場合は、対象を指定してください。
-- Export 後に Animate 側を変更すると、Apply 時に競合を検出します。ライブラリを変更した場合は Apply できません。
-- 未反映の編集があると再 Export はできません。破棄してよい場合に限り `force: true` を使ってください。
-- タイムライン・トゥイーン・ライブラリを変更した後は、スクリプトを編集・適用する前に再 Export してください。
-- レイヤー・フレーム・ライブラリアイテムの削除には `confirm: true` が必要です。使用中のライブラリアイテムは削除できません。
-- 保存には `save_document`（上書き時は事前に確認）か Animate の保存操作を使います。`edit_library` の `getLinkage` と `setLinkage` で AS3 のリンケージを読み書きできます。アイテムの名前変更・移動によって、リンケージ名やコード内の文字列参照が自動更新されるわけではありません。
-- `edit_elements` はトゥイーン途中のフレームを拒否し、書き込み前に全操作を検証します。`.fla` は保存されません。
+- スクリプトの編集では Export → 編集 → Apply の順に処理を行います。Export 後に Animate 側を変更した場合や、タイムライン・ライブラリを変更した後は、再 Export が必要です。
+- 編集後の `.fla` は自動では保存されません。`save_document` か Animate の保存操作を使ってください。
 
 ## ツール
 
-引数や注意点の詳細は [TOOLS.ja.md](TOOLS.ja.md) を参照してください。
+### 公開している MCP ツール
 
-| 分類 | ツール | できること |
+既定で公開する MCP ツールは次の4つです。
+
+| MCP ツール | 用途 |
+|------------|------|
+| `search_tools` | 操作のスキーマ・注意点を検索 |
+| `execute_readonly` | 読み取り専用の操作を実行 |
+| `execute_write` | それ以外の操作を実行（読み取り専用の操作は拒否） |
+| `run_jsfl` | JSFL を直接実行（個別に禁止可能） |
+
+許可は `execute_readonly` / `execute_write` 単位です。「常に許可」はその入口の対象すべてに適用されます。以前の個別操作名の権限ルールは一致しません。操作の一覧と詳細は [TOOLS.ja.md](TOOLS.ja.md) を参照してください。
+
+### 操作一覧
+
+次の操作は独立した MCP ツールではなく、`execute_readonly` / `execute_write` の `name` に指定して実行します。
+
+| 分類 | 操作 | できること |
 |------|--------|------------|
 | ドキュメント | `get_document_info` | 名前・サイズ・フレームレート・AS バージョンを確認 |
 |  | `get_status` | Animate の応答と開いているドキュメントを確認 |
@@ -217,7 +228,6 @@ Canvas 出力を Chrome で開いて、コンソールエラーがないか確�
 |  | `diff_captures` | キャプチャ PNG 2枚を比較 |
 |  | `visual_regression` | 名前付きフレーム基準画像を保存・比較 |
 | その他 | `install_greensock` | GreenSock-AS3 を導入（保存済み AS3 のみ・ライセンス確認が必要） |
-|  | `run_jsfl` | 任意の JSFL を実行 |
 
 ## 環境変数
 
@@ -245,39 +255,18 @@ Canvas 出力を Chrome で開いて、コンソールエラーがないか確�
 
 ## 開発
 
+リポジトリのルートで依存関係をインストールし、ビルドとテストを実行します。
+
     npm install && npm run build
     npm test
 
-クライアント設定: `node /path/to/animate-mcp/server/dist/index.js`（stdio）。
+ビルドしたサーバーを MCP クライアントに登録する場合は、起動コマンドを `node /path/to/animate-mcp/server/dist/index.js` に設定します。`/path/to/animate-mcp` は実際のリポジトリのパスに置き換えてください。
 
-ローカルでビルドしたサーバー（別に登録したサーバーではない）のツールを1回呼ぶ: `npm run call -- <ツール名> '<JSONオブジェクト>'`（例: `npm run call -- get_status '{}'`）。
+クライアントへの登録なしに、ビルドしたサーバーの操作を1回試すには、リポジトリのルートで次を実行します（`get_status` の例）。
 
-### スモークテスト（実機の Animate）
+    npm run -s call -- execute_readonly '{"name":"get_status","arguments":{}}'
 
-下記のスクリプトでは確認できない手動チェック:
-
-1. ドキュメントを開いた状態で `fl.trace('hi'); 'ok'` を `run_jsfl` で実行します。出力パネルに `hi` が表示され、ツールは `"ok"` を返します。Animate が前面に出ます（既知の挙動）。
-2. `get_document_info` を実行します。名前、サイズ、フレームレート、タイムライン名が返ります。
-3. すべてのドキュメントを閉じて `get_document_info` を実行します。"No document open" が返ります。
-4. Animate を終了して `run_jsfl` を実行します。"Animate not running" が返ります。
-
-スクリプトでの検証: `npm run build` の後、Animate を起動して、下記のスクリプトを `node server/scripts/<スクリプト>` で実行します。
-
-多くのスクリプトは使い捨ての FLA を作成して操作し、クローズします。手持ちのドキュメントには触れません。例外は `smoke-publish.mjs` で、名前を渡したドキュメントを Publish します。
-
-| スクリプト | 確認内容 | 備考 |
-| --- | --- | --- |
-| `smoke-publish.mjs <name.fla>...` | `publish` | 開いているドキュメントを使用 |
-| `smoke-capture-frame.mjs` | `capture_frame` | 使い捨ての FLA |
-| `smoke-edit-elements.mjs` | レイヤー・フレーム・トゥイーン・インスタンスの編集 | 使い捨ての FLA |
-| `smoke-edit-library.mjs` | ライブラリの編集 | 使い捨ての AS3 FLA |
-| `smoke-edit-text.mjs` | `edit_text` | 使い捨ての AS3・HTML5 Canvas FLA |
-| `smoke-import-document-properties.mjs` | 素材の取り込み・ステージ設定 | 使い捨ての FLA |
-| `smoke-document-ops.mjs` | open・save・close | 使い捨ての保存済み AS3 FLA |
-| `smoke-canvas.mjs` | HTML5 Canvas 機能 | 使い捨ての保存済み FLA |
-| `smoke-isolated-publish.mjs` | `publish` と出力 | 使い捨ての保存済み AS3 FLA。Animate は事前に起動しておく |
-| `smoke-verification-tools.mjs` | `audit_document`・`verify_canvas_output`・`capture_frame`・`diff_captures` | 使い捨ての保存済み FLA |
-| `smoke-test-movie.mjs` | `test_movie` | 使い捨ての AS3 FLA。**Test Movie Player は開いたままなので手動で閉じる** |
+実機 Animate を使うリリース前の確認は、[スモークテスト](SMOKE_TESTS.ja.md)を参照してください。
 
 ## ライセンス
 

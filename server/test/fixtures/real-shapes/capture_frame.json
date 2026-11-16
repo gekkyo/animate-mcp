@@ -1,0 +1,14 @@
+{
+    "shape": {
+        "path": "string",
+        "frame": "number",
+        "timeline": "string",
+        "width": "number",
+        "height": "number"
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "frame": 1,
+        "dir": "${TMP}/recorded-path"
+    }
+}

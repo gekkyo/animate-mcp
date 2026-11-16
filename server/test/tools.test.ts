@@ -1,47 +1,35 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { INSTRUCTIONS, TOOLS } from "../src/index.js";
+import { createToolRegistry } from "../src/tools/registry.js";
 import { text, withServer } from "./helpers/fake-animate.js";
 
-test("registry keeps all tools and the original client instructions", () => {
+test("default registry exposes only Entrances and compact instructions", async () => {
     assert.equal(TOOLS.length, 29);
     assert.equal(new Set(TOOLS.map((tool) => tool.name)).size, 29);
-    assert.equal(
-        INSTRUCTIONS,
-        `Read and write Adobe Animate timeline scripts as files.
-
-Basic flow:
-1. Run export_scripts to export the active document. Read index.md, then each structure.md, then the scripts.
-2. Edit the exported .as / .js files (an empty file deletes that frame's script).
-3. Run apply_scripts to apply them. The .fla is not saved; use save_document after asking the user before overwriting, or save in Animate.
-- To add a script to a frame with none, create <timeline dir>/as/<frame>.as (or .js for HTML Canvas), avoid tween spans, and run apply_scripts.
-- Use edit_timeline for layer or frame structure changes. shiftLayerFrames moves one layer's content later without shifting other layers. Always run export_scripts again before editing or applying scripts; delete operations require confirm: true.
-- Use edit_elements to set instance properties on keyframes; tween interiors are refused, and the .fla is not saved.
-- Use edit_text to add or update whole text fields; Canvas does not support input or single-line text. Use import_assets for images/audio and set_document_properties for stage settings; neither saves the .fla.
-- Use inspect_timeline to check instances and tweens instead of run_jsfl; use the distributeToLayers operation to split a layer.
-- Use edit_tween to animate instances; motion is the default and ease presets include quad, cubic, quart, quint, sine, expo, circ and back.
-- Use edit_library to organize library folders and items. Re-export with export_scripts before apply_scripts; deleteItem requires confirm: true and refuses items in use.
-- edit_library can also create/duplicate symbols and find direct usages; edit_elements can swap a symbol and set graphic loop/firstFrame.
-- If a frame changed in Animate before you applied, Export is refused and Apply skips that frame. Export again to pull in the change.
-- If get_document_info reports greensock: true, use TweenLite/TweenMax (import com.greensock.*). For AS3 with greensock: false, use fl.transitions.Tween or propose install_greensock (confirm: true; AS3 only).
-- For HTML5 Canvas, use createjs.Tween; install_greensock does not support Canvas.
-- Use publish to publish AS3 or HTML5 Canvas documents and check the Build result; outputs at the document's publish settings are overwritten. Canvas compile errors cannot be detected.
-- Use capture_frame to inspect the active timeline as PNG images; request one frame or an inclusive range of up to 24 frames. It saves new images under ~/.animate-mcp/captures/<document>/ and restores the current frame.
-- Use diff_captures with absolute before/after paths returned by capture_frame. It creates a non-overwriting red-highlight PNG alongside the earlier Capture.
-- Use audit_document for read-only document hygiene suggestions. Review every finding before changing content; unused Library items may be intentional, especially when linkage is enabled.
-- Use verify_canvas_output to check a published HTML5 Canvas page in Chrome. By default Publish overwrites the document's configured outputs; use publish: false to avoid publishing or htmlPath to specify custom output. Page scripts run in Chrome.
-- Use get_air_descriptor to inspect AIR app settings; the AIR settings dialog's OK may rewrite its descriptor.
-- Use set_air_descriptor to edit AIR app settings; dryRun first. The AIR settings dialog's OK may rewrite the descriptor.
-- Use preflight_publish to review known risks before Publish. AIR signing, ambiguous output-file paths, and compilation are not verified.
-- Save a named Baseline, then compare the same timeline and frames later. Saving over an existing Baseline requires overwrite: true.
-
-Notes:
-- When several documents are open, document is required. get_document_info returns the name.
-- AS3 and HTML5 Canvas have different APIs. Check the document type before trying things with run_jsfl.
-- Use read_output to inspect the current Output and Compiler Errors panels; their contents may be stale or mixed because Animate does not identify their source document or run.
-- When a script fails with a null error, first check the layer's frame length and instance names with run_jsfl.
-- If you add debug traces, always remove them after checking and Apply again.
-- run_jsfl runs arbitrary code. Ask the user before any operation that modifies the document.`,
+    assert.match(INSTRUCTIONS, /Use search_tools/);
+    assert.match(INSTRUCTIONS, /run_jsfl remains a direct tool/);
+    assert.ok(Buffer.byteLength(INSTRUCTIONS) < 11_500);
+    const directInstructions = createToolRegistry(TOOLS).instructions;
+    assert.match(directInstructions, /^Read and write Adobe Animate timeline scripts as files\./);
+    assert.match(directInstructions, /Basic flow:/);
+    for (const tool of TOOLS) {
+        for (const guidance of [tool.guidance.basic, tool.guidance.notes]) {
+            if (guidance) {
+                assert.ok(directInstructions.includes(guidance), `${tool.name} guidance missing`);
+            }
+        }
+    }
+    await withServer(
+        {},
+        async (client) => {
+            const { tools } = await client.listTools();
+            assert.deepEqual(
+                tools.map((tool) => tool.name).sort(),
+                ["execute_readonly", "execute_write", "run_jsfl", "search_tools"].sort(),
+            );
+        },
+        { entrances: true },
     );
 });
 

@@ -55,6 +55,7 @@ const doc = (documentName, documentType) => {
   const secondFrame = makeKeyframe(0, Number(process.env.FAKE_SECOND_LENGTH ?? 5), {
     ...(process.env.FAKE_SECOND_TWEEN ? { tweenType: process.env.FAKE_SECOND_TWEEN } : {}),
     ...(process.env.FAKE_SECOND_MOTION_XML ? { motionXML: process.env.FAKE_SECOND_MOTION_XML } : {}),
+    ...(process.env.FAKE_SECOND_LAYER_INSTANCE ? { elements: [makeInstance(process.env.FAKE_SECOND_LAYER_INSTANCE, 0)] } : {}),
   });
   const sceneLayers = [layer("a/b", expand(sceneFrames), "normal", Boolean(process.env.FAKE_LOCK_DISTRIBUTE)),
     ...(process.env.FAKE_SECOND_LAYER ? [layer(process.env.FAKE_SECOND_LAYER, expand([secondFrame]))] : []),
@@ -74,7 +75,65 @@ const doc = (documentName, documentType) => {
   if (process.env.FAKE_INITIAL_CURRENT_LAYER !== undefined) sceneTimeline.currentLayer = Number(process.env.FAKE_INITIAL_CURRENT_LAYER);
   if (process.env.FAKE_INITIAL_CURRENT_FRAME !== undefined) sceneTimeline.currentFrame = Number(process.env.FAKE_INITIAL_CURRENT_FRAME);
   if (process.env.FAKE_INITIAL_SELECTED_FRAMES) sceneTimeline.selectedFrames = JSON.parse(process.env.FAKE_INITIAL_SELECTED_FRAMES);
-  const document = { name: process.env.FAKE_DOCUMENT_NAME || documentName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", pathURI: process.env.FAKE_UNSAVED ? undefined : (process.env.FAKE_VOLUME_URI ? pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href.replace("file:///", "file:///Macintosh%20HD/") : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, documentName)).href), width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, backgroundColor: "#FFFFFF", currentTimeline: 0, timelines: [sceneTimeline],
+  const fakeName = process.env.FAKE_DOCUMENT_NAME || documentName;
+  const document = { name: fakeName, type: documentType, asVersion: process.env.FAKE_AS_VERSION || "AS3", playerTarget: process.env.FAKE_PLAYER_TARGET, pathURI: process.env.FAKE_UNSAVED ? undefined : (process.env.FAKE_VOLUME_URI ? pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, fakeName)).href.replace("file:///", "file:///Macintosh%20HD/") : pathToFileURL(join(process.env.FAKE_DOCUMENT_DIR, fakeName)).href), width: Number(process.env.FAKE_WIDTH || 550), height: Number(process.env.FAKE_HEIGHT || 400), frameRate: 24, backgroundColor: "#FFFFFF", currentTimeline: 0, timelines: [sceneTimeline],
+    /**
+     * Closes the disposable fake document.
+     * @param save Whether to save before closing
+     * @returns Whether the close succeeded
+     */
+     close(save) {
+       if (save) throw new Error("fake close does not save");
+       const index = docs.indexOf(this);
+       if (index >= 0) docs.splice(index, 1);
+       return true;
+     },
+    /**
+     * Converts the selected elements into a fake Library symbol.
+     * @param type Symbol type
+     * @param name Library symbol name
+     * @param registrationPoint Symbol registration point
+     * @returns Whether a symbol was created
+     */
+     convertToSymbol(type, name, registrationPoint) {
+      if (libraryItems.some((item) => item.name === name)) return false;
+      libraryItems.push({ name, itemType: type, registrationPoint });
+      return this.selection.length > 0;
+     },
+     /**
+      * Imports a file into the fake Library.
+      * @param uri File URI to import
+      * @param toLibrary Whether to import to the Library
+      * @param showDialog Whether Animate should show an import dialog
+      * @returns Whether the import succeeded
+      */
+     importFile(uri, toLibrary, showDialog) {
+       if (!toLibrary || showDialog) return false;
+       this.library.items.push({ name: decodeURIComponent(uri.split("/").pop()), itemType: "bitmap" });
+       return true;
+     },
+     /**
+      * Adds a minimal text element to the current fake timeline frame.
+      * @param bounds Text bounding rectangle
+      * @returns Nothing
+      */
+     addNewText(bounds) {
+       let value = "";
+       const element = {
+         elementType: "text",
+         textType: "static",
+         x: bounds.left,
+         y: bounds.top,
+         width: bounds.right - bounds.left,
+         height: bounds.bottom - bounds.top,
+         textRuns: [{ characters: "", textAttrs: {} }],
+         getTransformationPoint() { return { x: 0, y: 0 }; },
+         getTextString() { return value; },
+         setTextString(next) { value = next; this.textRuns[0].characters = next; },
+         setTextAttr(name, next) { this.textRuns[0].textAttrs[name] = next; },
+       };
+       this.getTimeline().layers[this.getTimeline().currentLayer].frames[this.getTimeline().currentFrame].elements.push(element);
+     },
     /**
      * Simulates Test Movie while preserving the Output panel for the next Run.
      * @param abortOnErrors Whether compilation errors should prevent launching the player
@@ -261,7 +320,7 @@ if (!src.includes("HANG")) runInNewContext(src, {
      */
     platformPathToURI: (path) => path,
     createFolder: (path) => { mkdirSync(path, { recursive: true }); return true; },
-    exists: (path) => existsSync(path),
+    exists: (path) => existsSync(path.startsWith("file:") ? fileURLToPath(path) : path),
     read: (path) => readFileSync(path, "utf8"),
     remove: (path) => { if (existsSync(path)) { unlinkSync(path); if (src.includes("var __readOutputPath")) logReadOutput(path.endsWith("-output.txt") ? "outputPanel.remove" : "compilerErrors.remove"); else logPublish("remove"); } },
     /** Converts the fake document's file URI to its platform path.
@@ -284,7 +343,36 @@ if (!src.includes("HANG")) runInNewContext(src, {
       logPublish("activate");
       writeFileSync(activeDocumentPath, document.name);
     },
-    publishDocument: () => { logPublish("publish"); return !process.env.FAKE_PUBLISH_FALSE; },
+     publishDocument: () => { logPublish("publish"); return !process.env.FAKE_PUBLISH_FALSE; },
+     /**
+      * Saves the fake document at a file URI.
+      * @param document Document to save
+      * @param uri Destination file URI
+      * @returns Whether the save succeeded
+     */
+     saveDocument: (document, uri) => {
+       const fileUri = uri.startsWith("file:") ? uri : pathToFileURL(uri).href;
+       const path = fileURLToPath(fileUri);
+       writeFileSync(path, "");
+       document.pathURI = fileUri;
+       return true;
+     },
+     /**
+      * Opens a fake document from an existing FLA path.
+      * @param uri FLA file URI
+      * @returns Open fake document
+      */
+     openDocument: (uri) => {
+       const fileUri = uri.startsWith("file:") ? uri : pathToFileURL(uri).href;
+       const path = fileURLToPath(fileUri);
+       const name = path.split("/").pop();
+       const existing = docs.find((document) => document.pathURI === fileUri);
+       if (existing) return existing;
+       const opened = doc(name, process.env.FAKE_TYPE || "Flash");
+       opened.pathURI = fileUri;
+       docs.push(opened);
+       return opened;
+     },
     outputPanel: {
       save: (path) => { logReadOutput("outputPanel.save"); const outputPath = process.env.FAKE_LOG + ".output-panel"; writeFileSync(path, existsSync(outputPath) ? readFileSync(outputPath, "utf8") : process.env.FAKE_OUTPUT_PANEL ?? ""); },
     },
