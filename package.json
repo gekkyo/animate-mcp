@@ -1,6 +1,6 @@
 {
   "name": "animate-mcp",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "MCP server for Adobe Animate: edit scripts, timelines and library, then publish and verify.",
   "mcpName": "io.github.gekkyo/animate-mcp",
   "license": "MIT",
@@ -35,6 +35,7 @@
     "build": "tsc --project server/tsconfig.json",
     "test": "tsx --test \"server/test/**/*.test.ts\"",
     "test:coverage": "tsx --test --experimental-test-coverage \"server/test/**/*.test.ts\"",
+    "smoke:bin": "node server/scripts/smoke-bin.mjs",
     "start": "node server/dist/index.js",
     "lint": "biome check && eslint \"server/**/*.ts\" \"server/**/*.mjs\" \"server/jsfl/**/*.jsfl\"",
     "format": "biome check --write"

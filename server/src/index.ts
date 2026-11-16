@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -95,7 +95,8 @@ async function main() {
     await server.connect(transport);
 }
 
-if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+// Resolve npm's bin symlink so the entrypoint comparison sees the real file.
+if (process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url) {
     main().catch(
         /** Reports startup failures and sets a failing process exit code.
          * @param error Startup failure to report
