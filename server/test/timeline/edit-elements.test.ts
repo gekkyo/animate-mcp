@@ -768,3 +768,22 @@ test("edit_elements rejects swapSymbol in add.set before earlier writes", { time
         );
     });
 });
+
+test("edit_elements tools/list reuses the repeated element-set schema", { timeout: 30_000 }, () =>
+    withServer({}, async (client) => {
+        const { tools } = await client.listTools();
+        const tool = tools.find(({ name }) => name === "edit_elements");
+        assert.ok(tool);
+        const schema = tool.inputSchema as {
+            definitions?: Record<string, unknown>;
+            properties?: Record<string, unknown>;
+        };
+        assert.ok(schema.definitions?.EditElementSet);
+        const references = JSON.stringify(schema.properties).match(/#\/definitions\/[^"]+/g) ?? [];
+        assert.ok(references.length > 0);
+        for (const reference of references) {
+            const definition = reference.split("/").at(-1);
+            assert.ok(definition && schema.definitions?.[definition], `Unresolved schema reference: ${reference}`);
+        }
+    }),
+);

@@ -380,3 +380,23 @@ test("edit_tween calls Animate scale and rotation APIs with valid arguments", { 
         assert.equal(target.rotation, 45);
     }),
 );
+
+test("edit_tween tools/list reuses repeated ease and filter schemas", { timeout: 30_000 }, () =>
+    withServer({}, async (client) => {
+        const { tools } = await client.listTools();
+        const tool = tools.find(({ name }) => name === "edit_tween");
+        assert.ok(tool);
+        const schema = tool.inputSchema as {
+            definitions?: Record<string, unknown>;
+            properties?: Record<string, unknown>;
+        };
+        assert.ok(schema.definitions?.Ease);
+        assert.ok(schema.definitions?.TweenFilter);
+        const references = JSON.stringify(schema.properties).match(/#\/definitions\/[^"]+/g) ?? [];
+        assert.ok(references.length > 0);
+        for (const reference of references) {
+            const definition = reference.split("/").at(-1);
+            assert.ok(definition && schema.definitions?.[definition], `Unresolved schema reference: ${reference}`);
+        }
+    }),
+);

@@ -32,26 +32,26 @@ const EASE_PRESETS = [
 ];
 // A string + refine keeps the emitted JSON schema small (an enum repeated per property exceeds scanners' string budget); the tool description lists the presets.
 const EASE_PRESET = z.string().refine((value) => EASE_PRESETS.includes(value), { message: "Unknown ease preset" });
-const EASE = z.union([
-    EASE_PRESET,
-    z.number().min(-100).max(100),
-    z.tuple([z.number(), z.number(), z.number(), z.number()]),
-]);
-const FILTER = z.object({
-    x: z.number().nonnegative().optional(),
-    y: z.number().nonnegative().optional(),
-    blurX: z.number().nonnegative().optional(),
-    blurY: z.number().nonnegative().optional(),
-    color: z.string().optional(),
-    alpha: z.number().min(0).max(100).optional(),
-    strength: z.number().min(0).max(255).optional(),
-    quality: z.number().int().min(1).max(15).optional(),
-    distance: z.number().optional(),
-    angle: z.number().optional(),
-    inner: z.boolean().optional(),
-    knockout: z.boolean().optional(),
-    hideObject: z.boolean().optional(),
-});
+const EASE = z
+    .union([EASE_PRESET, z.number().min(-100).max(100), z.tuple([z.number(), z.number(), z.number(), z.number()])])
+    .meta({ id: "Ease" });
+const FILTER = z
+    .object({
+        x: z.number().nonnegative().optional(),
+        y: z.number().nonnegative().optional(),
+        blurX: z.number().nonnegative().optional(),
+        blurY: z.number().nonnegative().optional(),
+        color: z.string().optional(),
+        alpha: z.number().min(0).max(100).optional(),
+        strength: z.number().min(0).max(255).optional(),
+        quality: z.number().int().min(1).max(15).optional(),
+        distance: z.number().optional(),
+        angle: z.number().optional(),
+        inner: z.boolean().optional(),
+        knockout: z.boolean().optional(),
+        hideObject: z.boolean().optional(),
+    })
+    .meta({ id: "TweenFilter" });
 const KEYFRAME = z.object({
     frame: z.number().int().positive(),
     x: z.number().optional(),

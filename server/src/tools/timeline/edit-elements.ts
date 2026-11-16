@@ -47,7 +47,8 @@ const EDIT_ELEMENT_SET = z
         filters: z.array(z.record(z.string(), z.unknown())).optional(),
     })
     .strict()
-    .refine((set) => Object.keys(set).length > 0, "set requires at least one field");
+    .refine((set) => Object.keys(set).length > 0, "set requires at least one field")
+    .meta({ id: "EditElementSet" });
 
 const EDIT_ELEMENT_OP = z.union([
     z
