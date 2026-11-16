@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      - run: npm i -g npm@11 # Trusted Publishing needs npm >= 11.5.1; keep the major in sync with ci.yml
+      - run: npm i -g npm@12 # Trusted Publishing needs npm >= 11.5.1; keep the major in sync with ci.yml
       - run: npm ci
       - run: npm run lint
       - run: npm test
