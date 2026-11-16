@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+### Fixed
+
+- Fixed npm/npx symlink startup by resolving the executable path before checking the server entrypoint.
+
 ## 0.3.1
 
 ### Fixed
