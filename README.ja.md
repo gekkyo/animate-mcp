@@ -207,6 +207,8 @@ Canvas 出力を Chrome で開いて、コンソールエラーがないか確�
 | ライブラリ | `edit_library` | 整理・使用箇所の検索・AS3 リンケージ編集 |
 |  | `import_assets` | 画像・音声をライブラリに取り込む |
 | 出力・確認 | `publish` | Publish して Build result を返す |
+|  | `get_air_descriptor` | AIR アプリ設定を隣接または指定した descriptor から取得 |
+|  | `set_air_descriptor` | 隣接または指定した descriptor の AIR アプリ設定を編集 |
 |  | `preflight_publish` | Publish せずに事前確認（AIR の descriptor・アイコンを含む） |
 |  | `read_output` | Output / Compiler Errors パネルを読む |
 |  | `test_movie` | AS3 の Test Movie を実行してコンパイル診断と起動直後の出力を取得 |

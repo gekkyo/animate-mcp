@@ -4,8 +4,8 @@ import { INSTRUCTIONS, TOOLS } from "../src/index.js";
 import { text, withServer } from "./helpers/fake-animate.js";
 
 test("registry keeps all tools and the original client instructions", () => {
-    assert.equal(TOOLS.length, 27);
-    assert.equal(new Set(TOOLS.map((tool) => tool.name)).size, 27);
+    assert.equal(TOOLS.length, 29);
+    assert.equal(new Set(TOOLS.map((tool) => tool.name)).size, 29);
     assert.equal(
         INSTRUCTIONS,
         `Read and write Adobe Animate timeline scripts as files.
@@ -30,6 +30,8 @@ Basic flow:
 - Use diff_captures with absolute before/after paths returned by capture_frame. It creates a non-overwriting red-highlight PNG alongside the earlier Capture.
 - Use audit_document for read-only document hygiene suggestions. Review every finding before changing content; unused Library items may be intentional, especially when linkage is enabled.
 - Use verify_canvas_output to check a published HTML5 Canvas page in Chrome. By default Publish overwrites the document's configured outputs; use publish: false to avoid publishing or htmlPath to specify custom output. Page scripts run in Chrome.
+- Use get_air_descriptor to inspect AIR app settings; the AIR settings dialog's OK may rewrite its descriptor.
+- Use set_air_descriptor to edit AIR app settings; dryRun first. The AIR settings dialog's OK may rewrite the descriptor.
 - Use preflight_publish to review known risks before Publish. AIR signing, ambiguous output-file paths, and compilation are not verified.
 - Save a named Baseline, then compare the same timeline and frames later. Saving over an existing Baseline requires overwrite: true.
 
@@ -123,6 +125,8 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
                 openWorldHint: false,
             },
             audit_document: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+            get_air_descriptor: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+            set_air_descriptor: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
             preflight_publish: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
             visual_regression: {
                 readOnlyHint: false,
@@ -177,10 +181,12 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
         for (const definition of TOOLS) {
             const listed = byName.get(definition.name);
             assert.equal(listed?.description, definition.description, definition.name);
-            const expectedSchema = definition.inputSchema as Record<string, unknown> | undefined;
+            const expectedSchema = definition.inputSchema as
+                | (Record<string, unknown> & { shape?: Record<string, unknown> })
+                | undefined;
             assert.deepEqual(
                 Object.keys(listed?.inputSchema.properties ?? {}).sort(),
-                Object.keys(expectedSchema ?? {}).sort(),
+                Object.keys(expectedSchema?.shape ?? expectedSchema ?? {}).sort(),
                 `${definition.name} input schema`,
             );
         }

@@ -47,6 +47,7 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 - Verify Canvas HTML in Chrome and compare captured PNGs.
 - Install GreenSock-AS3 with a prompt (saved AS3 documents only; review the license first).
 - Work with ActionScript 3 and HTML5 Canvas, and run arbitrary JSFL.
+- Read and edit AIR application descriptors, with a dry-run diff and backup.
 
 ## Requirements
 
@@ -215,6 +216,8 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 | Library | `edit_library` | Organize items, find usages, edit AS3 linkage |
 |  | `import_assets` | Import images and audio into the Library |
 | Output and verification | `publish` | Publish and return the Build result |
+|  | `get_air_descriptor` | Read AIR app settings from an adjacent or explicitly named descriptor |
+|  | `set_air_descriptor` | Edit AIR app settings in an adjacent or explicitly named descriptor |
 |  | `preflight_publish` | Check publish readiness (including AIR descriptor and icons) without publishing |
 |  | `read_output` | Read the Output and Compiler Errors panels |
 |  | `test_movie` | Run an AS3 Test Movie and capture compile diagnostics and early output |

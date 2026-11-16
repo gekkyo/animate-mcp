@@ -17,9 +17,11 @@ import { editLibraryTool } from "./tools/library/edit-library.js";
 import { importAssetsTool } from "./tools/library/import-assets.js";
 import { captureFrameTool } from "./tools/output/capture-frame.js";
 import { diffCapturesTool } from "./tools/output/diff-captures.js";
+import { getAirDescriptorTool } from "./tools/output/get-air-descriptor.js";
 import { preflightPublishTool } from "./tools/output/preflight-publish.js";
 import { publishTool } from "./tools/output/publish.js";
 import { readOutputTool } from "./tools/output/read-output.js";
+import { setAirDescriptorTool } from "./tools/output/set-air-descriptor.js";
 import { testMovieTool } from "./tools/output/test-movie.js";
 import { verifyCanvasOutputTool } from "./tools/output/verify-canvas-output.js";
 import { visualRegressionTool } from "./tools/output/visual-regression.js";
@@ -62,6 +64,8 @@ export const TOOLS = [
     importAssetsTool,
     setDocumentPropertiesTool,
     getStatusTool,
+    getAirDescriptorTool,
+    setAirDescriptorTool,
     preflightPublishTool,
     visualRegressionTool,
 ] as const;
