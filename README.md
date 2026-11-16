@@ -26,28 +26,19 @@ English | [日本語](README.ja.md)
 
 `animate-mcp` is an MCP server that lets AI agents such as Claude Code and Codex operate Adobe Animate directly.
 
-Just give the AI instructions in plain language to write and edit frame scripts, work with animations, and automate repetitive tasks.
+Just give the AI instructions in plain language to edit frame scripts, work with animations, and automate repetitive tasks.
 
 It reads the structure and scripts of scenes and library symbols so it can edit with an understanding of what is already there, and it supports a wide range of operations, including layers, frames, tweens, instance properties, and library assets. It can also publish a document and capture a frame as a PNG image.
 
 ## Highlights
 
-- AI agents can read frame scripts and structure from scenes and library symbols through files, then apply edited scripts back to Animate.
-- Inspect layers, keyframes, instances, and tweens.
-- Add and edit whole text fields, including font, size, color, alignment, and text type.
-- Edit instance transforms, color effects, filters, names, blend modes, and visibility on keyframes.
-- Edit layer and frame structure and labels.
-- Create motion and classic tweens with preset or custom Bézier easing, and shape tweens between raw shapes.
-- Organize library folders and items and find unused items.
-- Import images and audio, find direct Library usages, create or duplicate symbols, and change stage properties.
-- Publish AS3 and HTML5 Canvas documents and get AS3 compile errors and warnings back.
-- Read Animate's diagnostic panels and run an AS3 Test Movie to capture compile diagnostics and early Output panel text.
-- Capture a frame or range as PNG images.
-- Check for unused Library items and empty keyframes.
-- Verify Canvas HTML in Chrome and compare captured PNGs.
-- Install GreenSock-AS3 with a prompt (saved AS3 documents only; review the license first).
-- Work with ActionScript 3 and HTML5 Canvas, and run arbitrary JSFL.
-- Read and edit AIR application descriptors, with a dry-run diff and backup.
+- Read and edit scene and library-symbol structure and frame scripts.
+- Inspect and edit layers, keyframes, instances, text, and tweens.
+- Organize the library, import assets, create and place symbols, and change stage settings.
+- Check for unused library items and empty keyframes.
+- Publish AS3 and HTML5 Canvas documents; capture AS3 compile diagnostics and early output from Test Movie.
+- Verify Canvas output in Chrome; capture frames as PNG images and compare them.
+- Install GreenSock-AS3 (saved AS3 documents only; license review required) and run arbitrary JSFL.
 
 ## Requirements
 
@@ -57,6 +48,9 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 - Verified with Animate 2027 on macOS and with Animate on Windows.
 
 ## Install
+
+First, install [Node.js](https://nodejs.org/).
+Then configure your client using the examples below.
 
 ### Claude Code
 
@@ -76,8 +70,14 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 ## Usage
 
 1. Start Animate and open the target .fla.
+
+
 2. Ask your agent to do the work.
-3. When editing scripts, the workflow is:
+   The first time JSFL runs, Animate shows this dialog. Select **Run as command**, check **Don't Show Again**, then click **OK**.<br><br>
+   ![Open JSFL File dialog with Don't Show Again checked](assets/jsfl-first-run-dialog.png)
+
+
+3. Script-editing operations work in this order:
     1. `export_scripts` writes the structure and every frame script to `~/.animate-mcp/exports/<document name>/`.
     2. The agent edits the files.
     3. `apply_scripts` writes them back into Animate.
