@@ -11,11 +11,14 @@ const { version } = JSON.parse(await readFile(join(root, "package.json"), "utf8"
 const temp = await mkdtemp(join(tmpdir(), "animate-mcp-smoke-bin-"));
 
 try {
-    const [packed] = JSON.parse(
-        execFileSync("npm", ["pack", "--json", "--pack-destination", temp], {
-            cwd: root,
-            encoding: "utf8",
-        }),
+    // npm <= 11 returns an array; npm 12 returns an object keyed by package name.
+    const [packed] = Object.values(
+        JSON.parse(
+            execFileSync("npm", ["pack", "--json", "--pack-destination", temp], {
+                cwd: root,
+                encoding: "utf8",
+            }),
+        ),
     );
     const installDir = join(temp, "install");
     await mkdir(installDir);
