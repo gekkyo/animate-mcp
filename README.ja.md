@@ -228,26 +228,12 @@ Canvas 出力を Chrome で開いて、コンソールエラーがないか確�
 
 ## 仕組み
 
-```mermaid
-%%{init: {'themeVariables': {'fontSize': '13px'}, 'flowchart': {'nodeSpacing': 30, 'rankSpacing': 30, 'diagramPadding': 8}}}%%
-flowchart TB
-  Agent(["AI agent<br/>Claude Code / Codex"])
-  subgraph Server["animate-mcp (Node.js)"]
-    Tools["MCP tools ×27"]
-    Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
-    Runner["Runner<br/>serial + timeout"]
-  end
-  Files["exports/<br/>scripts + structure.md"]
-  Chrome(["Chrome"])
-  Animate(["Adobe Animate<br/>(running)"])
-  Agent -->|"edit files"| Files
-  Agent -->|"MCP stdio"| Tools
-  Tools -->|"export / apply"| Files
-  Tools -->|"verify_canvas_output"| Chrome
-  Tools --> Bundle --> Runner
-  Runner -->|"1. open Run.jsfl"| Animate
-  Animate -.->|"2. write Result.json"| Runner
-```
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.png">
+    <img src="assets/architecture-light.png" alt="仕組み：AIエージェントからMCPツールとJSFLを経由してAdobe Animateを操作し、ファイルやChromeとも連携" width="560">
+  </picture>
+</div>
 
 各ツールは JSFL スクリプトを生成して `~/.animate-mcp/runs/` に書き出し、起動中の Animate で開いて実行します。スクリプトは結果を JSON で書き出し、サーバーがそれを読み取ります。実行は直列で、Animate が応答しない場合はタイムアウトします。
 

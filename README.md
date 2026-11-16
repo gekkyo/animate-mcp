@@ -236,26 +236,12 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 
 ## How it works
 
-```mermaid
-%%{init: {'themeVariables': {'fontSize': '13px'}, 'flowchart': {'nodeSpacing': 30, 'rankSpacing': 30, 'diagramPadding': 8}}}%%
-flowchart TB
-  Agent(["AI agent<br/>Claude Code / Codex"])
-  subgraph Server["animate-mcp (Node.js)"]
-    Tools["MCP tools ×27"]
-    Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
-    Runner["Runner<br/>serial + timeout"]
-  end
-  Files["exports/<br/>scripts + structure.md"]
-  Chrome(["Chrome"])
-  Animate(["Adobe Animate<br/>(running)"])
-  Agent -->|"edit files"| Files
-  Agent -->|"MCP stdio"| Tools
-  Tools -->|"export / apply"| Files
-  Tools -->|"verify_canvas_output"| Chrome
-  Tools --> Bundle --> Runner
-  Runner -->|"1. open Run.jsfl"| Animate
-  Animate -.->|"2. write Result.json"| Runner
-```
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.png">
+    <img src="assets/architecture-light.png" alt="Architecture: AI agent, MCP tools, JSFL runner, Adobe Animate and Chrome" width="560">
+  </picture>
+</div>
 
 Each tool builds a JSFL script, writes it to `~/.animate-mcp/runs/`, and opens it in the running Animate. The script writes its result as JSON, which the server reads back. Runs are serialized and time out if Animate does not respond.
 
