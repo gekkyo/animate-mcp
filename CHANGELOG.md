@@ -4,21 +4,21 @@
 
 ## 0.4.0
 
-### Fixed
-
-- `set_air_descriptor` rejects icon paths that escape the descriptor directory through symlinks.
-- `test_movie` now polls the Output panel for up to about 6 seconds, so startup `trace` output that appears after the first 2-second read is no longer missed.
-- `edit_tween` description now says `createTween` ease goes on the destination keyframe.
-
-### Changed
-
-- **Breaking (0.4.0):** The MCP server now lists only `search_tools`, `execute_readonly`, `execute_write`, and direct `run_jsfl`. The other operation names (for example, `publish`) are no longer individual MCP tools. Use `search_tools` with `{"query":"publish"}` to read its schema and warnings, then call `execute_write` with `{"name":"publish","arguments":{}}`; use `execute_readonly` for operations marked read-only (for example, `{"name":"get_status","arguments":{}}`). Existing client permission rules such as `mcp__animate__publish` stop matching; replace them with rules for the corresponding entrance (using your configured server name), and deny `run_jsfl` directly if needed. Approvals are per entrance, **not per inner operation**: inspect `name` and `arguments` before approval, because “always allow” for `execute_write` permits future calls to all write operations.
-
 ### Added
 
 - Added `get_air_descriptor` and `set_air_descriptor` to read and patch an existing AIR `-app.xml` by open document or absolute path. Editing supports `dryRun`, field validation, and a same-folder `.bak`; the AIR settings dialog may rewrite the file.
 - `preflight_publish` checks AIR Desktop, Android and iOS documents: the adjacent application descriptor (well-formed, `<id>`, `<versionNumber>`), declared icon PNGs and sizes, iOS `Assets.car` presence and the Android `<resdir>` adaptive icon (`mipmap-anydpi-v26/icon.xml`). Signing files, `Assets.car` contents and packaging remain unchecked.
 - Added `npm run call -- <tool> '<json>'` to call a tool on the locally built server.
+
+### Changed
+
+- **Breaking (0.4.0):** The MCP server now lists only `search_tools`, `execute_readonly`, `execute_write`, and direct `run_jsfl`. The other operation names (for example, `publish`) are no longer individual MCP tools. Use `search_tools` with `{"query":"publish"}` to read its schema and warnings, then call `execute_write` with `{"name":"publish","arguments":{}}`; use `execute_readonly` for operations marked read-only (for example, `{"name":"get_status","arguments":{}}`). Existing client permission rules such as `mcp__animate__publish` stop matching; replace them with rules for the corresponding entrance (using your configured server name), and deny `run_jsfl` directly if needed. Approvals are per entrance, **not per inner operation**: inspect `name` and `arguments` before approval, because “always allow” for `execute_write` permits future calls to all write operations.
+
+### Fixed
+
+- `set_air_descriptor` rejects icon paths that escape the descriptor directory through symlinks.
+- `test_movie` now polls the Output panel for up to about 6 seconds, so startup `trace` output that appears after the first 2-second read is no longer missed.
+- `edit_tween` description now says `createTween` ease goes on the destination keyframe.
 
 ## 0.3.2
 
