@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { test } from "node:test";
+import { runInNewContext } from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { PNG } from "pngjs";
@@ -22,6 +23,7 @@ import {
     assertTestMovieReply,
     assertTestMovieScriptUnchanged,
     closeTestMoviePlayer,
+    createCaptureScenarioFixture,
     readCaptureFixture,
 } from "./output.mjs";
 
@@ -368,6 +370,53 @@ test("Canvas scenario is scoped to the disposable FLA and pins browser output an
         }
         await rm(directory, { recursive: true, force: true });
     }
+});
+
+test("capture fixture draws black even when the toolbar inherited another fill", async () => {
+    const pathURI = "file:///disposable.fla";
+    const timeline = {
+        frameCount: 1,
+        layers: [{ frames: [] }],
+        insertFrames: () => {
+            timeline.frameCount = 12;
+            timeline.layers[0].frames[11] = { elements: [] };
+        },
+    };
+    let toolbarFill = { style: "solid", color: "#654321" };
+    const drawnFills = [];
+    const document = {
+        pathURI,
+        type: "Flash",
+        asVersion: 3,
+        getTimeline: () => timeline,
+        getCustomFill: (target) => {
+            assert.equal(target, "toolbar");
+            return { ...toolbarFill };
+        },
+        setCustomFill: (fill) => {
+            toolbarFill = { ...fill };
+        },
+        // Animate 2027 leaves the toolbar unchanged here when nothing is selected.
+        setFillColor: () => {},
+        addNewRectangle: () => {
+            drawnFills.push({ ...toolbarFill });
+            timeline.layers[0].frames[11].elements.push({ elementType: "shape" });
+        },
+        addNewOval: () => {
+            drawnFills.push({ ...toolbarFill });
+        },
+        selectNone: () => {},
+    };
+    await createCaptureScenarioFixture(
+        async ({ code }) => ({
+            structuredContent: { result: runInNewContext(code, { fl: { documents: [document] } }) },
+        }),
+        pathURI,
+    );
+    assert.deepEqual(drawnFills, [
+        { style: "solid", color: "#000000" },
+        { style: "solid", color: "#000000" },
+    ]);
 });
 
 test("capture scenario pins frame 12, verifies PNG output, visual reply, and unchanged fixture", async () => {
