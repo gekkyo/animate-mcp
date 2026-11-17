@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -15,6 +15,24 @@ test("execute accepts a per-run timeout and cleans up on that deadline", async (
     });
     try {
         await assert.rejects(runner.execute("1", 30), /Run timed out after 30 ms/);
+        assert.deepEqual(await readdir(dir), []);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test("a Run Animate started but did not finish says it may still complete", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "animate-mcp-runner-test-"));
+    const runner = createRunner({
+        dir,
+        // Fake Animate: starts the Run (marker) but never writes the Result file.
+        launch: (runFile) => writeFile(runFile.replace(/\.jsfl$/, ".started"), ""),
+        isRunning: async () => true,
+        timeoutMs: 50,
+        pollMs: 5,
+    });
+    try {
+        await assert.rejects(runner.execute("1"), /started the \.jsfl but did not finish/);
         assert.deepEqual(await readdir(dir), []);
     } finally {
         await rm(dir, { recursive: true, force: true });
