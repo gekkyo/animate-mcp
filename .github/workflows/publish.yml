@@ -10,7 +10,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # GitHub Release creation
       id-token: write # npm Trusted Publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
@@ -73,3 +73,17 @@ jobs:
           tar xzf "$archive" mcp-publisher
       - run: ./mcp-publisher login github-oidc
       - run: ./mcp-publisher publish
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; skipping"
+            exit 0
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '$0 ~ "^## "v"( |$)"{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
+          [[ -s notes.md ]] || echo "See CHANGELOG.md" > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
