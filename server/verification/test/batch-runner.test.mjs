@@ -97,12 +97,14 @@ test("precondition skips are reported and never invoke the scenario runner", asy
     }
 });
 
-test("smoke skips document-dependent cases without open user documents", async () => {
+test("smoke runs canvas, document-ops and publish from an empty session using owned anchors only where needed", async () => {
     const runDir = await temporaryDirectory();
-    let calls = 0;
+    const documents = [];
+    const events = [];
+    const anchor = { name: "anchor.fla", pathURI: "file:///tmp/anchor.fla" };
     try {
         const result = await runSmokeBatch({
-            requested: ["canvas"],
+            requested: ["canvas", "document-ops", "publish"],
             runDir,
             platform: "darwin",
             distExists: true,
@@ -110,31 +112,107 @@ test("smoke skips document-dependent cases without open user documents", async (
                 running: true,
                 responding: true,
                 processIds: ["123"],
-                documents: [],
+                documents: [...documents],
             }),
-            run: async () => {
-                calls++;
+            createAnchor: async () => {
+                events.push("create");
+                documents.push(`${anchor.name}\t${anchor.pathURI}`);
+                return anchor;
+            },
+            closeAnchor: async (owned) => {
+                assert.equal(owned, anchor);
+                events.push("close");
+                documents.pop();
+            },
+            run: async (script) => {
+                events.push(`run:${script.split("/").pop()}:${documents.length}`);
                 return { exitCode: 0 };
             },
             log: () => {},
         });
-        assert.equal(calls, 0);
-        assert.equal(result.report.results[0].status, "SKIP");
-        assert.match(result.report.results[0].reason, /requires an existing user document/);
-        assert.equal(result.exitCode, 1);
+        assert.deepEqual(events, [
+            "create",
+            "run:smoke-canvas.mjs:1",
+            "close",
+            "create",
+            "run:smoke-document-ops.mjs:1",
+            "close",
+            "run:smoke-publish.mjs:0",
+        ]);
+        assert.deepEqual(
+            result.report.results.map(({ status }) => status),
+            ["PASS", "PASS", "PASS"],
+        );
+        assert.deepEqual(documents, []);
+        assert.equal(result.exitCode, 0);
         assert.equal((await stat(join(runDir, "smoke-report.json"))).isFile(), true);
     } finally {
         await rm(runDir, { recursive: true, force: true });
     }
 });
 
-test("smoke publish is always skipped and never runs against open user documents", async () => {
+test("smoke anchor failures stop before later scenarios and preserve an unsafe owned document", async () => {
+    for (const stage of ["create", "child", "close"]) {
+        const runDir = await temporaryDirectory();
+        const documents = [];
+        let runs = 0;
+        let closes = 0;
+        try {
+            const result = await runSmokeBatch({
+                requested: ["canvas", "publish"],
+                runDir,
+                platform: "darwin",
+                distExists: true,
+                readState: async () => ({
+                    running: true,
+                    responding: true,
+                    processIds: ["123"],
+                    documents: [...documents],
+                }),
+                createAnchor: async () => {
+                    if (stage === "create") {
+                        throw new Error("fixture refused");
+                    }
+                    documents.push("anchor.fla\tfile:///tmp/anchor.fla");
+                    return { name: "anchor.fla", pathURI: "file:///tmp/anchor.fla" };
+                },
+                closeAnchor: async () => {
+                    closes++;
+                    if (stage === "close") {
+                        throw new Error("close failed");
+                    }
+                    documents.pop();
+                },
+                run: async () => {
+                    runs++;
+                    if (stage === "child") {
+                        documents.push("unexpected.fla\tfile:///tmp/unexpected.fla");
+                    }
+                    return { exitCode: 0 };
+                },
+                log: () => {},
+            });
+            assert.deepEqual(
+                result.report.results.map(({ status }) => status),
+                ["FAIL", "NOT_RUN"],
+            );
+            assert.match(result.report.stopReason, /Owned smoke baseline cleanup\/safety failed/);
+            assert.equal(runs, stage === "create" ? 0 : 1);
+            assert.equal(closes, stage === "child" || stage === "create" ? 0 : 1);
+            assert.equal(result.exitCode, 1);
+        } finally {
+            await rm(runDir, { recursive: true, force: true });
+        }
+    }
+});
+
+test("a failed smoke child still closes its owned anchor before reporting the failure", async () => {
     const runDir = await temporaryDirectory();
-    let calls = 0;
-    const logs = [];
+    const documents = [];
+    let closed = 0;
     try {
         const result = await runSmokeBatch({
-            requested: ["publish"],
+            requested: ["canvas", "publish"],
             runDir,
             platform: "darwin",
             distExists: true,
@@ -142,25 +220,32 @@ test("smoke publish is always skipped and never runs against open user documents
                 running: true,
                 responding: true,
                 processIds: ["123"],
-                documents: ["User.fla\tfile:///Users/test/User.fla"],
+                documents: [...documents],
             }),
-            run: async () => {
-                calls++;
-                return { exitCode: 0 };
+            createAnchor: async () => {
+                documents.push("anchor.fla\tfile:///tmp/anchor.fla");
+                return { name: "anchor.fla", pathURI: "file:///tmp/anchor.fla" };
             },
-            log: (message) => logs.push(message),
+            closeAnchor: async () => {
+                closed++;
+                documents.pop();
+            },
+            run: async (script) => ({ exitCode: script.endsWith("smoke-canvas.mjs") ? 1 : 0 }),
+            log: () => {},
         });
-        assert.equal(calls, 0);
-        assert.equal(result.report.results[0].status, "SKIP");
-        assert.match(result.report.results[0].reason, /will not publish user documents/);
+        assert.equal(closed, 1);
+        assert.deepEqual(documents, []);
+        assert.deepEqual(
+            result.report.results.map(({ status }) => status),
+            ["FAIL", "PASS"],
+        );
         assert.equal(result.exitCode, 1);
-        assert.equal(logs.filter((message) => message.startsWith("Evidence runDir:")).length, 1);
     } finally {
         await rm(runDir, { recursive: true, force: true });
     }
 });
 
-test("prompt batch uses the shared scenario list, skips testmovie, and does not retry", async () => {
+test("prompt batch includes testmovie and runs each selected scenario once in an empty session", async () => {
     const runDir = await temporaryDirectory();
     let stateReads = 0;
     const ran = [];
@@ -178,13 +263,41 @@ test("prompt batch uses the shared scenario list, skips testmovie, and does not 
             },
             log: () => {},
         });
-        assert.deepEqual(ran, ["layer", "stage"]);
-        assert.equal(stateReads, 5);
+        assert.deepEqual(ran, ["layer", "testmovie", "stage"]);
+        assert.equal(stateReads, 7);
         assert.deepEqual(
             result.report.results.map(({ status }) => status),
-            ["PASS", "SKIP", "PASS"],
+            ["PASS", "PASS", "PASS"],
         );
         assert.equal(result.exitCode, 0);
+    } finally {
+        await rm(runDir, { recursive: true, force: true });
+    }
+});
+
+test("prompt batch never launches testmovie with an existing document open", async () => {
+    const runDir = await temporaryDirectory();
+    let calls = 0;
+    try {
+        const result = await runPromptBatch({
+            runDir,
+            scenarioNames: ["testmovie"],
+            readState: async () => ({
+                running: true,
+                responding: true,
+                processIds: ["123"],
+                documents: ["User.fla\tfile:///Users/test/User.fla"],
+            }),
+            runCommand: async () => {
+                calls++;
+                return { exitCode: 0 };
+            },
+            log: () => {},
+        });
+        assert.equal(calls, 0);
+        assert.equal(result.report.results[0].status, "SKIP");
+        assert.match(result.report.results[0].reason, /no documents open/);
+        assert.equal(result.exitCode, 1);
     } finally {
         await rm(runDir, { recursive: true, force: true });
     }

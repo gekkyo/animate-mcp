@@ -33,11 +33,7 @@ export async function runPromptBatch({
 } = {}) {
     const { scenarios } = await import("./prompt-e2e/scenarios/scenarios.mjs");
     const names = scenarioNames ?? Object.keys(scenarios);
-    const entries = names.map((name) => ({
-        name,
-        skipReason:
-            name === "testmovie" ? "Skipped: runner cleanup cannot safely close the Test Movie Player." : undefined,
-    }));
+    const entries = names.map((name) => ({ name }));
     let stateReader = readState;
     let initialState;
     let preflight;

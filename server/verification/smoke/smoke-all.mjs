@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runSequentialBatch } from "../batch-lib.mjs";
@@ -8,6 +10,32 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SCENARIO_DIR = path.join(SCRIPT_DIR, "scenarios");
 const EXCLUDED = new Set(["smoke-run.mjs"]);
 const SCRIPT_TIMEOUT_MS = 10 * 60 * 1000;
+
+/** Creates one owned saved document so document-preservation scenarios have a baseline.
+ * @returns The saved document identity and disposable directory.
+ */
+async function createAnchor() {
+    const { registerRunJsfl } = await import("../../dist/tools/core/run-jsfl.js");
+    const { createSavedAs3Document, toolHandler } = await import("./lib/smoke-lib.mjs");
+    const directory = await mkdtemp(path.join(tmpdir(), "animate-mcp-smoke-anchor-"));
+    const document = await createSavedAs3Document(
+        toolHandler(registerRunJsfl),
+        pathToFileURL(path.join(directory, "smoke-anchor.fla")).href,
+        "",
+    );
+    return { ...document, directory };
+}
+
+/** Closes only the owned saved document before removing its disposable directory.
+ * @param anchor Owned saved document and directory.
+ * @returns Resolves once cleanup succeeds.
+ */
+async function closeAnchor(anchor) {
+    const { registerRunJsfl } = await import("../../dist/tools/core/run-jsfl.js");
+    const { closeDocumentByPath, toolHandler } = await import("./lib/smoke-lib.mjs");
+    await closeDocumentByPath(toolHandler(registerRunJsfl), anchor.pathURI);
+    await rm(anchor.directory, { recursive: true, force: true });
+}
 
 /**
  * Runs one smoke script and captures its output and exit status.
@@ -96,6 +124,8 @@ function selectScripts(requested) {
  * @param options.platform Platform name.
  * @param options.distExists Whether the compiled server exists.
  * @param options.printEvidence Whether to print the evidence directory.
+ * @param options.createAnchor Creates an owned saved baseline document.
+ * @param options.closeAnchor Closes and removes only that baseline document.
  * @param options.log Progress logger.
  * @returns Batch result and process exit code.
  */
@@ -107,6 +137,8 @@ export async function runSmokeBatch({
     platform = process.platform,
     distExists = existsSync(path.resolve(process.cwd(), "server/dist")),
     printEvidence = true,
+    createAnchor: createOwnedAnchor = createAnchor,
+    closeAnchor: closeOwnedAnchor = closeAnchor,
     log = console.log,
 } = {}) {
     const selection = selectScripts(requested);
@@ -118,10 +150,6 @@ export async function runSmokeBatch({
     const entries = selection.scripts.map((script) => ({
         name: script.slice("smoke-".length, -".mjs".length),
         script,
-        skipReason:
-            script === "smoke-publish.mjs"
-                ? "Skipped: publish requires explicitly naming an existing FLA; the automatic batch will not publish user documents. Use isolated-publish for disposable publish coverage."
-                : undefined,
     }));
     if (printEvidence) {
         log(`Evidence runDir: ${path.resolve(runDir)}`);
@@ -141,12 +169,6 @@ export async function runSmokeBatch({
                 preflight = { skipReason: initialState.reason ?? "Adobe Animate is not running." };
             } else if (!initialState.responding) {
                 preflight = { stopReason: initialState.reason ?? "Animate is not responding." };
-            } else if (initialState.documents.length === 0) {
-                for (const entry of entries) {
-                    if (entry.name === "canvas" || entry.name === "document-ops") {
-                        entry.skipReason = "This smoke scenario requires an existing user document; none is open.";
-                    }
-                }
             }
         } catch (error) {
             preflight = { stopReason: `Animate safety check failed: ${error.message}` };
@@ -156,7 +178,14 @@ export async function runSmokeBatch({
     /** Confirms Animate and the original document set remain unchanged.
      * @returns Whether the batch is safe to continue.
      */
+    let fixtureFailure;
+    /** Refuses to continue when the anchor or Animate state changed unexpectedly.
+     * @returns Whether the batch can continue safely.
+     */
     const checkSafety = async () => {
+        if (fixtureFailure) {
+            return { ok: false, reason: fixtureFailure };
+        }
         try {
             const current = await stateReader();
             if (!current.running) {
@@ -179,7 +208,40 @@ export async function runSmokeBatch({
 
     const batch = await runSequentialBatch({
         entries,
-        run: (entry) => run(path.join(SCENARIO_DIR, entry.script)),
+        run: async (entry) => {
+            if (initialState.documents.length || (entry.name !== "canvas" && entry.name !== "document-ops")) {
+                return run(path.join(SCENARIO_DIR, entry.script));
+            }
+            let anchor;
+            try {
+                anchor = await createOwnedAnchor();
+                const expected = `${anchor.name}\t${anchor.pathURI}`;
+                const current = await stateReader();
+                if (
+                    !current.running ||
+                    !current.responding ||
+                    current.processIds.join(",") !== initialState.processIds.join(",") ||
+                    current.documents.join("\n") !== expected
+                ) {
+                    throw new Error("Owned smoke baseline document was not the only open document; cleanup refused.");
+                }
+                const outcome = await run(path.join(SCENARIO_DIR, entry.script));
+                const after = await stateReader();
+                if (
+                    !after.running ||
+                    !after.responding ||
+                    after.processIds.join(",") !== initialState.processIds.join(",") ||
+                    after.documents.join("\n") !== expected
+                ) {
+                    throw new Error("Smoke child changed the baseline document set; cleanup refused.");
+                }
+                await closeOwnedAnchor(anchor);
+                return outcome;
+            } catch (error) {
+                fixtureFailure = `Owned smoke baseline cleanup/safety failed: ${error.message}`;
+                throw error;
+            }
+        },
         checkSafety,
         runDir,
         preflight,

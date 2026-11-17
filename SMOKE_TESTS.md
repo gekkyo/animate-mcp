@@ -1,62 +1,81 @@
-# Smoke tests (real Animate)
+# Real-Animate tests
 
-## Quick start
+## Run
 
-Start Animate on a Mac, then run this from the repository root. These tests need real Animate and do not run in CI.
+Start Animate on a Mac. **Manually save and close open documents**, then run from the repository root. Also close existing Test Movie Players before prompt tests. Do not interact with Animate during a run. Real-Animate tests do not run in CI.
 
-    npm run build && npm run smoke
-
-Results are saved in `smoke-report.json`. Confirm that every check passes.
-
-## Manual checks
-
-The scripts cannot verify these:
-
-1. With a document open, run `run_jsfl` with `fl.trace('hi'); 'ok'`. `hi` appears in the Output panel and the tool returns `"ok"`. Animate comes to the front (known behavior).
-2. Run `get_document_info` through `execute_readonly`. It returns name, size, frame rate and timeline names.
-3. Close all documents and run `get_document_info` through `execute_readonly`. It returns "No document open".
-4. Quit Animate and run `run_jsfl`. It returns "Animate not running".
-
-## Optional checks
-
-- **Run a subset:** Specify targets, for example `npm run smoke -- document-ops capture-frame`.
-- **Check the Entrance path:** For a disposable AS3 document, save `[{"tool":"get_status"}]` as `steps.json` and run `node server/verification/smoke/scenarios/smoke-run.mjs --entrances steps.json`. This checks dispatch in Animate, not a client's approval dialog.
-- **Record runs:** Set `SMOKE_RECORD_DIR=/path/to/dir` to write JSONL with full tool input values, including text and JSFL. Use only nonconfidential disposable test data. Files stay local and are not uploaded automatically.
-- **Refresh shape fixtures:** Run `node server/verification/smoke/lib/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>`. It updates result shapes but keeps each fixture's reviewed sample arguments. The `run_jsfl` fixture is excluded from automatic updates to keep its reviewed shape and runnable safe sample paired; tools without a reviewed fixture fail clearly.
-
-## Individual scripts
-
-The following files live under `server/verification/smoke/`.
-
-Most scripts create a disposable FLA, exercise it and close it without touching your documents. `smoke-publish.mjs` is the exception: it publishes the documents you pass by name.
-
-| Script | Checks | Notes |
+| Scope | Command | Model billing |
 | --- | --- | --- |
-| `smoke-publish.mjs <name.fla>...` | `publish` | Uses your open documents |
-| `smoke-capture-frame.mjs` | `capture_frame` | Disposable FLA |
-| `smoke-edit-elements.mjs` | Layer, frame, tween and instance edits | Disposable FLA |
-| `smoke-edit-library.mjs` | Library edits | Disposable AS3 FLA |
-| `smoke-edit-text.mjs` | `edit_text` | Disposable AS3 and HTML5 Canvas FLAs |
-| `smoke-import-document-properties.mjs` | Import and stage settings | Disposable FLA |
-| `smoke-document-ops.mjs` | open, save, close | Disposable saved AS3 FLA |
-| `smoke-canvas.mjs` | HTML5 Canvas features | Disposable saved FLA |
-| `smoke-isolated-publish.mjs` | `publish` and its output | Disposable saved AS3 FLA; Animate must already be running |
-| `smoke-verification-tools.mjs` | `audit_document`, `verify_canvas_output`, `capture_frame`, `diff_captures` | Disposable saved FLA |
-| `smoke-test-movie.mjs` | `test_movie` | Disposable AS3 FLA; **leaves the Test Movie Player open, so close it manually** |
+| Smoke | `npm run build && npm run smoke` | No |
+| Prompt tests | `npm run verify:prompt -- --allow-paid` | Yes |
+| Both | `npm run verify:all -- --allow-paid` | Yes |
 
-## README prompt E2E
+Prompt tests give natural-language instructions to an AI and verify the resulting operations in real Animate. They default to an authenticated Claude CLI. To use Codex, prefix the command with `PROMPT_E2E_PROVIDER=codex`. Model selection and billing follow the CLI configuration. `canvas` also needs Chrome.
 
-`server/verification/prompt-e2e/` holds a separate harness: it sends README prompts through Claude or Codex CLI and a restricted MCP server to real Animate. Claude remains the default; select Codex explicitly with `PROMPT_E2E_PROVIDER=codex`.
+**Codex isolation is not proven equivalent to Claude's restricted mode.** A read-only sandbox is requested, but native tools and user-level instructions may remain available. Review and approve the risks before running.
 
-- **Nonpaid checks:** `npm run test:prompt-e2e` builds the server and runs fixture, file-scope, MCP discovery and fake-CLI tests. It does not launch a real Claude/Codex CLI or Animate, and runs as a separate CI step; `npm test` is unchanged.
-- **Codex parser/handshake preflight (no model or Animate):** After `npm run build`, run `PROMPT_E2E_SCENARIO=stage node server/verification/prompt-e2e/runner.mjs --codex-preflight`. It checks the installed Codex parser against the production `codexArgs` inline config overrides with an inert fake MCP command under fresh temporary `HOME` and `CODEX_HOME` directories, then uses the SDK with the explicit restricted child environment to verify the MCP handshake and entrance allowlist. It does not read normal Codex configuration, require auth, execute Animate tools, or prove tool-write approval.
-- **Real-Animate fixture preflight (no model):** Start Animate with no documents open, then run `npm run build` and `PROMPT_E2E_SCENARIO=capture node server/verification/prompt-e2e/runner.mjs --fixture-preflight`. It creates and closes a disposable FLA, checks the production fixture, invokes only the restricted frame-12 capture path, and verifies the PNG pixels. Other scenarios can be selected with `PROMPT_E2E_SCENARIO`; `canvas` also needs Chrome.
-- **Persistent diagnostics:** Failure/success metadata is written outside disposable workspaces to `~/.animate-mcp/prompt-e2e-diagnostics/diagnostics.jsonl` with private directory/file permissions and rolling 64 KiB retention. Default records contain fixed allowlisted metadata, a categorical failure reason/exit code, and a validated CLI version (or `unavailable`), probed once in an isolated temporary home. Set `PROMPT_E2E_DIAGNOSTICS=1` to include additional allowlisted counters and enum fields; raw CLI output, credentials, authentication content, and MCP URLs are never recorded.
-- **Real E2E (explicit approval required):** Start Animate with no documents open, authenticate the selected CLI, then run from the repository root:
+## Results and safety
 
-      npm run build
-      RUN_PROMPT_E2E=1 PROMPT_E2E_SCENARIO=layer node server/verification/prompt-e2e/runner.mjs
+- **Evidence:** `summary.json` and individual logs in `verification-runs/<run-ID>/`. Smoke also writes `smoke-report.json`. Review CLI output before sharing.
+- **Stopping:** Each scenario runs once, sequentially, without retries. Stop after three consecutive failures or an Animate exit, restart, unresponsive state, or document cleanup failure. Combined runs do not proceed to prompt tests after a smoke failure.
+- **Cleanup:** User documents are never closed automatically. Close any remaining Test Movie Player manually.
+- **`testmovie`:** Included in prompt tests. Cleanup closes all Players. The harness checks for an empty document session, but you must manually confirm that no existing Players are open.
+- **Verdicts:** SKIP and NOT_RUN do not mean verified. Check their reasons.
 
-  For Codex, add `PROMPT_E2E_PROVIDER=codex` to the command. It uses the Codex CLI's existing authentication and does not force a model; usage and billing depend on that CLI configuration. Both providers operate on a disposable FLA. Do not interact with Animate while the test runs. Other scenarios are `stage`, `script`, `investigate`, `text`, `tween`, `instance`, `symbol`, `inspect`, `library`, `capture`, `assets`, `publish`, `testmovie`, and `canvas`. GreenSock installation is not covered. `canvas` also needs Chrome.
+In an empty session, smoke `canvas` and `document-ops` each use a temporary saved baseline FLA to check that another open document is preserved. Smoke `publish` creates and publishes its own AS3 FLA and checks its SWF output. Owned documents are closed by their exact returned URI; cleanup failures stop the batch.
 
-  **Codex safety is not proven equivalent to Claude's restricted mode.** The harness requests a read-only sandbox and disables several Codex integrations, but native tools may remain available and user-level instructions may still load. Only the dedicated MCP server's `execute_write` entrance is preapproved; document-scope and scenario restrictions remain enforced by that server. Unlike Claude, Codex has no equivalent per-scenario turn-count cap; the harness timeout is five minutes. Live runs have verified this write approval, but isolation is not fully verified. Obtain safety/risk approval before running Codex E2E.
+## Nonpaid harness tests
+
+These use neither real Animate nor a model.
+
+```sh
+npm run test:verification
+npm run test:prompt-e2e
+```
+
+<details>
+<summary>Individual runs and output paths</summary>
+
+- Smoke subset: `npm run smoke -- capture-frame edit-text` (build first).
+- One prompt-test scenario (paid, explicit approval required; build first):
+
+  ```sh
+  RUN_PROMPT_E2E=1 PROMPT_E2E_SCENARIO=layer node server/verification/prompt-e2e/runner.mjs
+  ```
+
+- Scenarios: `layer` / `stage` / `script` / `investigate` / `text` / `tween` / `instance` / `symbol` / `inspect` / `library` / `capture` / `assets` / `publish` / `testmovie` / `canvas`.
+- Close existing Players before standalone `testmovie` too. GreenSock installation is not covered.
+- Output directory: `VERIFICATION_RUN_DIR=/path/to/dir`. Smoke report only: `SMOKE_REPORT=/path/to/report.json`.
+- The old `verify:readme`, `test:readme-e2e`, and `README_*E2E*` environment variables are no longer supported. Update your commands to the new names. Historical diagnostics and run evidence are not moved or deleted.
+- Scripts: `server/verification/smoke/scenarios/`. Most use disposable FLAs. **`smoke-publish.mjs <name.fla>...` publishes the named existing documents; without arguments it creates an owned disposable FLA.**
+
+</details>
+
+<details>
+<summary>Preflights, diagnostics, and fixture maintenance</summary>
+
+Run `npm run build` first.
+
+- **Codex connection preflight (no model or Animate):**
+  `PROMPT_E2E_SCENARIO=stage node server/verification/prompt-e2e/runner.mjs --codex-preflight`
+  Checks config parsing, handshake, and allowlists using a temporary HOME and fake MCP. Does not use normal Codex config or authentication, or prove write approval.
+- **Real-Animate fixture preflight (no model):**
+  `PROMPT_E2E_SCENARIO=capture node server/verification/prompt-e2e/runner.mjs --fixture-preflight`
+  Uses empty Animate to verify a disposable FLA and frame-12 PNG pixels. Other scenarios can also be selected.
+- **Entrance dispatch:** With a disposable AS3 document, save `[{"tool":"get_status"}]` as `steps.json`, then run `node server/verification/smoke/scenarios/smoke-run.mjs --entrances steps.json`. Does not test client approval dialogs.
+- **Persistent diagnostics:** `~/.animate-mcp/prompt-e2e-diagnostics/diagnostics.jsonl` (private permissions, rolling 64 KiB). Records categorical results, exit codes, and the CLI version probed in an isolated environment. `PROMPT_E2E_DIAGNOSTICS=1` adds allowlisted counters and enums. Raw CLI output, credentials, and MCP URLs are not recorded.
+- **Input recording:** `SMOKE_RECORD_DIR=/path/to/dir` writes full tool inputs to local JSONL, including text and JSFL. Use only nonconfidential disposable data. No automatic uploads.
+- **Shape updates:** `node server/verification/smoke/lib/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>` updates result shapes while preserving reviewed arguments. Excludes `run_jsfl`; tools without reviewed fixtures fail.
+- **Codex limits:** Only the dedicated MCP `execute_write` entrance is preapproved; document and scenario restrictions are enforced server-side. Write approval is live-verified, but full isolation is not. Unlike Claude, there is no turn-count cap; the harness times out after five minutes.
+
+</details>
+
+<details>
+<summary>Manual checks</summary>
+
+1. With a document open, execute `fl.trace('hi'); 'ok'` via `run_jsfl` → Output panel shows `hi`, return value is `"ok"`. Animate comes to the front.
+2. `execute_readonly` → `get_document_info` → name, size, frame rate, and timeline names.
+3. Manually save and close documents, then repeat → `"No document open"`.
+4. Quit Animate, then call `run_jsfl` → `"Animate not running"`.
+
+</details>
