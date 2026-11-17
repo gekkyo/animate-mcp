@@ -130,10 +130,10 @@ test("script export/apply pin paths, document, and force to disposable values", 
         data: { documents: [{ path: "file:///tmp/disposable.fla", name: "disposable.fla" }] },
     });
     for (const [name, input, data] of [
-        ["export_scripts", { dir: "/tmp/readme-e2e/export", force: false, document: "user.fla" }, { failed: [] }],
+        ["export_scripts", { dir: "/tmp/prompt-e2e/export", force: false, document: "user.fla" }, { failed: [] }],
         [
             "apply_scripts",
-            { dir: "/tmp/readme-e2e/export", document: "user.fla" },
+            { dir: "/tmp/prompt-e2e/export", document: "user.fla" },
             { failed: [], applied: ["scenes/Scene 1/as/1.as"] },
         ],
     ]) {
@@ -147,7 +147,7 @@ test("script export/apply pin paths, document, and force to disposable values", 
             },
             "file:///tmp/disposable.fla",
             checkStatus,
-            "/tmp/readme-e2e",
+            "/tmp/prompt-e2e",
         );
         await wrapped.run(input, {}, {});
     }
@@ -160,14 +160,14 @@ test("script export/apply pin paths, document, and force to disposable values", 
         { name: "export_scripts", run: async () => assert.fail("Unsafe export ran") },
         "file:///tmp/disposable.fla",
         checkStatus,
-        "/tmp/readme-e2e",
+        "/tmp/prompt-e2e",
     );
     await assert.rejects(unsafe.run({ dir: "/user/path", force: true }, {}, {}), /export dir is pinned/);
     const unsafeApply = scoped(
         { name: "apply_scripts", run: async () => assert.fail("Unsafe apply ran") },
         "file:///tmp/disposable.fla",
         checkStatus,
-        "/tmp/readme-e2e",
+        "/tmp/prompt-e2e",
     );
     await assert.rejects(unsafeApply.run({ dir: "/user/path" }, {}, {}), /apply dir must be/);
 });
@@ -178,12 +178,12 @@ test("script MCP discovery exposes only scoped script workflow tools", async () 
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_E2E_OUT_DIR: "/tmp/disposable-e2e",
-            README_PROMPT_E2E_SCENARIO: "script",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_OUT_DIR: "/tmp/disposable-e2e",
+            PROMPT_E2E_SCENARIO: "script",
         },
     });
-    const client = new Client({ name: "readme-e2e-script-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-script-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -211,12 +211,12 @@ test("investigation MCP discovery exposes only get_status, export_scripts, and r
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_E2E_OUT_DIR: "/tmp/disposable-e2e",
-            README_PROMPT_E2E_SCENARIO: "investigate",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_OUT_DIR: "/tmp/disposable-e2e",
+            PROMPT_E2E_SCENARIO: "investigate",
         },
     });
-    const client = new Client({ name: "readme-e2e-investigate-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-investigate-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();

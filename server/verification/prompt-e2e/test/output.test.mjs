@@ -30,8 +30,8 @@ import {
 test("publish trace requires a verified compiler-error result and its reply cites the diagnostic", async () => {
     const directory = await mkdtemp(join(tmpdir(), "readme-publish-trace-"));
     const tracePath = join(directory, "trace.jsonl");
-    const previousTracePath = process.env.README_E2E_TRACE_PATH;
-    process.env.README_E2E_TRACE_PATH = tracePath;
+    const previousTracePath = process.env.PROMPT_E2E_TRACE_PATH;
+    process.env.PROMPT_E2E_TRACE_PATH = tracePath;
     const returned = [];
     const responses = [
         { data: { ok: false, compilerOutput: "verified", errors: [{ code: "1084" }] } },
@@ -92,9 +92,9 @@ test("publish trace requires a verified compiler-error result and its reply cite
         }
     } finally {
         if (previousTracePath === undefined) {
-            delete process.env.README_E2E_TRACE_PATH;
+            delete process.env.PROMPT_E2E_TRACE_PATH;
         } else {
-            process.env.README_E2E_TRACE_PATH = previousTracePath;
+            process.env.PROMPT_E2E_TRACE_PATH = previousTracePath;
         }
         await rm(directory, { recursive: true, force: true });
     }
@@ -103,8 +103,8 @@ test("publish trace requires a verified compiler-error result and its reply cite
 test("test_movie is scoped to the disposable FLA, validates its result, and closes Player windows", async () => {
     const directory = await mkdtemp(join(tmpdir(), "readme-testmovie-trace-"));
     const tracePath = join(directory, "trace.jsonl");
-    const previousTracePath = process.env.README_E2E_TRACE_PATH;
-    process.env.README_E2E_TRACE_PATH = tracePath;
+    const previousTracePath = process.env.PROMPT_E2E_TRACE_PATH;
+    process.env.PROMPT_E2E_TRACE_PATH = tracePath;
     const responses = [
         {
             data: {
@@ -248,9 +248,9 @@ test("test_movie is scoped to the disposable FLA, validates its result, and clos
         assert.throws(() => assertTestMovieScriptUnchanged("trace('other');", "trace('other');"));
     } finally {
         if (previousTracePath === undefined) {
-            delete process.env.README_E2E_TRACE_PATH;
+            delete process.env.PROMPT_E2E_TRACE_PATH;
         } else {
-            process.env.README_E2E_TRACE_PATH = previousTracePath;
+            process.env.PROMPT_E2E_TRACE_PATH = previousTracePath;
         }
         await rm(directory, { recursive: true, force: true });
     }
@@ -259,8 +259,8 @@ test("test_movie is scoped to the disposable FLA, validates its result, and clos
 test("Canvas scenario is scoped to the disposable FLA and pins browser output and observation", async () => {
     const directory = await mkdtemp(join(tmpdir(), "readme-canvas-trace-"));
     const tracePath = join(directory, "trace.jsonl");
-    const previousTracePath = process.env.README_E2E_TRACE_PATH;
-    process.env.README_E2E_TRACE_PATH = tracePath;
+    const previousTracePath = process.env.PROMPT_E2E_TRACE_PATH;
+    process.env.PROMPT_E2E_TRACE_PATH = tracePath;
     const marker = "README_CANVAS_ERROR_MARKER";
     const responses = [
         { data: { browserOutput: { consoleErrors: [marker] } } },
@@ -364,9 +364,9 @@ test("Canvas scenario is scoped to the disposable FLA and pins browser output an
         assert.throws(() => assertCanvasFrameScriptUnchanged('console.error("other");', 'console.error("other");'));
     } finally {
         if (previousTracePath === undefined) {
-            delete process.env.README_E2E_TRACE_PATH;
+            delete process.env.PROMPT_E2E_TRACE_PATH;
         } else {
-            process.env.README_E2E_TRACE_PATH = previousTracePath;
+            process.env.PROMPT_E2E_TRACE_PATH = previousTracePath;
         }
         await rm(directory, { recursive: true, force: true });
     }
@@ -558,12 +558,12 @@ test("capture MCP discovery exposes only get_status and capture_frame", async ()
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_E2E_OUT_DIR: "/tmp/disposable-e2e",
-            README_PROMPT_E2E_SCENARIO: "capture",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_OUT_DIR: "/tmp/disposable-e2e",
+            PROMPT_E2E_SCENARIO: "capture",
         },
     });
-    const client = new Client({ name: "readme-e2e-capture-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-capture-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         for (const name of ["get_status", "capture_frame"]) {
@@ -595,12 +595,12 @@ test("publish MCP discovery exposes only get_status and publish with its documen
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_E2E_OUT_DIR: "/tmp/disposable-publish-e2e",
-            README_PROMPT_E2E_SCENARIO: "publish",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_OUT_DIR: "/tmp/disposable-publish-e2e",
+            PROMPT_E2E_SCENARIO: "publish",
         },
     });
-    const client = new Client({ name: "readme-e2e-publish-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-publish-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -633,11 +633,11 @@ test("testmovie MCP discovery exposes only get_status and test_movie without run
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_PROMPT_E2E_SCENARIO: "testmovie",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_SCENARIO: "testmovie",
         },
     });
-    const client = new Client({ name: "readme-e2e-testmovie-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-testmovie-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -670,12 +670,12 @@ test("Canvas MCP discovery exposes only get_status and verify_canvas_output with
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_E2E_OUT_DIR: "/tmp/disposable-canvas-e2e",
-            README_PROMPT_E2E_SCENARIO: "canvas",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_OUT_DIR: "/tmp/disposable-canvas-e2e",
+            PROMPT_E2E_SCENARIO: "canvas",
         },
     });
-    const client = new Client({ name: "readme-e2e-canvas-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-canvas-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();

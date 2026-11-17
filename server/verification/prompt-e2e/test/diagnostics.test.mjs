@@ -3,12 +3,12 @@ import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { validatedCliVersion, writeReadmeDiagnostic } from "../lib/diagnostics.mjs";
+import { validatedCliVersion, writePromptDiagnostic } from "../lib/diagnostics.mjs";
 
 test("persistent diagnostics default to fixed metadata and use private storage", async () => {
-    const homeDir = await mkdtemp(join(tmpdir(), "readme-e2e-diagnostics-"));
+    const homeDir = await mkdtemp(join(tmpdir(), "prompt-e2e-diagnostics-"));
     try {
-        await writeReadmeDiagnostic(
+        await writePromptDiagnostic(
             {
                 event: "codex-cli",
                 outcome: "failed",
@@ -24,7 +24,7 @@ test("persistent diagnostics default to fixed metadata and use private storage",
             },
             { homeDir, detailed: false, cliVersion: "codex-cli token-do-not-store" },
         );
-        const directory = join(homeDir, ".animate-mcp", "readme-e2e-diagnostics");
+        const directory = join(homeDir, ".animate-mcp", "prompt-e2e-diagnostics");
         const path = join(directory, "diagnostics.jsonl");
         const record = JSON.parse((await readFile(path, "utf8")).trim());
         assert.deepEqual(Object.keys(record).sort(), [
@@ -52,11 +52,11 @@ test("persistent diagnostics default to fixed metadata and use private storage",
 });
 
 test("opt-in diagnostics add only bounded enums and counters, and stop at the file cap", async () => {
-    const homeDir = await mkdtemp(join(tmpdir(), "readme-e2e-diagnostics-detailed-"));
-    const directory = join(homeDir, ".animate-mcp", "readme-e2e-diagnostics");
+    const homeDir = await mkdtemp(join(tmpdir(), "prompt-e2e-diagnostics-detailed-"));
+    const directory = join(homeDir, ".animate-mcp", "prompt-e2e-diagnostics");
     const path = join(directory, "diagnostics.jsonl");
     try {
-        await writeReadmeDiagnostic(
+        await writePromptDiagnostic(
             {
                 event: "codex-cli",
                 outcome: "failed",
@@ -101,7 +101,7 @@ test("opt-in diagnostics add only bounded enums and counters, and stop at the fi
             "canvas",
         ];
         for (let index = 0; index < 500; index++) {
-            await writeReadmeDiagnostic(
+            await writePromptDiagnostic(
                 {
                     event: "run",
                     outcome: "failed",
@@ -137,7 +137,7 @@ test("CLI versions accept only a bounded semantic version token", () => {
 });
 
 test("CLI --version is probed once in isolation and cached for later diagnostics", async () => {
-    const homeDir = await mkdtemp(join(tmpdir(), "readme-e2e-version-cache-"));
+    const homeDir = await mkdtemp(join(tmpdir(), "prompt-e2e-version-cache-"));
     const bin = join(homeDir, "bin");
     const calls = join(homeDir, "version-calls");
     const executable = join(bin, "codex");
@@ -156,7 +156,7 @@ process.stdout.write("codex-cli 0.169.0\\n");
         await chmod(executable, 0o755);
         process.env.PATH = `${bin}:${originalPath}`;
         for (let index = 0; index < 2; index++) {
-            await writeReadmeDiagnostic(
+            await writePromptDiagnostic(
                 {
                     event: "run",
                     outcome: "failed",
@@ -169,7 +169,7 @@ process.stdout.write("codex-cli 0.169.0\\n");
             );
         }
         const records = (
-            await readFile(join(homeDir, ".animate-mcp", "readme-e2e-diagnostics", "diagnostics.jsonl"), "utf8")
+            await readFile(join(homeDir, ".animate-mcp", "prompt-e2e-diagnostics", "diagnostics.jsonl"), "utf8")
         )
             .trim()
             .split("\n")

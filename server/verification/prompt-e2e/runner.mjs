@@ -1,6 +1,6 @@
-// Manual paid check: npm run build && RUN_README_PROMPT_E2E=1 node server/verification/readme-e2e/runner.mjs
-// Select with README_PROMPT_E2E_SCENARIO=layer|stage|script|investigate|text|tween|instance|symbol|inspect|library|capture|assets|publish|testmovie|canvas (default: layer).
-// Set README_PROMPT_E2E_PROVIDER=codex to opt into Codex; Claude is the default.
+// Manual paid check: npm run build && RUN_PROMPT_E2E=1 node server/verification/prompt-e2e/runner.mjs
+// Select with PROMPT_E2E_SCENARIO=layer|stage|script|investigate|text|tween|instance|symbol|inspect|library|capture|assets|publish|testmovie|canvas (default: layer).
+// Set PROMPT_E2E_PROVIDER=codex to opt into Codex; Claude is the default.
 
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,7 +18,7 @@ import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "../smo
 import { runClaude } from "./lib/claude.mjs";
 import { runCodex } from "./lib/codex.mjs";
 import { checkRestrictedMcpHandshake, runCodexPreflight } from "./lib/codex-preflight.mjs";
-import { writeReadmeDiagnostic } from "./lib/diagnostics.mjs";
+import { writePromptDiagnostic } from "./lib/diagnostics.mjs";
 import { serveRestricted } from "./lib/mcp-server.mjs";
 import {
     assertCaptureDocumentUnchanged,
@@ -46,9 +46,9 @@ const scriptPath = fileURLToPath(import.meta.url);
  * @param provider Provider name from the environment.
  * @returns Validated provider name.
  */
-export function readmeE2eProvider(provider = process.env.README_PROMPT_E2E_PROVIDER ?? "claude") {
+export function promptE2eProvider(provider = process.env.PROMPT_E2E_PROVIDER ?? "claude") {
     if (provider !== "claude" && provider !== "codex") {
-        throw new Error('README_PROMPT_E2E_PROVIDER must be "claude" or "codex".');
+        throw new Error('PROMPT_E2E_PROVIDER must be "claude" or "codex".');
     }
     return provider;
 }
@@ -75,7 +75,7 @@ async function main() {
     if (process.argv.includes("--mcp-server")) {
         return serveRestricted();
     }
-    const scenarioName = process.env.README_PROMPT_E2E_SCENARIO ?? "layer";
+    const scenarioName = process.env.PROMPT_E2E_SCENARIO ?? "layer";
     const scenario = selectedScenario(scenarioName);
     if (process.argv.includes("--codex-preflight")) {
         const result = await runCodexPreflight({ serverPath: scriptPath, scenarioName });
@@ -85,9 +85,9 @@ async function main() {
     if (process.argv.includes("--fixture-preflight")) {
         return runFixturePreflight(scenarioName);
     }
-    const provider = readmeE2eProvider();
-    if (process.env.RUN_README_PROMPT_E2E !== "1") {
-        throw new Error(`Set RUN_README_PROMPT_E2E=1 only after approving the paid ${provider} CLI run.`);
+    const provider = promptE2eProvider();
+    if (process.env.RUN_PROMPT_E2E !== "1") {
+        throw new Error(`Set RUN_PROMPT_E2E=1 only after approving the paid ${provider} CLI run.`);
     }
     if (!(await isAnimateRunning())) {
         throw new Error("Start Adobe Animate before running this test.");
@@ -102,7 +102,7 @@ async function main() {
         await assertChromeInstalled();
     }
 
-    const outDir = await mkdtemp(join(tmpdir(), "animate-mcp-readme-e2e-"));
+    const outDir = await mkdtemp(join(tmpdir(), "animate-mcp-prompt-e2e-"));
     const flaPath = join(outDir, `${basename(outDir)}.fla`);
     const tracePath = join(outDir, "trace.jsonl");
     const configPath = join(outDir, "mcp.json");
@@ -117,7 +117,7 @@ async function main() {
     let failure;
     let stage = "fixture";
     try {
-        const fixture = await prepareReadmeE2eScenario(
+        const fixture = await preparePromptE2eScenario(
             scenarioName,
             {
                 runJsfl,
@@ -139,7 +139,7 @@ async function main() {
                 configPath,
                 JSON.stringify({
                     mcpServers: {
-                        "animate-readme-e2e": { command: process.execPath, args: [scriptPath, "--mcp-server"] },
+                        "animate-prompt-e2e": { command: process.execPath, args: [scriptPath, "--mcp-server"] },
                     },
                 }),
             );
@@ -250,7 +250,7 @@ async function main() {
                 fallbackErrorCategory = "fixture";
             }
         }
-        await writeReadmeDiagnostic({
+        await writePromptDiagnostic({
             ...(failure?.diagnostic ?? {}),
             event: "run",
             outcome: failure ? "failed" : "passed",
@@ -278,7 +278,7 @@ async function main() {
  * @param services.editTween Tween editing tool handler.
  * @param services.closeDocumentByPath Disposable document cleanup handler.
  * @param services.checkRestrictedMcpHandshake Restricted MCP handshake checker.
- * @param services.writeReadmeDiagnostic Safe diagnostics writer.
+ * @param services.writePromptDiagnostic Safe diagnostics writer.
  * @param services.log Preflight completion logger.
  * @returns Resolves after fixture checks and disposable-document cleanup.
  */
@@ -308,7 +308,7 @@ export async function runFixturePreflight(scenarioName, services = {}) {
     const editTween = services.editTween ?? toolHandler(registerEditTween);
     const closeDocument = services.closeDocumentByPath ?? closeDocumentByPath;
     const checkHandshake = services.checkRestrictedMcpHandshake ?? checkRestrictedMcpHandshake;
-    const writeDiagnostic = services.writeReadmeDiagnostic ?? writeReadmeDiagnostic;
+    const writeDiagnostic = services.writePromptDiagnostic ?? writePromptDiagnostic;
     const log = services.log ?? console.log;
     const state = {};
     let pathURI = "";
@@ -317,7 +317,7 @@ export async function runFixturePreflight(scenarioName, services = {}) {
     let toolsCount;
     let handshakePassed = false;
     try {
-        const fixture = await prepareReadmeE2eScenario(
+        const fixture = await preparePromptE2eScenario(
             scenarioName,
             {
                 runJsfl,
@@ -337,11 +337,11 @@ export async function runFixturePreflight(scenarioName, services = {}) {
         stage = "mcp-handshake";
         const handshakeEnv = {
             ...process.env,
-            README_E2E_TRACE_PATH: tracePath,
-            README_E2E_DOCUMENT_URI: pathURI,
-            README_E2E_OUT_DIR: outDir,
-            ...(assetsFixture ? { README_E2E_ASSET_PATHS: JSON.stringify(assetsFixture.paths) } : {}),
-            README_PROMPT_E2E_SCENARIO: scenarioName,
+            PROMPT_E2E_TRACE_PATH: tracePath,
+            PROMPT_E2E_DOCUMENT_URI: pathURI,
+            PROMPT_E2E_OUT_DIR: outDir,
+            ...(assetsFixture ? { PROMPT_E2E_ASSET_PATHS: JSON.stringify(assetsFixture.paths) } : {}),
+            PROMPT_E2E_SCENARIO: scenarioName,
         };
         const handshake = await checkHandshake({
             serverPath: scriptPath,
@@ -438,7 +438,7 @@ export async function runFixturePreflight(scenarioName, services = {}) {
  * @param state Mutable scenario-specific state.
  * @returns Fixture document and setup metadata.
  */
-export async function prepareReadmeE2eScenario(scenarioName, context, state) {
+export async function preparePromptE2eScenario(scenarioName, context, state) {
     const scenario = selectedScenario(scenarioName);
     const { runJsfl, status, saveDocument, openDocument, flaPath, outDir } = context;
     const assetsFixture = scenario === scenarios.assets ? await createAssetsFixture(outDir) : undefined;

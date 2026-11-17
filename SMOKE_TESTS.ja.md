@@ -13,10 +13,10 @@ Mac で Animate を起動し、リポジトリのルートから実行します�
 用途別に3つの入口を使います。実行前に Animate を起動し、開いているドキュメントは自分で保存して閉じてください。実行中は Animate を操作しないでください。
 
 - **smoke 全件:** `npm run build && npm run smoke`
-- **README 実機全件（有料、build 含む）:** `npm run verify:readme -- --allow-paid`
+- **README 実機全件（有料、build 含む）:** `npm run verify:prompt -- --allow-paid`
 - **両方全件（有料、build → smoke → README）:** `npm run verify:all -- --allow-paid`
 
-README の一括実行には、選択した Claude/Codex CLI の認証と、課金を許可する `--allow-paid` が必要です。既定は Claude です。`npm run test:readme-e2e` は別物で、実機もモデルも使わないハーネステストです。
+README の一括実行には、選択した Claude/Codex CLI の認証と、課金を許可する `--allow-paid` が必要です。既定は Claude です。`npm run test:prompt-e2e` は別物で、実機もモデルも使わないハーネステストです。
 
 各シナリオは順番に1回ずつ実行し、自動リトライはしません。3連続失敗または Animate の終了・再起動などの安全問題で停止します。ユーザー文書を自動で閉じることはしません。
 
@@ -64,17 +64,17 @@ smoke の単独 `publish` は明示した既存 FLA が必要なため、一括�
 
 ## README プロンプト E2E
 
-`server/verification/readme-e2e/` は、README の例文を Claude または Codex CLI と制限付き MCP サーバー経由で実機 Animate に渡す、別のハーネスです。既定は Claude です。Codex は `README_PROMPT_E2E_PROVIDER=codex` で明示的に選択します。
+`server/verification/prompt-e2e/` は、README の例文を Claude または Codex CLI と制限付き MCP サーバー経由で実機 Animate に渡す、別のハーネスです。既定は Claude です。Codex は `PROMPT_E2E_PROVIDER=codex` で明示的に選択します。
 
-- **非課金チェック:** `npm run test:readme-e2e` はサーバーをビルドし、フィクスチャ・ファイル操作制限・MCP探索・偽CLIのテストを実行します。実際の Claude/Codex CLI や Animate は起動しません。CIでは独立ステップで実行し、`npm test` の対象は変更しません。
-- **Codex パーサー／ハンドシェイクの事前確認（モデル・Animate 不使用）:** `npm run build` の後、`README_PROMPT_E2E_SCENARIO=stage node server/verification/readme-e2e/runner.mjs --codex-preflight` を実行します。新規の一時 `HOME`／`CODEX_HOME` と、本番 `codexArgs` が生成するインライン設定・無害な fake MCP コマンドでインストール済み Codex のパーサーを確認し、明示的に制限した子プロセス環境で SDK ハンドシェイクと入口の許可リストを確認します。通常の Codex 設定は読み込まず、認証・Animate ツール実行は不要です。設定のパースだけで書き込み承認を証明するものではありません。
-- **実機 Animate フィクスチャの事前確認（モデル不使用）:** ドキュメントを開いていない Animate を起動し、`npm run build` の後、`README_PROMPT_E2E_SCENARIO=capture node server/verification/readme-e2e/runner.mjs --fixture-preflight` を実行します。使い捨て FLA を作成・終了し、本番フィクスチャを確認したうえで、制限 MCP 経由のフレーム12キャプチャだけを実行して PNG ピクセルを検証します。`README_PROMPT_E2E_SCENARIO` で他のシナリオも選択できます。`canvas` には Chrome も必要です。
-- **永続診断ログ:** 使い捨てワークスペース外の `~/.animate-mcp/readme-e2e-diagnostics/diagnostics.jsonl` に、private 権限・直近64 KiBの保持で結果メタデータを保存します。既定では固定の許可リスト項目、分類済み失敗理由／終了コード、隔離した一時ホームで一度だけ確認する CLI バージョン（検証できない場合は `unavailable`）を記録します。`README_E2E_DIAGNOSTICS=1` を設定すると、追加の許可済みカウンターと列挙値も記録します。CLI の生出力、認証情報、認証内容、MCP URL は記録しません。
+- **非課金チェック:** `npm run test:prompt-e2e` はサーバーをビルドし、フィクスチャ・ファイル操作制限・MCP探索・偽CLIのテストを実行します。実際の Claude/Codex CLI や Animate は起動しません。CIでは独立ステップで実行し、`npm test` の対象は変更しません。
+- **Codex パーサー／ハンドシェイクの事前確認（モデル・Animate 不使用）:** `npm run build` の後、`PROMPT_E2E_SCENARIO=stage node server/verification/prompt-e2e/runner.mjs --codex-preflight` を実行します。新規の一時 `HOME`／`CODEX_HOME` と、本番 `codexArgs` が生成するインライン設定・無害な fake MCP コマンドでインストール済み Codex のパーサーを確認し、明示的に制限した子プロセス環境で SDK ハンドシェイクと入口の許可リストを確認します。通常の Codex 設定は読み込まず、認証・Animate ツール実行は不要です。設定のパースだけで書き込み承認を証明するものではありません。
+- **実機 Animate フィクスチャの事前確認（モデル不使用）:** ドキュメントを開いていない Animate を起動し、`npm run build` の後、`PROMPT_E2E_SCENARIO=capture node server/verification/prompt-e2e/runner.mjs --fixture-preflight` を実行します。使い捨て FLA を作成・終了し、本番フィクスチャを確認したうえで、制限 MCP 経由のフレーム12キャプチャだけを実行して PNG ピクセルを検証します。`PROMPT_E2E_SCENARIO` で他のシナリオも選択できます。`canvas` には Chrome も必要です。
+- **永続診断ログ:** 使い捨てワークスペース外の `~/.animate-mcp/prompt-e2e-diagnostics/diagnostics.jsonl` に、private 権限・直近64 KiBの保持で結果メタデータを保存します。既定では固定の許可リスト項目、分類済み失敗理由／終了コード、隔離した一時ホームで一度だけ確認する CLI バージョン（検証できない場合は `unavailable`）を記録します。`PROMPT_E2E_DIAGNOSTICS=1` を設定すると、追加の許可済みカウンターと列挙値も記録します。CLI の生出力、認証情報、認証内容、MCP URL は記録しません。
 - **実機E2E（明示的な承認が必要）:** Animate をドキュメントが開いていない状態にし、選択した CLI の認証を済ませて、リポジトリのルートで実行します。
 
       npm run build
-      RUN_README_PROMPT_E2E=1 README_PROMPT_E2E_SCENARIO=layer node server/verification/readme-e2e/runner.mjs
+      RUN_PROMPT_E2E=1 PROMPT_E2E_SCENARIO=layer node server/verification/prompt-e2e/runner.mjs
 
-  Codex を使う場合は、コマンドに `README_PROMPT_E2E_PROVIDER=codex` を追加します。Codex CLI の既存認証を使い、モデルは固定しません。利用量・課金は CLI の設定に依存します。どちらのプロバイダーも使い捨ての FLA を操作します。実行中は Animate を操作しないでください。他のシナリオは `stage`、`script`、`investigate`、`text`、`tween`、`instance`、`symbol`、`inspect`、`library`、`capture`、`assets`、`publish`、`testmovie`、`canvas` です。GreenSock のインストールは対象外です。`canvas` には Chrome も必要です。
+  Codex を使う場合は、コマンドに `PROMPT_E2E_PROVIDER=codex` を追加します。Codex CLI の既存認証を使い、モデルは固定しません。利用量・課金は CLI の設定に依存します。どちらのプロバイダーも使い捨ての FLA を操作します。実行中は Animate を操作しないでください。他のシナリオは `stage`、`script`、`investigate`、`text`、`tween`、`instance`、`symbol`、`inspect`、`library`、`capture`、`assets`、`publish`、`testmovie`、`canvas` です。GreenSock のインストールは対象外です。`canvas` には Chrome も必要です。
 
   **Codex の安全性が Claude の制限モードと同等とは確認できていません。** ハーネスは read-only sandbox を要求し、一部の Codex 連携機能を無効化しますが、ネイティブツールが利用可能な場合や、ユーザー共通の指示が読み込まれる可能性があります。専用 MCP サーバーの `execute_write` 入口だけを事前承認し、対象ドキュメントとシナリオの制限はサーバー側で維持します。Claude と異なり Codex にはシナリオごとの turn 数上限に相当する機能がなく、ハーネスのタイムアウトは5分です。この書き込み承認は実機で確認済みですが、隔離の完全な検証は未実施です。Codex E2E の実行前に、安全性・リスクの確認と承認を得てください。

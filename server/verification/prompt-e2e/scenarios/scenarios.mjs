@@ -186,11 +186,11 @@ export async function createAssetsFixture(outDir) {
  * @param name Scenario name.
  * @returns Scenario configuration.
  */
-export function selectedScenario(name = process.env.README_PROMPT_E2E_SCENARIO ?? "layer") {
+export function selectedScenario(name = process.env.PROMPT_E2E_SCENARIO ?? "layer") {
     const scenario = scenarios[name];
     if (!scenario) {
         throw new Error(
-            'README_PROMPT_E2E_SCENARIO must be "layer", "stage", "script", "investigate", "text", "tween", "instance", "symbol", "inspect", "library", "capture", "assets", "publish", "testmovie", or "canvas".',
+            'PROMPT_E2E_SCENARIO must be "layer", "stage", "script", "investigate", "text", "tween", "instance", "symbol", "inspect", "library", "capture", "assets", "publish", "testmovie", or "canvas".',
         );
     }
     return scenario;

@@ -28,11 +28,11 @@ const CODEX_FLAGS = new Set([
     "-o",
 ]);
 export const CODEX_MCP_ENV_VARS = [
-    "README_E2E_TRACE_PATH",
-    "README_E2E_DOCUMENT_URI",
-    "README_E2E_OUT_DIR",
-    "README_E2E_ASSET_PATHS",
-    "README_PROMPT_E2E_SCENARIO",
+    "PROMPT_E2E_TRACE_PATH",
+    "PROMPT_E2E_DOCUMENT_URI",
+    "PROMPT_E2E_OUT_DIR",
+    "PROMPT_E2E_ASSET_PATHS",
+    "PROMPT_E2E_SCENARIO",
 ];
 const CODEX_CONFIG_KEYS = [
     "approval_policy",
@@ -46,7 +46,7 @@ const CODEX_CONFIG_KEYS = [
     "skills.include_instructions",
     "skills.bundled.enabled",
     "web_search",
-    "mcp_servers.animate-readme-e2e",
+    "mcp_servers.animate-prompt-e2e",
 ];
 
 /** Runs Codex in a separate empty working directory and returns only bounded final-result text.
@@ -81,10 +81,10 @@ export async function runCodex(
                 {
                     env: {
                         ...env,
-                        README_E2E_TRACE_PATH: tracePath,
-                        README_E2E_DOCUMENT_URI: documentPath,
-                        README_E2E_OUT_DIR: outDir,
-                        ...(assetPaths ? { README_E2E_ASSET_PATHS: JSON.stringify(assetPaths) } : {}),
+                        PROMPT_E2E_TRACE_PATH: tracePath,
+                        PROMPT_E2E_DOCUMENT_URI: documentPath,
+                        PROMPT_E2E_OUT_DIR: outDir,
+                        ...(assetPaths ? { PROMPT_E2E_ASSET_PATHS: JSON.stringify(assetPaths) } : {}),
                     },
                     timeoutMs,
                 },
@@ -283,7 +283,7 @@ export function codexArgs(serverPath, outputPath, workingDirectory, selectedProm
         "-c",
         'web_search="disabled"',
         "-c",
-        `mcp_servers.animate-readme-e2e={${mcpConfig}}`,
+        `mcp_servers.animate-prompt-e2e={${mcpConfig}}`,
         "--json",
         "-o",
         outputPath,

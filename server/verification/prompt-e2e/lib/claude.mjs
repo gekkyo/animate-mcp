@@ -25,10 +25,10 @@ export function runClaude(
             detached: process.platform !== "win32",
             env: {
                 ...env,
-                README_E2E_TRACE_PATH: tracePath,
-                README_E2E_DOCUMENT_URI: documentPath,
-                ...(outDir ? { README_E2E_OUT_DIR: outDir } : {}),
-                ...(assetPaths ? { README_E2E_ASSET_PATHS: JSON.stringify(assetPaths) } : {}),
+                PROMPT_E2E_TRACE_PATH: tracePath,
+                PROMPT_E2E_DOCUMENT_URI: documentPath,
+                ...(outDir ? { PROMPT_E2E_OUT_DIR: outDir } : {}),
+                ...(assetPaths ? { PROMPT_E2E_ASSET_PATHS: JSON.stringify(assetPaths) } : {}),
             },
         });
         let stdoutBytes = 0;
@@ -246,9 +246,9 @@ export function claudeArgs(configPath, selectedPrompt = prompt) {
         "--permission-prompts",
         "none",
         "--allowedTools",
-        "mcp__animate-readme-e2e__search_tools",
-        "mcp__animate-readme-e2e__execute_readonly",
-        "mcp__animate-readme-e2e__execute_write",
+        "mcp__animate-prompt-e2e__search_tools",
+        "mcp__animate-prompt-e2e__execute_readonly",
+        "mcp__animate-prompt-e2e__execute_write",
         "--no-session-persistence",
         "--max-turns",
         scenario === scenarios.script ? "12" : "6",

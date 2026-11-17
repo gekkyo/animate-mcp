@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { runSequentialBatch } from "../batch-lib.mjs";
 import { runSmokeBatch } from "../smoke/smoke-all.mjs";
-import { runReadmeBatch, runVerification } from "../verify-batch.mjs";
+import { runPromptBatch, runVerification } from "../verify-batch.mjs";
 
 /** Creates an isolated evidence directory for one focused test.
  * @returns Temporary directory path.
@@ -160,12 +160,12 @@ test("smoke publish is always skipped and never runs against open user documents
     }
 });
 
-test("README batch uses the shared scenario list, skips testmovie, and does not retry", async () => {
+test("prompt batch uses the shared scenario list, skips testmovie, and does not retry", async () => {
     const runDir = await temporaryDirectory();
     let stateReads = 0;
     const ran = [];
     try {
-        const result = await runReadmeBatch({
+        const result = await runPromptBatch({
             runDir,
             scenarioNames: ["layer", "testmovie", "stage"],
             readState: async () => {
@@ -173,7 +173,7 @@ test("README batch uses the shared scenario list, skips testmovie, and does not 
                 return { running: true, responding: true, processIds: ["123"], documents: [] };
             },
             runCommand: async ({ env }) => {
-                ran.push(env.README_PROMPT_E2E_SCENARIO);
+                ran.push(env.PROMPT_E2E_SCENARIO);
                 return { exitCode: 0, stdout: "passed" };
             },
             log: () => {},
@@ -190,12 +190,12 @@ test("README batch uses the shared scenario list, skips testmovie, and does not 
     }
 });
 
-test("README batch stops after a process identity change", async () => {
+test("prompt batch stops after a process identity change", async () => {
     const runDir = await temporaryDirectory();
     let stateReads = 0;
     let calls = 0;
     try {
-        const result = await runReadmeBatch({
+        const result = await runPromptBatch({
             runDir,
             scenarioNames: ["layer", "stage"],
             readState: async () => {
@@ -223,7 +223,7 @@ test("README batch stops after a process identity change", async () => {
     }
 });
 
-test("README batch stops when Animate becomes unresponsive or a disposable document remains", async () => {
+test("prompt batch stops when Animate becomes unresponsive or a disposable document remains", async () => {
     for (const unsafeState of [
         { running: true, responding: false, processIds: ["123"], documents: [] },
         { running: true, responding: true, processIds: ["123"], documents: ["fixture.fla\tfile:///tmp/fixture.fla"] },
@@ -232,7 +232,7 @@ test("README batch stops when Animate becomes unresponsive or a disposable docum
         let stateReads = 0;
         let calls = 0;
         try {
-            const result = await runReadmeBatch({
+            const result = await runPromptBatch({
                 runDir,
                 scenarioNames: ["layer", "stage"],
                 readState: async () => {
@@ -258,7 +258,7 @@ test("README batch stops when Animate becomes unresponsive or a disposable docum
 });
 
 test("paid gates reject both modes before creating a run directory or spawning build", async () => {
-    for (const mode of ["readme", "all"]) {
+    for (const mode of ["prompt", "all"]) {
         const parent = await temporaryDirectory();
         const runDir = join(parent, "must-not-exist");
         let calls = 0;
@@ -284,7 +284,7 @@ test("paid gates reject both modes before creating a run directory or spawning b
     }
 });
 
-test("combined verification orders build, smoke, then README", async () => {
+test("combined verification orders build, smoke, then prompt", async () => {
     const runDir = await temporaryDirectory();
     const calls = [];
     const logs = [];
@@ -299,19 +299,19 @@ test("combined verification orders build, smoke, then README", async () => {
                 calls.push("smoke");
                 return { exitCode: 0, report: { results: [{ name: "smoke", status: "PASS" }] } };
             },
-            runReadmeBatch: async () => {
-                calls.push("readme");
+            runPromptBatch: async () => {
+                calls.push("prompt");
                 return { exitCode: 0, report: { results: [{ name: "layer", status: "PASS" }] } };
             },
             log: (message) => logs.push(message),
         });
-        assert.deepEqual(calls, ["run build", "smoke", "readme"]);
+        assert.deepEqual(calls, ["run build", "smoke", "prompt"]);
         assert.deepEqual(
             result.report.steps.map(({ name, status }) => [name, status]),
             [
                 ["build", "PASS"],
                 ["smoke", "PASS"],
-                ["readme", "PASS"],
+                ["prompt", "PASS"],
             ],
         );
         assert.equal(result.exitCode, 0);
@@ -322,9 +322,9 @@ test("combined verification orders build, smoke, then README", async () => {
     }
 });
 
-test("combined verification stops before paid README work after a smoke failure", async () => {
+test("combined verification stops before paid prompt work after a smoke failure", async () => {
     const runDir = await temporaryDirectory();
-    let readmeCalls = 0;
+    let promptCalls = 0;
     try {
         const result = await runVerification("all", ["--allow-paid"], {
             runDir,
@@ -333,19 +333,19 @@ test("combined verification stops before paid README work after a smoke failure"
                 exitCode: 1,
                 report: { results: [{ name: "first", status: "FAIL" }] },
             }),
-            runReadmeBatch: async () => {
-                readmeCalls++;
+            runPromptBatch: async () => {
+                promptCalls++;
                 return { exitCode: 0, report: { results: [{ name: "layer", status: "PASS" }] } };
             },
             log: () => {},
         });
-        assert.equal(readmeCalls, 0);
+        assert.equal(promptCalls, 0);
         assert.deepEqual(
             result.report.steps.map(({ name, status }) => [name, status]),
             [
                 ["build", "PASS"],
                 ["smoke", "FAIL"],
-                ["readme", "NOT_RUN"],
+                ["prompt", "NOT_RUN"],
             ],
         );
         assert.equal(result.exitCode, 1);
@@ -356,7 +356,7 @@ test("combined verification stops before paid README work after a smoke failure"
 
 test("a thrown suite is recorded as FAIL when it has no item results", async () => {
     const runDir = await temporaryDirectory();
-    let readmeCalls = 0;
+    let promptCalls = 0;
     try {
         const result = await runVerification("all", ["--allow-paid"], {
             runDir,
@@ -364,8 +364,8 @@ test("a thrown suite is recorded as FAIL when it has no item results", async () 
             runSmokeBatch: async () => {
                 throw new Error("runner import failed");
             },
-            runReadmeBatch: async () => {
-                readmeCalls++;
+            runPromptBatch: async () => {
+                promptCalls++;
                 return { exitCode: 0, report: { results: [{ name: "layer", status: "PASS" }] } };
             },
             log: () => {},
@@ -373,7 +373,7 @@ test("a thrown suite is recorded as FAIL when it has no item results", async () 
         assert.equal(result.report.steps[1].status, "FAIL");
         assert.match(result.report.steps[1].stopReason, /runner import failed/);
         assert.equal(result.report.steps[2].status, "NOT_RUN");
-        assert.equal(readmeCalls, 0);
+        assert.equal(promptCalls, 0);
         assert.equal(result.exitCode, 1);
     } finally {
         await rm(runDir, { recursive: true, force: true });

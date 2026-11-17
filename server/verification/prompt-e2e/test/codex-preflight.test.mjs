@@ -26,12 +26,12 @@ if (!config.includes('approval_policy="never"')) process.exit(6);
 if (!config.includes('sandbox_mode="read-only"')) process.exit(7);
 if (!config.includes("features.apps=false")) process.exit(8);
 if (!config.includes("enabled_tools=[\\"search_tools\\", \\"execute_readonly\\", \\"execute_write\\"]")) process.exit(9);
-if (!config.includes("env_vars=[\\"README_E2E_TRACE_PATH\\", \\"README_E2E_DOCUMENT_URI\\"")) process.exit(10);
+if (!config.includes("env_vars=[\\"PROMPT_E2E_TRACE_PATH\\", \\"PROMPT_E2E_DOCUMENT_URI\\"")) process.exit(10);
 if (!config.includes('tools={execute_write={approval_mode="approve"}}')) process.exit(11);
-if (!config.includes("animate-readme-e2e={command=")) process.exit(12);
+if (!config.includes("animate-prompt-e2e={command=")) process.exit(12);
 if (/https?:\\/\\//.test(config)) process.exit(13);
 if (config.includes('features.apps="invalid"')) process.exit(14);
-process.stdout.write("animate-readme-e2e\\n");
+process.stdout.write("animate-prompt-e2e\\n");
 `;
 
 /** Creates a fake Codex parser that accepts only a fresh fake-server configuration.
@@ -51,30 +51,30 @@ test("Codex MCP child environment forwards only the explicit allowlist and defau
         PATH: "/usr/bin",
         CODEX_HOME: "/isolated/codex-home",
         API_KEY: "must-not-forward",
-        README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-        README_PROMPT_E2E_SCENARIO: "stage",
+        PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+        PROMPT_E2E_SCENARIO: "stage",
     });
     assert.deepEqual(Object.keys(environment).sort(), [
         "HOME",
         "PATH",
-        "README_E2E_DOCUMENT_URI",
-        "README_PROMPT_E2E_SCENARIO",
+        "PROMPT_E2E_DOCUMENT_URI",
+        "PROMPT_E2E_SCENARIO",
     ]);
     assert.equal(environment.API_KEY, undefined);
     assert.equal(environment.CODEX_HOME, undefined);
     assert.deepEqual(CODEX_MCP_ENV_VARS, [
-        "README_E2E_TRACE_PATH",
-        "README_E2E_DOCUMENT_URI",
-        "README_E2E_OUT_DIR",
-        "README_E2E_ASSET_PATHS",
-        "README_PROMPT_E2E_SCENARIO",
+        "PROMPT_E2E_TRACE_PATH",
+        "PROMPT_E2E_DOCUMENT_URI",
+        "PROMPT_E2E_OUT_DIR",
+        "PROMPT_E2E_ASSET_PATHS",
+        "PROMPT_E2E_SCENARIO",
     ]);
 });
 
 test("Codex preflight parses generated config under isolated homes and handshakes with the restricted server", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-codex-preflight-test-"));
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-codex-preflight-test-"));
     const diagnosticsHome = join(directory, "diagnostics-home");
-    const executableDirectory = await mkdtemp(join(tmpdir(), "readme-e2e-codex-parser-"));
+    const executableDirectory = await mkdtemp(join(tmpdir(), "prompt-e2e-codex-parser-"));
     const codexPath = await createFakeCodexParser(executableDirectory);
     const serverPath = fileURLToPath(new URL("../runner.mjs", import.meta.url));
     try {
@@ -87,7 +87,7 @@ test("Codex preflight parses generated config under isolated homes and handshake
             diagnosticsVersion: "unavailable",
         });
         assert.deepEqual(result, { mcpHandshake: true, toolsCount: 3 });
-        const diagnosticPath = join(diagnosticsHome, ".animate-mcp", "readme-e2e-diagnostics", "diagnostics.jsonl");
+        const diagnosticPath = join(diagnosticsHome, ".animate-mcp", "prompt-e2e-diagnostics", "diagnostics.jsonl");
         const diagnostic = JSON.parse((await readFile(diagnosticPath, "utf8")).trim());
         assert.equal(diagnostic.event, "codex-preflight");
         assert.equal(diagnostic.outcome, "passed");
@@ -100,7 +100,7 @@ test("Codex preflight parses generated config under isolated homes and handshake
 });
 
 test("parse-only Codex probe reuses production config and rejects an invalid production setting", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-codex-config-negative-"));
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-codex-config-negative-"));
     const home = join(directory, "home");
     const codexHome = join(directory, "codex-home");
     const cwd = join(directory, "cwd");
@@ -157,7 +157,7 @@ test("parse-only Codex probe reuses production config and rejects an invalid pro
 });
 
 test("restricted MCP handshake needs only the allowlisted environment and performs no Animate operation", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-mcp-handshake-test-"));
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-mcp-handshake-test-"));
     const isolatedHome = join(directory, "home");
     const outDir = join(directory, "workspace");
     const serverPath = fileURLToPath(new URL("../runner.mjs", import.meta.url));
@@ -170,10 +170,10 @@ test("restricted MCP handshake needs only the allowlisted environment and perfor
             env: {
                 HOME: isolatedHome,
                 PATH: process.env.PATH,
-                README_E2E_TRACE_PATH: join(outDir, "trace.jsonl"),
-                README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-                README_E2E_OUT_DIR: outDir,
-                README_PROMPT_E2E_SCENARIO: "stage",
+                PROMPT_E2E_TRACE_PATH: join(outDir, "trace.jsonl"),
+                PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+                PROMPT_E2E_OUT_DIR: outDir,
+                PROMPT_E2E_SCENARIO: "stage",
                 PRIVATE_TOKEN: "must-not-forward",
                 CODEX_HOME: join(directory, "not-forwarded"),
             },

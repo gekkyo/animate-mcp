@@ -3,7 +3,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { aggregateFailure, prepareReadmeE2eScenario, runFixturePreflight } from "../runner.mjs";
+import { aggregateFailure, preparePromptE2eScenario, runFixturePreflight } from "../runner.mjs";
 import { CANVAS_FRAME_SCRIPT } from "../scenarios/scenarios.mjs";
 
 /** Returns a fake status handler scoped to one disposable document.
@@ -29,13 +29,13 @@ function jsflResponses(pathURI, responses) {
 }
 
 test("shared fixture setup dispatches capture, initial-script, Canvas, and assets fixtures without Animate", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-fixture-dispatch-"));
-    const pathURI = "file:///tmp/readme-e2e-preflight.fla";
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-fixture-dispatch-"));
+    const pathURI = "file:///tmp/prompt-e2e-preflight.fla";
     const status = statusFor(pathURI);
     try {
         const captureState = {};
         const captureReport = "シーン 1\t12\t550\t400\t1\tshape\t165\t90\t250\t100";
-        const capture = await prepareReadmeE2eScenario(
+        const capture = await preparePromptE2eScenario(
             "capture",
             {
                 runJsfl: jsflResponses(pathURI, [`OK\tpreflight.fla\t${pathURI}`, "READY", captureReport]),
@@ -52,7 +52,7 @@ test("shared fixture setup dispatches capture, initial-script, Canvas, and asset
 
         const scriptState = {};
         const scriptSource = "trace('README_TEST_MOVIE_OK');";
-        const script = await prepareReadmeE2eScenario(
+        const script = await preparePromptE2eScenario(
             "testmovie",
             {
                 runJsfl: jsflResponses(pathURI, [`OK\tpreflight.fla\t${pathURI}`, scriptSource]),
@@ -66,7 +66,7 @@ test("shared fixture setup dispatches capture, initial-script, Canvas, and asset
         assert.equal(scriptState.testMovieBefore, scriptSource);
 
         const canvasState = {};
-        const canvas = await prepareReadmeE2eScenario(
+        const canvas = await preparePromptE2eScenario(
             "canvas",
             {
                 runJsfl: jsflResponses(pathURI, [CANVAS_FRAME_SCRIPT, CANVAS_FRAME_SCRIPT, CANVAS_FRAME_SCRIPT]),
@@ -82,7 +82,7 @@ test("shared fixture setup dispatches capture, initial-script, Canvas, and asset
         assert.equal(canvasState.canvasBefore, CANVAS_FRAME_SCRIPT);
 
         const assetsState = {};
-        const assets = await prepareReadmeE2eScenario(
+        const assets = await preparePromptE2eScenario(
             "assets",
             {
                 runJsfl: jsflResponses(pathURI, [
@@ -115,7 +115,7 @@ test("cleanup aggregation preserves the primary CLI diagnostic", () => {
 });
 
 test("fixture-preflight runner reaches selected scenario setup through fake services", async () => {
-    const pathURI = "file:///tmp/readme-e2e-preflight-runner.fla";
+    const pathURI = "file:///tmp/prompt-e2e-preflight-runner.fla";
     let documentOpen = false;
     let jsflCalls = 0;
     let diagnostic;
@@ -141,11 +141,11 @@ test("fixture-preflight runner reaches selected scenario setup through fake serv
         },
         checkRestrictedMcpHandshake: async ({ scenarioName, env, captureFrame }) => {
             assert.equal(scenarioName, "testmovie");
-            assert.equal(env.README_E2E_DOCUMENT_URI, pathURI);
+            assert.equal(env.PROMPT_E2E_DOCUMENT_URI, pathURI);
             assert.equal(captureFrame, false);
             return { toolsCount: 3 };
         },
-        writeReadmeDiagnostic: async (record) => {
+        writePromptDiagnostic: async (record) => {
             diagnostic = record;
         },
         log: () => {},
@@ -158,7 +158,7 @@ test("fixture-preflight runner reaches selected scenario setup through fake serv
 });
 
 test("fixture-preflight classifies a cleanup-only failure as cleanup", async () => {
-    const pathURI = "file:///tmp/readme-e2e-preflight-cleanup.fla";
+    const pathURI = "file:///tmp/prompt-e2e-preflight-cleanup.fla";
     let documentOpen = false;
     let diagnostic;
     await assert.rejects(
@@ -179,7 +179,7 @@ test("fixture-preflight classifies a cleanup-only failure as cleanup", async () 
                 documentOpen = false;
                 throw new Error("Synthetic cleanup failure");
             },
-            writeReadmeDiagnostic: async (record) => {
+            writePromptDiagnostic: async (record) => {
                 diagnostic = record;
             },
             log: () => {},

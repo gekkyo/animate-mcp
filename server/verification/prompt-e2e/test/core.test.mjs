@@ -164,8 +164,8 @@ test("all 15 scenario names have a grouped lifecycle and only the intended speci
 test("edit_elements is scoped to the sole disposable document and traces only applied success", async () => {
     const directory = await mkdtemp(join(tmpdir(), "readme-instance-trace-"));
     const tracePath = join(directory, "trace.jsonl");
-    const previousTracePath = process.env.README_E2E_TRACE_PATH;
-    process.env.README_E2E_TRACE_PATH = tracePath;
+    const previousTracePath = process.env.PROMPT_E2E_TRACE_PATH;
+    process.env.PROMPT_E2E_TRACE_PATH = tracePath;
     /** Returns the sole disposable document for a scoped edit_elements call.
      * @returns Status result.
      */
@@ -224,9 +224,9 @@ test("edit_elements is scoped to the sole disposable document and traces only ap
         assert.ok(entries.every((entry) => !("input" in entry) && !("arguments" in entry)));
     } finally {
         if (previousTracePath === undefined) {
-            delete process.env.README_E2E_TRACE_PATH;
+            delete process.env.PROMPT_E2E_TRACE_PATH;
         } else {
-            process.env.README_E2E_TRACE_PATH = previousTracePath;
+            process.env.PROMPT_E2E_TRACE_PATH = previousTracePath;
         }
         await rm(directory, { recursive: true, force: true });
     }
@@ -236,9 +236,9 @@ test("Claude preapproves only the MCP entrances", () => {
     const args = claudeArgs("/tmp/mcp.json", selectedScenario("publish").prompt);
     const allowedIndex = args.indexOf("--allowedTools");
     assert.deepEqual(args.slice(allowedIndex + 1, allowedIndex + 4), [
-        "mcp__animate-readme-e2e__search_tools",
-        "mcp__animate-readme-e2e__execute_readonly",
-        "mcp__animate-readme-e2e__execute_write",
+        "mcp__animate-prompt-e2e__search_tools",
+        "mcp__animate-prompt-e2e__execute_readonly",
+        "mcp__animate-prompt-e2e__execute_write",
     ]);
     assert.ok(args.includes("--restricted"));
     assert.ok(args.includes("--strict-mcp-config"));
@@ -385,9 +385,9 @@ test("restricted MCP discovery omits run_jsfl and document operations", async ()
     const transport = new StdioClientTransport({
         command: process.execPath,
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
-        env: { ...process.env, README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla" },
+        env: { ...process.env, PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla" },
     });
-    const client = new Client({ name: "readme-e2e-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();

@@ -40,9 +40,9 @@
     "call": "node server/scripts/call-tool.mjs",
     "smoke": "node server/verification/smoke/smoke-all.mjs",
     "smoke:bin": "node server/verification/smoke/smoke-bin.mjs",
-    "verify:readme": "node server/verification/verify-batch.mjs readme",
+    "verify:prompt": "node server/verification/verify-batch.mjs prompt",
     "verify:all": "node server/verification/verify-batch.mjs all",
-    "test:readme-e2e": "npm run build && node --test \"server/verification/readme-e2e/test/*.test.mjs\"",
+    "test:prompt-e2e": "npm run build && node --test \"server/verification/prompt-e2e/test/*.test.mjs\"",
     "lint": "biome check && eslint \"server/**/*.ts\" \"server/**/*.mjs\" \"server/jsfl/**/*.jsfl\"",
     "format": "biome check --write"
   },

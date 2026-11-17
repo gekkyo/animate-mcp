@@ -69,7 +69,7 @@ const ENUMS = {
         "skills.include_instructions",
         "skills.bundled.enabled",
         "web_search",
-        "mcp_servers.animate-readme-e2e",
+        "mcp_servers.animate-prompt-e2e",
     ]),
     stderrConfigIssue: new Set(["value", "type", "key"]),
     jsonlStatus: new Set(["valid", "empty", "invalid"]),
@@ -86,9 +86,9 @@ const ENUMS = {
  * @param options.cliVersion Validated CLI version override for tests.
  * @returns Resolves after writing or safely skipping the record.
  */
-export async function writeReadmeDiagnostic(
+export async function writePromptDiagnostic(
     diagnostic,
-    { homeDir = homedir(), detailed = process.env.README_E2E_DIAGNOSTICS === "1", cliVersion } = {},
+    { homeDir = homedir(), detailed = process.env.PROMPT_E2E_DIAGNOSTICS === "1", cliVersion } = {},
 ) {
     const record = {
         timestamp: new Date().toISOString(),
@@ -132,7 +132,7 @@ export async function writeReadmeDiagnostic(
         return;
     }
     const appDirectory = join(homeDir, ".animate-mcp");
-    const directory = join(appDirectory, "readme-e2e-diagnostics");
+    const directory = join(appDirectory, "prompt-e2e-diagnostics");
     const path = join(directory, "diagnostics.jsonl");
     let file;
     try {
@@ -231,7 +231,7 @@ function cachedCliVersion(provider) {
 async function probeCliVersion(provider) {
     let root;
     try {
-        root = await mkdtemp(join(tmpdir(), "readme-e2e-version-"));
+        root = await mkdtemp(join(tmpdir(), "prompt-e2e-version-"));
         const home = join(root, "home");
         const codexHome = join(root, "codex-home");
         const claudeConfig = join(root, "claude-config");

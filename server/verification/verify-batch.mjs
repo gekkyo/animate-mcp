@@ -5,33 +5,33 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { runSequentialBatch } from "./batch-lib.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const README_RUNNER = path.join(ROOT, "server/verification/readme-e2e/runner.mjs");
+const PROMPT_RUNNER = path.join(ROOT, "server/verification/prompt-e2e/runner.mjs");
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
- * Runs the README real-Animate batch, requiring a safe empty Animate session.
+ * Runs the prompt real-Animate batch, requiring a safe empty Animate session.
  * @param options Injectable runner dependencies for focused tests.
  * @param options.runDir Evidence directory.
  * @param options.runCommand One-shot process runner.
  * @param options.readState Animate process and document probe.
- * @param options.scenarioNames Ordered README scenario names.
- * @param options.provider README CLI provider.
+ * @param options.scenarioNames Ordered prompt scenario names.
+ * @param options.provider prompt CLI provider.
  * @param options.log Progress logger.
  * @returns Batch result and process exit code.
  */
-export async function runReadmeBatch({
+export async function runPromptBatch({
     runDir = path.join(
         ROOT,
         "verification-runs",
-        `readme-${new Date().toISOString().replace(/[:.]/g, "-")}-${process.pid}`,
+        `prompt-${new Date().toISOString().replace(/[:.]/g, "-")}-${process.pid}`,
     ),
     runCommand = defaultRunCommand,
     readState,
     scenarioNames,
-    provider = process.env.README_PROMPT_E2E_PROVIDER ?? "claude",
+    provider = process.env.PROMPT_E2E_PROVIDER ?? "claude",
     log = console.log,
 } = {}) {
-    const { scenarios } = await import("./readme-e2e/scenarios/scenarios.mjs");
+    const { scenarios } = await import("./prompt-e2e/scenarios/scenarios.mjs");
     const names = scenarioNames ?? Object.keys(scenarios);
     const entries = names.map((name) => ({
         name,
@@ -42,7 +42,7 @@ export async function runReadmeBatch({
     let initialState;
     let preflight;
     if (provider !== "claude" && provider !== "codex") {
-        preflight = { stopReason: 'README_PROMPT_E2E_PROVIDER must be "claude" or "codex".' };
+        preflight = { stopReason: 'PROMPT_E2E_PROVIDER must be "claude" or "codex".' };
     } else {
         try {
             stateReader ??= (await import("./animate-state.mjs")).readAnimateState;
@@ -52,7 +52,7 @@ export async function runReadmeBatch({
             } else if (!initialState.responding) {
                 preflight = { stopReason: initialState.reason ?? "Animate is not responding." };
             } else if (initialState.documents.length > 0) {
-                preflight = { skipReason: "README scenarios require Animate to respond with no documents open." };
+                preflight = { skipReason: "prompt scenarios require Animate to respond with no documents open." };
             }
         } catch (error) {
             preflight = { stopReason: `Animate safety check failed: ${error.message}` };
@@ -60,19 +60,19 @@ export async function runReadmeBatch({
     }
 
     /** Confirms Animate is still the original responding process with no open documents.
-     * @returns Whether the README batch is safe to continue.
+     * @returns Whether the prompt batch is safe to continue.
      */
     const checkSafety = async () => {
         try {
             const current = await stateReader();
             if (!current.running) {
-                return { ok: false, reason: current.reason ?? "Animate exited during the README batch." };
+                return { ok: false, reason: current.reason ?? "Animate exited during the prompt batch." };
             }
             if (!current.responding) {
-                return { ok: false, reason: current.reason ?? "Animate stopped responding during the README batch." };
+                return { ok: false, reason: current.reason ?? "Animate stopped responding during the prompt batch." };
             }
             if (current.processIds.join(",") !== initialState.processIds.join(",")) {
-                return { ok: false, reason: "Animate exited or restarted during the README batch." };
+                return { ok: false, reason: "Animate exited or restarted during the prompt batch." };
             }
             if (current.documents.length > 0) {
                 return { ok: false, reason: "A document remained open; disposable-document cleanup may have failed." };
@@ -92,12 +92,12 @@ export async function runReadmeBatch({
         run: (entry) =>
             runCommand({
                 command: process.execPath,
-                args: [README_RUNNER],
+                args: [PROMPT_RUNNER],
                 cwd: ROOT,
                 env: {
-                    RUN_README_PROMPT_E2E: "1",
-                    README_PROMPT_E2E_SCENARIO: entry.name,
-                    README_PROMPT_E2E_PROVIDER: provider,
+                    RUN_PROMPT_E2E: "1",
+                    PROMPT_E2E_SCENARIO: entry.name,
+                    PROMPT_E2E_PROVIDER: provider,
                 },
                 timeoutMs: COMMAND_TIMEOUT_MS,
             }),
@@ -105,18 +105,18 @@ export async function runReadmeBatch({
 }
 
 /**
- * Runs a paid-gated README batch or the full build, smoke, and README sequence.
+ * Runs a paid-gated prompt batch or the full build, smoke, and prompt sequence.
  * @param mode Verification entry name.
  * @param args Command-line options.
  * @param dependencies Injectable process and suite runners.
  * @returns Verification report and process exit code.
  */
 export async function runVerification(mode, args = [], dependencies = {}) {
-    if (mode !== "readme" && mode !== "all") {
+    if (mode !== "prompt" && mode !== "all") {
         return { exitCode: 2, report: { stopReason: `Unknown verification mode: ${mode}` } };
     }
     if (!args.includes("--allow-paid")) {
-        const message = `Refusing to run paid README scenarios: pass --allow-paid to npm run verify:${mode}.`;
+        const message = `Refusing to run paid prompt scenarios: pass --allow-paid to npm run verify:${mode}.`;
         (dependencies.log ?? console.error)(message);
         return { exitCode: 2, report: { stopReason: message } };
     }
@@ -145,7 +145,7 @@ export async function runVerification(mode, args = [], dependencies = {}) {
     if (build.exitCode !== 0) {
         exitCode = 1;
         steps.push({ name: "smoke", status: "NOT_RUN" });
-        steps.push({ name: "readme", status: "NOT_RUN" });
+        steps.push({ name: "prompt", status: "NOT_RUN" });
     } else if (mode === "all") {
         let smoke;
         try {
@@ -157,16 +157,16 @@ export async function runVerification(mode, args = [], dependencies = {}) {
         steps.push({ name: "smoke", status: batchStatus(smoke.report), ...smoke.report });
         if (smoke.exitCode !== 0) {
             exitCode = 1;
-            steps.push({ name: "readme", status: "NOT_RUN" });
+            steps.push({ name: "prompt", status: "NOT_RUN" });
         }
     }
 
     if (!exitCode) {
-        let readme;
+        let prompt;
         try {
-            const runner = dependencies.runReadmeBatch ?? runReadmeBatch;
-            readme = await runner({
-                runDir: path.join(runDir, "readme"),
+            const runner = dependencies.runPromptBatch ?? runPromptBatch;
+            prompt = await runner({
+                runDir: path.join(runDir, "prompt"),
                 runCommand,
                 readState: dependencies.readState,
                 scenarioNames: dependencies.scenarioNames,
@@ -174,10 +174,10 @@ export async function runVerification(mode, args = [], dependencies = {}) {
                 log,
             });
         } catch (error) {
-            readme = { exitCode: 1, report: { stopReason: error.message } };
+            prompt = { exitCode: 1, report: { stopReason: error.message } };
         }
-        steps.push({ name: "readme", status: batchStatus(readme.report), ...readme.report });
-        exitCode = readme.exitCode;
+        steps.push({ name: "prompt", status: batchStatus(prompt.report), ...prompt.report });
+        exitCode = prompt.exitCode;
     }
 
     const report = { startedAt, finishedAt: new Date().toISOString(), mode, steps, exitCode };

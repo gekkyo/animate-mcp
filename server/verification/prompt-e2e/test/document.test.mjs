@@ -42,8 +42,8 @@ test("assets scenario generates disposable fixtures and substitutes their absolu
 test("assets import is pinned to exactly the two fixtures and traces a successful import", async () => {
     const directory = await mkdtemp(join(tmpdir(), "readme-assets-scope-"));
     const tracePath = join(directory, "trace.jsonl");
-    const previousTracePath = process.env.README_E2E_TRACE_PATH;
-    process.env.README_E2E_TRACE_PATH = tracePath;
+    const previousTracePath = process.env.PROMPT_E2E_TRACE_PATH;
+    process.env.PROMPT_E2E_TRACE_PATH = tracePath;
     const pinnedPaths = [join(directory, "hero.png"), join(directory, "bgm.mp3")];
     const calls = [];
     const wrapped = scoped(
@@ -85,9 +85,9 @@ test("assets import is pinned to exactly the two fixtures and traces a successfu
         }
     } finally {
         if (previousTracePath === undefined) {
-            delete process.env.README_E2E_TRACE_PATH;
+            delete process.env.PROMPT_E2E_TRACE_PATH;
         } else {
-            process.env.README_E2E_TRACE_PATH = previousTracePath;
+            process.env.PROMPT_E2E_TRACE_PATH = previousTracePath;
         }
         await rm(directory, { recursive: true, force: true });
     }
@@ -153,8 +153,8 @@ test("library scenario requires only the successful listUnused operation and the
 test("library scope permits only listUnused and records no tool inputs", async () => {
     const directory = await mkdtemp(join(tmpdir(), "readme-library-trace-"));
     const tracePath = join(directory, "trace.jsonl");
-    const previousTracePath = process.env.README_E2E_TRACE_PATH;
-    process.env.README_E2E_TRACE_PATH = tracePath;
+    const previousTracePath = process.env.PROMPT_E2E_TRACE_PATH;
+    process.env.PROMPT_E2E_TRACE_PATH = tracePath;
     const calls = [];
     const wrapped = scoped(
         {
@@ -190,9 +190,9 @@ test("library scope permits only listUnused and records no tool inputs", async (
         );
     } finally {
         if (previousTracePath === undefined) {
-            delete process.env.README_E2E_TRACE_PATH;
+            delete process.env.PROMPT_E2E_TRACE_PATH;
         } else {
-            process.env.README_E2E_TRACE_PATH = previousTracePath;
+            process.env.PROMPT_E2E_TRACE_PATH = previousTracePath;
         }
         await rm(directory, { recursive: true, force: true });
     }
@@ -235,13 +235,13 @@ test("assets MCP discovery exposes only get_status and import_assets", async () 
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_E2E_OUT_DIR: outDir,
-            README_E2E_ASSET_PATHS: JSON.stringify(assetPaths),
-            README_PROMPT_E2E_SCENARIO: "assets",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_OUT_DIR: outDir,
+            PROMPT_E2E_ASSET_PATHS: JSON.stringify(assetPaths),
+            PROMPT_E2E_SCENARIO: "assets",
         },
     });
-    const client = new Client({ name: "readme-e2e-assets-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-assets-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -274,11 +274,11 @@ test("library MCP discovery exposes only get_status and edit_library", async () 
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_PROMPT_E2E_SCENARIO: "library",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_SCENARIO: "library",
         },
     });
-    const client = new Client({ name: "readme-e2e-library-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-library-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();

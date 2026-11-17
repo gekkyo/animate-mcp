@@ -242,8 +242,8 @@ test("edit_text is scoped to the sole disposable document and trace success requ
 test("edit_tween trace succeeds only when edits were applied with no failed operations", async () => {
     const directory = await mkdtemp(join(tmpdir(), "readme-tween-trace-"));
     const tracePath = join(directory, "trace.jsonl");
-    const previousTracePath = process.env.README_E2E_TRACE_PATH;
-    process.env.README_E2E_TRACE_PATH = tracePath;
+    const previousTracePath = process.env.PROMPT_E2E_TRACE_PATH;
+    process.env.PROMPT_E2E_TRACE_PATH = tracePath;
     /** Returns the sole disposable document for a scoped edit_tween call.
      * @returns Status result.
      */
@@ -277,9 +277,9 @@ test("edit_tween trace succeeds only when edits were applied with no failed oper
         );
     } finally {
         if (previousTracePath === undefined) {
-            delete process.env.README_E2E_TRACE_PATH;
+            delete process.env.PROMPT_E2E_TRACE_PATH;
         } else {
-            process.env.README_E2E_TRACE_PATH = previousTracePath;
+            process.env.PROMPT_E2E_TRACE_PATH = previousTracePath;
         }
         await rm(directory, { recursive: true, force: true });
     }
@@ -288,8 +288,8 @@ test("edit_tween trace succeeds only when edits were applied with no failed oper
 test("convert_to_symbol is scoped and traces the requested movie-clip result without inputs", async () => {
     const directory = await mkdtemp(join(tmpdir(), "readme-symbol-trace-"));
     const tracePath = join(directory, "trace.jsonl");
-    const previousTracePath = process.env.README_E2E_TRACE_PATH;
-    process.env.README_E2E_TRACE_PATH = tracePath;
+    const previousTracePath = process.env.PROMPT_E2E_TRACE_PATH;
+    process.env.PROMPT_E2E_TRACE_PATH = tracePath;
     /** Returns the sole disposable document for a scoped symbol conversion.
      * @returns Status result.
      */
@@ -346,9 +346,9 @@ test("convert_to_symbol is scoped and traces the requested movie-clip result wit
         assert.ok(entries.every((entry) => !("input" in entry) && !("arguments" in entry)));
     } finally {
         if (previousTracePath === undefined) {
-            delete process.env.README_E2E_TRACE_PATH;
+            delete process.env.PROMPT_E2E_TRACE_PATH;
         } else {
-            process.env.README_E2E_TRACE_PATH = previousTracePath;
+            process.env.PROMPT_E2E_TRACE_PATH = previousTracePath;
         }
         await rm(directory, { recursive: true, force: true });
     }
@@ -357,8 +357,8 @@ test("convert_to_symbol is scoped and traces the requested movie-clip result wit
 test("inspect_timeline is scoped, injects the disposable document, and traces success", async () => {
     const directory = await mkdtemp(join(tmpdir(), "readme-inspect-trace-"));
     const tracePath = join(directory, "trace.jsonl");
-    const previousTracePath = process.env.README_E2E_TRACE_PATH;
-    process.env.README_E2E_TRACE_PATH = tracePath;
+    const previousTracePath = process.env.PROMPT_E2E_TRACE_PATH;
+    process.env.PROMPT_E2E_TRACE_PATH = tracePath;
     const captured = [];
     const wrapped = scoped(
         {
@@ -379,9 +379,9 @@ test("inspect_timeline is scoped, injects the disposable document, and traces su
         assert.match(trace, /"targetTool":"inspect_timeline","succeeded":true/);
     } finally {
         if (previousTracePath === undefined) {
-            delete process.env.README_E2E_TRACE_PATH;
+            delete process.env.PROMPT_E2E_TRACE_PATH;
         } else {
-            process.env.README_E2E_TRACE_PATH = previousTracePath;
+            process.env.PROMPT_E2E_TRACE_PATH = previousTracePath;
         }
         await rm(directory, { recursive: true, force: true });
     }
@@ -412,11 +412,11 @@ test("stage MCP discovery exposes only its three tools", async () => {
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_PROMPT_E2E_SCENARIO: "stage",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_SCENARIO: "stage",
         },
     });
-    const client = new Client({ name: "readme-e2e-stage-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-stage-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -437,11 +437,11 @@ test("text MCP discovery exposes only get_status, inspect_timeline, and edit_tex
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_PROMPT_E2E_SCENARIO: "text",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_SCENARIO: "text",
         },
     });
-    const client = new Client({ name: "readme-e2e-text-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-text-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -465,11 +465,11 @@ test("instance MCP discovery exposes only get_status, inspect_timeline, and edit
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_PROMPT_E2E_SCENARIO: "instance",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_SCENARIO: "instance",
         },
     });
-    const client = new Client({ name: "readme-e2e-instance-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-instance-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -493,11 +493,11 @@ test("symbol MCP discovery exposes only get_status, inspect_timeline, and conver
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_PROMPT_E2E_SCENARIO: "symbol",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_SCENARIO: "symbol",
         },
     });
-    const client = new Client({ name: "readme-e2e-symbol-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-symbol-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -538,11 +538,11 @@ test("inspect MCP discovery exposes only get_status and inspect_timeline", async
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_PROMPT_E2E_SCENARIO: "inspect",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_SCENARIO: "inspect",
         },
     });
-    const client = new Client({ name: "readme-e2e-inspect-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-inspect-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -571,11 +571,11 @@ test("tween MCP discovery exposes only get_status, inspect_timeline, and edit_tw
         args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_PROMPT_E2E_SCENARIO: "tween",
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_SCENARIO: "tween",
         },
     });
-    const client = new Client({ name: "readme-e2e-tween-test", version: "1.0.0" });
+    const client = new Client({ name: "prompt-e2e-tween-test", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();

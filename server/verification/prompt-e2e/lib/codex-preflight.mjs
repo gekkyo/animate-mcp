@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createAssetsFixture, selectedScenario } from "../scenarios/scenarios.mjs";
 import { CODEX_MCP_ENV_VARS, codexArgs } from "./codex.mjs";
-import { writeReadmeDiagnostic } from "./diagnostics.mjs";
+import { writePromptDiagnostic } from "./diagnostics.mjs";
 
 const MAX_CODEX_OUTPUT_BYTES = 16_384;
 
@@ -99,14 +99,14 @@ export async function runCodexPreflight({
         await runCodexConfigProbe(codexPath, workingDirectory, codexEnv, productionArgs);
         const e2eEnv = {
             ...codexEnv,
-            README_E2E_TRACE_PATH: tracePath,
-            README_E2E_DOCUMENT_URI: "file:///tmp/readme-e2e-codex-preflight.fla",
-            README_E2E_OUT_DIR: outDir,
-            README_PROMPT_E2E_SCENARIO: scenarioName,
+            PROMPT_E2E_TRACE_PATH: tracePath,
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/prompt-e2e-codex-preflight.fla",
+            PROMPT_E2E_OUT_DIR: outDir,
+            PROMPT_E2E_SCENARIO: scenarioName,
         };
         if (scenarioName === "assets") {
             const assets = await createAssetsFixture(outDir);
-            e2eEnv.README_E2E_ASSET_PATHS = JSON.stringify(assets.paths);
+            e2eEnv.PROMPT_E2E_ASSET_PATHS = JSON.stringify(assets.paths);
         }
         stage = "mcp-handshake";
         const handshake = await checkRestrictedMcpHandshake({
@@ -114,7 +114,7 @@ export async function runCodexPreflight({
             scenarioName,
             env: e2eEnv,
         });
-        await writeReadmeDiagnostic(
+        await writePromptDiagnostic(
             {
                 event: "codex-preflight",
                 outcome: "passed",
@@ -130,7 +130,7 @@ export async function runCodexPreflight({
         );
         return { mcpHandshake: true, toolsCount: handshake.toolsCount };
     } catch (error) {
-        await writeReadmeDiagnostic(
+        await writePromptDiagnostic(
             {
                 event: "codex-preflight",
                 outcome: "failed",
@@ -179,7 +179,7 @@ export async function checkRestrictedMcpHandshake({ serverPath, scenarioName, en
         stderr: "pipe",
     });
     transport.stderr?.on("data", () => {});
-    const client = new Client({ name: "animate-readme-e2e-preflight", version: "1.0.0" });
+    const client = new Client({ name: "animate-prompt-e2e-preflight", version: "1.0.0" });
     try {
         await client.connect(transport);
         const { tools } = await client.listTools();
@@ -265,7 +265,7 @@ function parseInstalledCodexConfig(executable, cwd, env, args) {
             if (timedOut) {
                 return;
             }
-            if (code === 0 && stdout.includes("animate-readme-e2e") && stdoutBytes <= MAX_CODEX_OUTPUT_BYTES) {
+            if (code === 0 && stdout.includes("animate-prompt-e2e") && stdoutBytes <= MAX_CODEX_OUTPUT_BYTES) {
                 resolve();
             } else {
                 reject(new Error("Codex isolated config parser rejected the generated configuration."));

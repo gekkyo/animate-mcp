@@ -7,14 +7,14 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { codexArgs, runCodex } from "../lib/codex.mjs";
-import { readmeE2eProvider } from "../runner.mjs";
+import { promptE2eProvider } from "../runner.mjs";
 import { selectedScenario } from "../scenarios/scenarios.mjs";
 
 const fakeCodexSource = `#!/usr/bin/env node
 const fs = require("node:fs");
 const args = process.argv.slice(2);
 const outputPath = args[args.indexOf("-o") + 1];
-const mcpConfig = args.find((arg) => arg.startsWith("mcp_servers.animate-readme-e2e="));
+const mcpConfig = args.find((arg) => arg.startsWith("mcp_servers.animate-prompt-e2e="));
 const envVarsStart = mcpConfig?.indexOf("env_vars=") ?? -1;
 const mcpEnvVars = envVarsStart < 0
   ? []
@@ -30,10 +30,10 @@ if (capturePath) {
     args,
     cwd: process.cwd(),
     cwdEntries: fs.readdirSync(process.cwd()),
-    tracePath: process.env.README_E2E_TRACE_PATH,
-    documentUri: process.env.README_E2E_DOCUMENT_URI,
-    outDir: process.env.README_E2E_OUT_DIR,
-    assetPaths: process.env.README_E2E_ASSET_PATHS,
+    tracePath: process.env.PROMPT_E2E_TRACE_PATH,
+    documentUri: process.env.PROMPT_E2E_DOCUMENT_URI,
+    outDir: process.env.PROMPT_E2E_OUT_DIR,
+    assetPaths: process.env.PROMPT_E2E_ASSET_PATHS,
     mcpEnvVars,
     mcpChildEnv
   }));
@@ -80,7 +80,7 @@ async function createFakeCodex(directory) {
  * @returns Explicit MCP environment variable names and the filtered environment.
  */
 function filteredMcpEnvironment(args, parentEnv) {
-    const config = args.find((arg) => arg.startsWith("mcp_servers.animate-readme-e2e="));
+    const config = args.find((arg) => arg.startsWith("mcp_servers.animate-prompt-e2e="));
     const envVarsStart = config?.indexOf("env_vars=") ?? -1;
     assert.notEqual(envVarsStart, -1, "MCP env_vars was not configured");
     const envVars = JSON.parse(config.slice(envVarsStart + "env_vars=".length, -1));
@@ -93,24 +93,24 @@ function filteredMcpEnvironment(args, parentEnv) {
 }
 
 test("Codex stays opt-in, and provider selection rejects unknown values", () => {
-    const previousProvider = process.env.README_PROMPT_E2E_PROVIDER;
+    const previousProvider = process.env.PROMPT_E2E_PROVIDER;
     try {
-        delete process.env.README_PROMPT_E2E_PROVIDER;
-        assert.equal(readmeE2eProvider(), "claude");
+        delete process.env.PROMPT_E2E_PROVIDER;
+        assert.equal(promptE2eProvider(), "claude");
     } finally {
         if (previousProvider === undefined) {
-            delete process.env.README_PROMPT_E2E_PROVIDER;
+            delete process.env.PROMPT_E2E_PROVIDER;
         } else {
-            process.env.README_PROMPT_E2E_PROVIDER = previousProvider;
+            process.env.PROMPT_E2E_PROVIDER = previousProvider;
         }
     }
-    assert.equal(readmeE2eProvider("claude"), "claude");
-    assert.equal(readmeE2eProvider("codex"), "codex");
-    assert.throws(() => readmeE2eProvider("unknown"), /must be "claude" or "codex"/);
+    assert.equal(promptE2eProvider("claude"), "claude");
+    assert.equal(promptE2eProvider("codex"), "codex");
+    assert.throws(() => promptE2eProvider("unknown"), /must be "claude" or "codex"/);
 });
 
 test("Codex arguments pin an isolated read-only run to the dedicated MCP entrances", () => {
-    const args = codexArgs("/tmp/readme-e2e.mjs", "/tmp/work/codex-last-message.txt", "/tmp/empty", "test prompt");
+    const args = codexArgs("/tmp/prompt-e2e.mjs", "/tmp/work/codex-last-message.txt", "/tmp/empty", "test prompt");
     assert.equal(args[0], "exec");
     assert.ok(args.includes("--ignore-user-config"));
     assert.ok(args.includes("--ignore-rules"));
@@ -132,10 +132,10 @@ test("Codex arguments pin an isolated read-only run to the dedicated MCP entranc
     ]) {
         assert.ok(args.includes(setting), `missing Codex restriction ${setting}`);
     }
-    const mcpConfig = args.find((arg) => arg.startsWith("mcp_servers.animate-readme-e2e="));
+    const mcpConfig = args.find((arg) => arg.startsWith("mcp_servers.animate-prompt-e2e="));
     assert.equal(
         mcpConfig,
-        `mcp_servers.animate-readme-e2e={command=${JSON.stringify(process.execPath)},args=["/tmp/readme-e2e.mjs", "--mcp-server"],enabled=true,required=true,enabled_tools=["search_tools", "execute_readonly", "execute_write"],tools={execute_write={approval_mode="approve"}},env_vars=["README_E2E_TRACE_PATH", "README_E2E_DOCUMENT_URI", "README_E2E_OUT_DIR", "README_E2E_ASSET_PATHS", "README_PROMPT_E2E_SCENARIO"]}`,
+        `mcp_servers.animate-prompt-e2e={command=${JSON.stringify(process.execPath)},args=["/tmp/prompt-e2e.mjs", "--mcp-server"],enabled=true,required=true,enabled_tools=["search_tools", "execute_readonly", "execute_write"],tools={execute_write={approval_mode="approve"}},env_vars=["PROMPT_E2E_TRACE_PATH", "PROMPT_E2E_DOCUMENT_URI", "PROMPT_E2E_OUT_DIR", "PROMPT_E2E_ASSET_PATHS", "PROMPT_E2E_SCENARIO"]}`,
     );
     assert.ok(mcpConfig.includes('tools={execute_write={approval_mode="approve"}}'));
     assert.doesNotMatch(mcpConfig, /tools=\{execute_readonly=/);
@@ -145,7 +145,7 @@ test("Codex arguments pin an isolated read-only run to the dedicated MCP entranc
 });
 
 test("fake Codex returns bounded final text from an empty cwd and a workspace-specific output file", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-fake-codex-"));
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-fake-codex-"));
     const workspace = join(directory, "workspace");
     await mkdir(workspace);
     const executableDir = join(directory, "bin");
@@ -165,7 +165,7 @@ test("fake Codex returns bounded final text from an empty cwd and a workspace-sp
                 CODEX_TEST_CAPTURE: capturePath,
                 CODEX_TEST_WRITE_RESULT: "1",
                 CODEX_TEST_RESULT: "  hero has a motion tween\n",
-                README_PROMPT_E2E_SCENARIO: "inspect",
+                PROMPT_E2E_SCENARIO: "inspect",
             },
         });
         assert.equal(result, "hero has a motion tween");
@@ -178,20 +178,20 @@ test("fake Codex returns bounded final text from an empty cwd and a workspace-sp
         assert.equal(capture.outDir, workspace);
         assert.deepEqual(JSON.parse(capture.assetPaths), [join(workspace, "hero.png")]);
         assert.deepEqual(capture.mcpEnvVars, [
-            "README_E2E_TRACE_PATH",
-            "README_E2E_DOCUMENT_URI",
-            "README_E2E_OUT_DIR",
-            "README_E2E_ASSET_PATHS",
-            "README_PROMPT_E2E_SCENARIO",
+            "PROMPT_E2E_TRACE_PATH",
+            "PROMPT_E2E_DOCUMENT_URI",
+            "PROMPT_E2E_OUT_DIR",
+            "PROMPT_E2E_ASSET_PATHS",
+            "PROMPT_E2E_SCENARIO",
         ]);
         assert.deepEqual(capture.mcpChildEnv, {
             HOME: process.env.HOME,
             PATH: `${executableDir}:${process.env.PATH}`,
-            README_E2E_TRACE_PATH: join(workspace, "trace.jsonl"),
-            README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
-            README_E2E_OUT_DIR: workspace,
-            README_E2E_ASSET_PATHS: JSON.stringify([join(workspace, "hero.png")]),
-            README_PROMPT_E2E_SCENARIO: "inspect",
+            PROMPT_E2E_TRACE_PATH: join(workspace, "trace.jsonl"),
+            PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
+            PROMPT_E2E_OUT_DIR: workspace,
+            PROMPT_E2E_ASSET_PATHS: JSON.stringify([join(workspace, "hero.png")]),
+            PROMPT_E2E_SCENARIO: "inspect",
         });
         assert.equal(capture.mcpChildEnv.CODEX_TEST_CAPTURE, undefined);
         assert.equal(capture.args[0], "exec");
@@ -199,7 +199,7 @@ test("fake Codex returns bounded final text from an empty cwd and a workspace-sp
             capture.args[capture.args.indexOf("-C") + 1].replace(/^\/private/, ""),
             capture.cwd.replace(/^\/private/, ""),
         );
-        const mcpConfig = capture.args.find((arg) => arg.startsWith("mcp_servers.animate-readme-e2e="));
+        const mcpConfig = capture.args.find((arg) => arg.startsWith("mcp_servers.animate-prompt-e2e="));
         assert.ok(mcpConfig.includes(`command=${JSON.stringify(process.execPath)}`));
         assert.ok(mcpConfig.includes(`args=[${JSON.stringify(serverPath)}, "--mcp-server"]`));
         assert.deepEqual(await readdir(workspace), ["codex-last-message.txt"]);
@@ -215,24 +215,24 @@ test("Codex-filtered MCP environment requires the URI and preserves the stage-on
     const parentEnv = {
         HOME: process.env.HOME,
         PATH: process.env.PATH,
-        README_E2E_TRACE_PATH: "/tmp/stage-e2e/trace.jsonl",
-        README_E2E_DOCUMENT_URI: "file:///tmp/disposable-stage.fla",
-        README_E2E_OUT_DIR: "/tmp/stage-e2e",
-        README_PROMPT_E2E_SCENARIO: "stage",
+        PROMPT_E2E_TRACE_PATH: "/tmp/stage-e2e/trace.jsonl",
+        PROMPT_E2E_DOCUMENT_URI: "file:///tmp/disposable-stage.fla",
+        PROMPT_E2E_OUT_DIR: "/tmp/stage-e2e",
+        PROMPT_E2E_SCENARIO: "stage",
         CODEX_TEST_PRIVATE_VALUE: "must not be forwarded",
     };
     const { envVars, childEnv } = filteredMcpEnvironment(args, parentEnv);
     assert.deepEqual(envVars, [
-        "README_E2E_TRACE_PATH",
-        "README_E2E_DOCUMENT_URI",
-        "README_E2E_OUT_DIR",
-        "README_E2E_ASSET_PATHS",
-        "README_PROMPT_E2E_SCENARIO",
+        "PROMPT_E2E_TRACE_PATH",
+        "PROMPT_E2E_DOCUMENT_URI",
+        "PROMPT_E2E_OUT_DIR",
+        "PROMPT_E2E_ASSET_PATHS",
+        "PROMPT_E2E_SCENARIO",
     ]);
     assert.equal(childEnv.CODEX_TEST_PRIVATE_VALUE, undefined);
 
     const missingUriEnv = { ...childEnv };
-    delete missingUriEnv.README_E2E_DOCUMENT_URI;
+    delete missingUriEnv.PROMPT_E2E_DOCUMENT_URI;
     const failedTransport = new StdioClientTransport({
         command: process.execPath,
         args: [serverPath, "--mcp-server"],
@@ -278,7 +278,7 @@ test("Codex-filtered MCP environment requires the URI and preserves the stage-on
 });
 
 test("Codex accepts Japanese JSONL split inside a multibyte UTF-8 character", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-codex-utf8-"));
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-codex-utf8-"));
     const executableDir = join(directory, "bin");
     const workspace = join(directory, "workspace");
     await mkdir(executableDir);
@@ -305,7 +305,7 @@ test("Codex accepts Japanese JSONL split inside a multibyte UTF-8 character", as
 });
 
 test("Codex nonzero and JSONL error events fail with only safe diagnostics", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-codex-failure-"));
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-codex-failure-"));
     const executableDir = join(directory, "bin");
     const workspace = join(directory, "workspace");
     await mkdir(executableDir);
@@ -357,7 +357,7 @@ test("Codex nonzero and JSONL error events fail with only safe diagnostics", asy
 });
 
 test("Codex startup stderr yields bounded allowlisted diagnostics without echoing raw content", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-codex-startup-errors-"));
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-codex-startup-errors-"));
     const executableDir = join(directory, "bin");
     const workspace = join(directory, "workspace");
     await mkdir(executableDir);
@@ -416,7 +416,7 @@ test("Codex startup stderr yields bounded allowlisted diagnostics without echoin
 });
 
 test("Codex result-consuming scenarios reject missing and oversized final-message output", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-codex-no-result-"));
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-codex-no-result-"));
     const executableDir = join(directory, "bin");
     const workspace = join(directory, "workspace");
     await mkdir(executableDir);
@@ -454,7 +454,7 @@ test("Codex result-consuming scenarios reject missing and oversized final-messag
 });
 
 test("Codex timeout kills and waits for the process group", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "readme-e2e-codex-timeout-"));
+    const directory = await mkdtemp(join(tmpdir(), "prompt-e2e-codex-timeout-"));
     const executableDir = join(directory, "bin");
     const workspace = join(directory, "workspace");
     await mkdir(executableDir);

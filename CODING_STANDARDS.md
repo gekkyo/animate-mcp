@@ -18,6 +18,6 @@ Biome enforces formatting and basic style; ESLint enforces JSDoc for TypeScript,
 - **Recording fake** (`server/test/helpers/fake-jsfl.ts`): tool logic only. Asserts the JSFL entry name, vars and how a canned result is validated and shaped. Proves nothing about JSFL itself.
 - **`fake-animate.ts`**: the generated Run file executes in a Node VM against a fake Animate. Proves JSFL syntax, `@requires` closure and control flow, not real Animate API behavior.
 - **`real-shapes.test.ts`**: replays result shapes recorded from real Animate. Proves the result schemas accept real output, only as fresh as the recording.
-- **Smoke scripts and readme-e2e** (`server/verification/`): run in real Animate. The only evidence of Animate/AIR behavior; needs user approval.
+- **Smoke scripts and prompt-e2e** (`server/verification/`): run in real Animate. The only evidence of Animate/AIR behavior; needs user approval.
 
 Change a tool's logic or schema: recording fake. Change JSFL: also `fake-animate` and `real-shapes`. Change JSFL calling an Animate API, or a new `unverified:` guess: a real-Animate smoke run, or keep the `unverified:` label.

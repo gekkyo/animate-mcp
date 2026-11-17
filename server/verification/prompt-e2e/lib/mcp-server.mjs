@@ -26,7 +26,7 @@ export function scoped(
     tool,
     documentPath,
     checkStatus = (deps) => getStatusTool.run({}, deps),
-    outDir = process.env.README_E2E_OUT_DIR,
+    outDir = process.env.PROMPT_E2E_OUT_DIR,
     assetPaths,
 ) {
     return {
@@ -152,7 +152,7 @@ export function scoped(
                 }
                 return result;
             } finally {
-                const tracePath = process.env.README_E2E_TRACE_PATH;
+                const tracePath = process.env.PROMPT_E2E_TRACE_PATH;
                 if (tracePath) {
                     await appendFile(
                         tracePath,
@@ -167,8 +167,8 @@ export function scoped(
 /** Starts the restricted MCP server without exposing direct JSFL or document operations. */
 export async function serveRestricted() {
     const scenario = selectedScenario();
-    const documentPath = process.env.README_E2E_DOCUMENT_URI;
-    const outDir = process.env.README_E2E_OUT_DIR;
+    const documentPath = process.env.PROMPT_E2E_DOCUMENT_URI;
+    const outDir = process.env.PROMPT_E2E_OUT_DIR;
     if (!documentPath) {
         throw new Error("The restricted MCP server requires the disposable document URI.");
     }
@@ -189,7 +189,7 @@ export async function serveRestricted() {
     if (assetPaths) {
         let configuredPaths;
         try {
-            configuredPaths = JSON.parse(process.env.README_E2E_ASSET_PATHS ?? "null");
+            configuredPaths = JSON.parse(process.env.PROMPT_E2E_ASSET_PATHS ?? "null");
         } catch {
             throw new Error("The assets scenario requires its exact fixture paths.");
         }
@@ -202,7 +202,7 @@ export async function serveRestricted() {
         timeoutMs: 30_000,
     });
     const server = new McpServer(
-        { name: "animate-readme-e2e", version: "1.0.0" },
+        { name: "animate-prompt-e2e", version: "1.0.0" },
         { instructions: scenario.instruction },
     );
     let scenarioTools;
@@ -222,7 +222,7 @@ export async function serveRestricted() {
                             'Relative file inside the disposable export, e.g. "index.md", "scenes/<scene-name>/structure.md", or the frame script path listed there. Never an absolute path.',
                         ),
                 },
-                run: ({ file }) => readExportFile(join(process.env.README_E2E_OUT_DIR, "export"), file),
+                run: ({ file }) => readExportFile(join(process.env.PROMPT_E2E_OUT_DIR, "export"), file),
             },
             {
                 name: "write_export_script",
@@ -237,7 +237,7 @@ export async function serveRestricted() {
                     content: z.string().describe("Complete edited ActionScript source for that existing frame script."),
                 },
                 run: ({ file, content }) =>
-                    writeExportScript(join(process.env.README_E2E_OUT_DIR, "export"), file, content),
+                    writeExportScript(join(process.env.PROMPT_E2E_OUT_DIR, "export"), file, content),
             },
         ];
     } else if (scenario === scenarios.investigate) {
@@ -253,7 +253,7 @@ export async function serveRestricted() {
                         .string()
                         .describe("Relative export metadata path or the frame-one AS3 script path shown there."),
                 },
-                run: ({ file }) => readExportFile(join(process.env.README_E2E_OUT_DIR, "export"), file),
+                run: ({ file }) => readExportFile(join(process.env.PROMPT_E2E_OUT_DIR, "export"), file),
             },
         ];
     } else {
