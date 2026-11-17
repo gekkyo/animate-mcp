@@ -6,7 +6,25 @@ Mac で Animate を起動し、リポジトリのルートから実行します�
 
     npm run build && npm run smoke
 
-結果は `smoke-report.json` に保存されます。すべて PASS であることを確認してください。
+結果は `verification-runs/<実行ID>/` に保存されます。smoke は `smoke-report.json` と `summary.json`、README・統合実行は `summary.json` と各シナリオのログを確認してください。PASS だけでなく、FAIL・SKIP・未実行の項目と理由も確認してください。
+
+## 一括実行の入口
+
+用途別に3つの入口を使います。実行前に Animate を起動し、開いているドキュメントは自分で保存して閉じてください。実行中は Animate を操作しないでください。
+
+- **smoke 全件:** `npm run build && npm run smoke`
+- **README 実機全件（有料、build 含む）:** `npm run verify:readme -- --allow-paid`
+- **両方全件（有料、build → smoke → README）:** `npm run verify:all -- --allow-paid`
+
+README の一括実行には、選択した Claude/Codex CLI の認証と、課金を許可する `--allow-paid` が必要です。既定は Claude です。`npm run test:readme-e2e` は別物で、実機もモデルも使わないハーネステストです。
+
+各シナリオは順番に1回ずつ実行し、自動リトライはしません。3連続失敗または Animate の終了・再起動などの安全問題で停止します。ユーザー文書を自動で閉じることはしません。
+
+README の `testmovie` は、既存の cleanup が無関係な Player も閉じる可能性があるため、一括実行では SKIP します。全件を対象にしても、SKIP を含めてすべてを検証できたことにはなりません。smoke の Test Movie Player が残った場合は手動で閉じてください。
+
+smoke の単独 `publish` は明示した既存 FLA が必要なため、一括実行では SKIP します（使い捨て FLA の `isolated-publish` は実行対象）。`canvas` と `document-ops` も既存文書を必要とするため、空の Animate セッションでは SKIP します。統合実行は smoke が非ゼロ終了した場合、README に進みません。
+
+保存先は `VERIFICATION_RUN_DIR=/path/to/dir`、smoke の集計ファイルだけの保存先は `SMOKE_REPORT=/path/to/report.json` で指定できます。ログには CLI の出力が含まれるため、共有前に内容を確認してください。入口の無課金テストは `npm run test:verification` で実行できます。
 
 ## 手動で確認
 
