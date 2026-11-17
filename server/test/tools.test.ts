@@ -203,7 +203,7 @@ test("tool metadata describes behavior and the run_jsfl last-resort boundary", {
         assert.match(byName.get("read_output")?.description ?? "", /does not mean a clean compile/i);
         assert.match(
             byName.get("test_movie")?.description ?? "",
-            /single Output-panel delta captured once two seconds after launch/i,
+            /polling starts two seconds after launch and repeats every 500 ms.*unchanged across two consecutive reads.*six seconds after launch.*two-second Player startup grace/i,
         );
         assert.match(byName.get("test_movie")?.description ?? "", /empty delta does not prove/i);
         assert.match(

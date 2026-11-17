@@ -9,6 +9,11 @@ import { type Diagnostic, parseCompilerOutput } from "./publish.js";
 const TEST_MOVIE_INPUT = {
     document: z.string().optional().describe("Saved AS3 document name; defaults to the only open document"),
 };
+const FIRST_OUTPUT_SNAPSHOT_MS = 2_000;
+const OUTPUT_POLL_INTERVAL_MS = 500;
+const OUTPUT_MAX_WAIT_MS = 6_000;
+const FINAL_EMPTY_OUTPUT_GRACE_MS = 2_000;
+const STABLE_OUTPUT_READS = 2;
 
 /** Parses the length-prefixed panel text returned by read-output.jsfl.
  * @param result Encoded Compiler Errors availability and panel text
@@ -43,15 +48,37 @@ function parsePanelSnapshot(result: string) {
     return { compilerPanelAvailable, outputPanel, compilerErrorsPanel };
 }
 
+/**
+ * Returns output appended since the initial panel snapshot, or the full text after a reset.
+ * @param before Initial Output-panel text.
+ * @param after Latest Output-panel text.
+ * @returns The delta, or the full text if the panel prefix changed.
+ */
+function outputPanelDelta(before: string, after: string): string {
+    return after.startsWith(before) ? after.slice(before.length) : after;
+}
+
+/** Checks whether a valid Compiler Errors snapshot confirms launch was blocked.
+ * @param snapshot Parsed panel snapshot.
+ * @returns Whether compilation errors are present.
+ */
+function hasCompilerErrors(snapshot: ReturnType<typeof parsePanelSnapshot>): boolean {
+    try {
+        return snapshot.compilerPanelAvailable && parseCompilerOutput(snapshot.compilerErrorsPanel).errors.length > 0;
+    } catch {
+        return false;
+    }
+}
+
 export const testMovieTool: ToolDefinition<typeof TEST_MOVIE_INPUT> = {
     name: "test_movie",
     description:
-        "Run a saved AS3 document in Test Movie with abort-on-compiler-errors enabled, using its current in-memory contents (the .fla is never saved, published, or closed). Any Test Movie Player remains open for you to close. Compiler Errors raw text and parsed diagnostics are separate from a single Output-panel delta captured once two seconds after launch; later output may be missed, concurrent messages may be mixed in, and an empty delta does not prove there were no runtime errors. compilerDiagnostics.status: unavailable does not prove a clean compile.",
+        "Run a saved AS3 document in Test Movie with abort-on-compiler-errors enabled, using its current in-memory contents (the .fla is never saved, published, or closed). Any Test Movie Player remains open for you to close. Compiler Errors raw text and parsed diagnostics are separate from the Output-panel delta; polling starts two seconds after launch and repeats every 500 ms until non-empty output is unchanged across two consecutive reads, or six seconds after launch. If still empty, it waits a final two-second Player startup grace and takes one last snapshot. Polling stops after the first snapshot if compilation errors prevent launch. Concurrent messages may be mixed in, and an empty delta does not prove there were no runtime errors. compilerDiagnostics.status: unavailable does not prove a clean compile.",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     inputSchema: TEST_MOVIE_INPUT,
     guidance: {},
     /**
-     * Runs Test Movie and captures one delayed snapshot of its output panels.
+     * Runs Test Movie and polls its output panels after launch.
      * @param document Optional saved AS3 document selector.
      * @param deps Tool dependencies for executing Animate commands.
      * @returns Runtime output, compiler panel text, and parsed diagnostics when available.
@@ -84,9 +111,38 @@ export const testMovieTool: ToolDefinition<typeof TEST_MOVIE_INPUT> = {
         if (!Number.isFinite(startedAt) || startedAt <= 0) {
             throw new Error("Animate returned an invalid test_movie start time");
         }
-        await new Promise((resolve) => setTimeout(resolve, Math.max(0, startedAt + 2000 - Date.now())));
-
-        const after = parsePanelSnapshot(String(await runner.execute(`${panelPrelude}${bundle("read-output")}`)));
+        /** Reads the latest Output and Compiler Errors panel snapshot.
+         * @returns Parsed panel snapshot.
+         */
+        const readPanels = async () =>
+            parsePanelSnapshot(String(await runner.execute(`${panelPrelude}${bundle("read-output")}`)));
+        await new Promise((resolve) =>
+            setTimeout(resolve, Math.max(0, startedAt + FIRST_OUTPUT_SNAPSHOT_MS - Date.now())),
+        );
+        let after = await readPanels();
+        let runtimeOutput = outputPanelDelta(before.outputPanel, after.outputPanel);
+        let stableReads = runtimeOutput ? 1 : 0;
+        const deadline = startedAt + OUTPUT_MAX_WAIT_MS;
+        while (stableReads < STABLE_OUTPUT_READS && Date.now() < deadline && !hasCompilerErrors(after)) {
+            await new Promise((resolve) =>
+                setTimeout(resolve, Math.max(0, Math.min(OUTPUT_POLL_INTERVAL_MS, deadline - Date.now()))),
+            );
+            after = await readPanels();
+            const nextOutput = outputPanelDelta(before.outputPanel, after.outputPanel);
+            if (!nextOutput) {
+                stableReads = 0;
+            } else if (nextOutput === runtimeOutput) {
+                stableReads += 1;
+            } else {
+                stableReads = 1;
+            }
+            runtimeOutput = nextOutput;
+        }
+        if (!runtimeOutput && !hasCompilerErrors(after) && Date.now() >= deadline) {
+            await new Promise((resolve) => setTimeout(resolve, FINAL_EMPTY_OUTPUT_GRACE_MS));
+            after = await readPanels();
+            runtimeOutput = outputPanelDelta(before.outputPanel, after.outputPanel);
+        }
         let compilerDiagnostics: {
             status: "parsed" | "unavailable";
             errors: Diagnostic[];
@@ -101,12 +157,10 @@ export const testMovieTool: ToolDefinition<typeof TEST_MOVIE_INPUT> = {
             compilerDiagnostics = { status: "unavailable", errors: [], warnings: [] };
         }
         const response = {
-            runtimeOutput: after.outputPanel.startsWith(before.outputPanel)
-                ? after.outputPanel.slice(before.outputPanel.length)
-                : after.outputPanel,
+            runtimeOutput,
             compilerErrorsPanel: after.compilerErrorsPanel,
             compilerDiagnostics,
-            note: "Runtime output is a single snapshot taken two seconds after Test Movie starts; later output may be missed, concurrent Output-panel messages may be mixed in, and an empty delta does not prove that no runtime errors occurred. An unavailable compilerDiagnostics status does not mean a clean compile. Any Test Movie Player remains open for you to close.",
+            note: "Output polling starts two seconds after Test Movie starts and repeats every 500 ms until non-empty output is unchanged across two consecutive reads, stopping by six seconds after launch. If still empty, a final Output-panel snapshot follows a two-second Player startup grace. Polling stops after the first snapshot if compilation errors prevent launch. Concurrent Output-panel messages may be mixed in, and an empty delta does not prove that no runtime errors occurred. An unavailable compilerDiagnostics status does not mean a clean compile. Any Test Movie Player remains open for you to close.",
         };
         return { data: response };
     },
