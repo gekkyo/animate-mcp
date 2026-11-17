@@ -4,9 +4,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { isAnimateRunning, launcher } from "../../../dist/runtime/animate-launcher.js";
-import { bundle } from "../../../dist/runtime/jsfl-bundle.js";
 import { createRunner } from "../../../dist/runtime/runner.js";
 import { registerEntrances } from "../../../dist/tools/core/entrance.js";
+import { createJsflRunner } from "../../../dist/tools/core/shared.js";
 import { getStatusTool } from "../../../dist/tools/document/get-status.js";
 import { applyScriptsTool } from "../../../dist/tools/scripts/apply-scripts.js";
 import { exportScriptsTool } from "../../../dist/tools/scripts/export-scripts.js";
@@ -262,7 +262,7 @@ export async function serveRestricted() {
     registerEntrances(
         server,
         scenarioTools.map((tool) => scoped(tool, documentPath, undefined, outDir, assetPaths)),
-        { runner, bundle },
+        { runner, jsfl: createJsflRunner(runner) },
     );
     await server.connect(new StdioServerTransport());
 }
