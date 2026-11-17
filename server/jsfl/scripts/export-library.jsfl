@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common
 // Concatenated and evaluated after export-common. `var __docName` and `var __items` are injected before it.
 // If __items is null, only the symbol list (and AS3 Linked classes) is returned. If it is an array, each symbol's timeline is read.
 // Reading enters edit mode, so the original edit state is restored at the end; a failure goes to warning.

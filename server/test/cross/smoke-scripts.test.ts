@@ -13,6 +13,37 @@ test("smoke-run uses the production-wrapped handler for --entrances steps", () =
     assert.doesNotMatch(source, /entranceHandlers/);
 });
 
+test("smoke-lib creates saved AS3 and Canvas documents through their shared lifecycle", async () => {
+    const { createSavedAs3Document, createSavedHtmlCanvasDocument } = await import(
+        "../../verification/smoke/lib/smoke-lib.mjs"
+    );
+    const codes: string[] = [];
+    /** Records JSFL passed to the lifecycle helper and returns a fake saved document.
+     * @param args JSFL request.
+     * @param args.code JSFL source.
+     * @returns Mock run_jsfl tool result.
+     */
+    const runJsfl = async ({ code }: { code: string }) => {
+        codes.push(code);
+        const path = codes.length === 1 ? "file:///tmp/smoke.fla" : "file:///tmp/smoke-canvas.fla";
+        return { isError: false, structuredContent: { result: `Smoke\t${path}` } };
+    };
+
+    assert.deepEqual(await createSavedAs3Document(runJsfl, "file:///tmp/smoke.fla", "trace('smoke');"), {
+        name: "Smoke",
+        pathURI: "file:///tmp/smoke.fla",
+    });
+    assert.match(codes[0], /fl\.createDocument\("timeline"/);
+    assert.match(codes[0], /doc\.getTimeline\(\)\.layers\[0\]\.frames\[0\]\.actionScript/);
+
+    assert.deepEqual(await createSavedHtmlCanvasDocument(runJsfl, "file:///tmp/smoke-canvas.fla"), {
+        name: "Smoke",
+        pathURI: "file:///tmp/smoke-canvas.fla",
+    });
+    assert.match(codes[1], /fl\.createDocument\("htmlcanvas"/);
+    assert.doesNotMatch(codes[1], /actionScript/);
+});
+
 test("fixture merge leaves the reviewed run_jsfl fixture unchanged", () => {
     const directory = mkdtempSync(join(tmpdir(), "merge-smoke-shapes-"));
     const records = join(directory, "records");

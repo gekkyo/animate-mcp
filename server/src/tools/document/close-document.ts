@@ -1,6 +1,5 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const CLOSE_DOCUMENT_INPUT = {
@@ -10,6 +9,7 @@ const CLOSE_DOCUMENT_INPUT = {
         .optional()
         .describe("Must be true to discard unsaved changes; otherwise save first"),
 };
+const CLOSE_DOCUMENT_RESULT = z.object({ name: z.string(), path: z.string().nullable() }).strict();
 
 export const closeDocumentTool: ToolDefinition<typeof CLOSE_DOCUMENT_INPUT> = {
     name: "close_document",
@@ -27,23 +27,19 @@ export const closeDocumentTool: ToolDefinition<typeof CLOSE_DOCUMENT_INPUT> = {
      */
     run: async (
         { document, discardUnsavedChanges }: Parameters<ToolCallback<typeof CLOSE_DOCUMENT_INPUT>>[0],
-        deps: ToolDeps,
+        { jsfl }: ToolDeps,
     ) => {
-        const { runner, bundle } = deps;
-
         if (discardUnsavedChanges !== true) {
             throw new Error(
                 "Set discardUnsavedChanges: true only when you intend to discard changes; otherwise call save_document first.",
             );
         }
 
-        const code = jsflRun("close-document", { __closeDocumentTarget: document }, bundle);
-        const value = String(await runner.execute(code));
-        const separator = value.indexOf("\n");
-        if (separator < 1) {
-            throw new Error("Animate returned invalid closed-document details");
-        }
-        const result = { name: value.slice(0, separator), path: value.slice(separator + 1) || null };
+        const result = await jsfl.run(
+            "document/close-document",
+            { __closeDocumentTarget: document },
+            CLOSE_DOCUMENT_RESULT,
+        );
         return { data: result };
     },
 };

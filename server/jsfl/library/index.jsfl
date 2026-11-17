@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common, library/ops
 (function () {
   var document = selectDocument(), restore = saveEditState(document), originalTimeline = document.getTimeline();
   var originalLayer = originalTimeline.layers[originalTimeline.currentLayer], originalFrame = originalTimeline.currentFrame;

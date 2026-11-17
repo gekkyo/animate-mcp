@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common, shared/element-read
 // `var __docName`, `var __timelineRef`, `var __layers`, `var __frame`, and `var __geometry` are injected before this file.
 /** Inspects selected timeline layers and serializes their structure.
  * @returns The serialized timeline inspection.

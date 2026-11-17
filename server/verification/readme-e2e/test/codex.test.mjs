@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { codexArgs, runCodex } from "../lib/codex.mjs";
-import { readmeE2eProvider } from "./runner.mjs";
+import { readmeE2eProvider } from "../runner.mjs";
 import { selectedScenario } from "../scenarios/scenarios.mjs";
 
 const fakeCodexSource = `#!/usr/bin/env node
@@ -210,7 +210,7 @@ test("fake Codex returns bounded final text from an empty cwd and a workspace-sp
 });
 
 test("Codex-filtered MCP environment requires the URI and preserves the stage-only tool allowlist", async () => {
-    const serverPath = fileURLToPath(new URL("./runner.mjs", import.meta.url));
+    const serverPath = fileURLToPath(new URL("../runner.mjs", import.meta.url));
     const args = codexArgs(serverPath, "/tmp/codex-last-message.txt", "/tmp/empty", "stage prompt");
     const parentEnv = {
         HOME: process.env.HOME,

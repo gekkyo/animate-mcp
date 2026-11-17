@@ -66,7 +66,9 @@ export async function mergeSmokeShapes(directory, outputDir = resolve("server/te
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
     const [directory, outputDir] = process.argv.slice(2);
     if (!directory || process.argv.length > 4) {
-        throw new Error("Usage: node server/verification/smoke/lib/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR> [OUTPUT_DIR]");
+        throw new Error(
+            "Usage: node server/verification/smoke/lib/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR> [OUTPUT_DIR]",
+        );
     }
     await mergeSmokeShapes(resolve(directory), outputDir ? resolve(outputDir) : undefined);
 }

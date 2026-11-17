@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common, shared/element-read
 // `var __docName`, `var __timelineRef`, and `var __ops` are injected before this file.
 /** Applies text additions and edits to a timeline.
  * @returns The serialized edit result.

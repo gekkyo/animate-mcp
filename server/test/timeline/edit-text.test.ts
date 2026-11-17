@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
 import { z } from "zod";
+import { createJsflRunner } from "../../src/tools/core/shared.js";
 import { registerEditText } from "../../src/tools/timeline/edit-text.js";
 
 /**
@@ -77,20 +76,7 @@ const callEditText = async (
     const context = fakeDocument(options);
     let handler: ((input: unknown) => Promise<unknown>) | undefined;
     let inputSchema: z.ZodRawShape = {};
-    const bundlePaths: Record<string, string> = {
-        "select-document": "server/jsfl/shared/select-document.jsfl",
-        "edit-state": "server/jsfl/shared/edit-state.jsfl",
-        "export-common": "server/jsfl/shared/export-common.jsfl",
-        "element-read": "server/jsfl/shared/element-read.jsfl",
-        "edit-text": "server/jsfl/timeline/edit-text.jsfl",
-    };
-    /**
-     * Loads requested JSFL source files for the fixture.
-     * @param names Requested bundle names.
-     * @returns Concatenated JSFL source.
-     */
-    const bundle = (...names: string[]) =>
-        names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
+    const runner = { execute: async (code: string) => runInContext(code, context) };
     registerEditText(
         {
             registerTool: (_name: string, config: { inputSchema: unknown }, callback: (input: unknown) => unknown) => {
@@ -99,8 +85,8 @@ const callEditText = async (
             },
         } as unknown as Parameters<typeof registerEditText>[0],
         {
-            runner: { execute: async (code) => runInContext(code, context) },
-            bundle,
+            runner,
+            jsfl: createJsflRunner(runner),
         },
     );
     const parsed = z.object(inputSchema).safeParse(input);

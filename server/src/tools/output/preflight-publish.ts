@@ -2,7 +2,6 @@ import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import { isInside } from "../core/paths.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 import {
@@ -16,32 +15,37 @@ const INPUT = {
     document: z.string().optional().describe("Open document name; defaults to the only open document"),
 };
 
-type DocumentInfo = {
-    name: string;
-    pathURI: string;
-    type: string;
-    profile: string;
-    playerTarget?: string;
-    platformPath?: string;
-};
-
-type OutputProbe = {
-    name: string;
-    exists: boolean;
-};
-
-type AuditResult = {
-    document: string;
-    findings: {
-        category: "unusedLibraryItem" | "emptyKeyframe" | "defaultName";
-        severity: "info" | "warning";
-        location: string;
-        message: string;
-        item?: string;
-        linkage?: boolean;
-    }[];
-    warnings: string[];
-};
+const OUTPUT_PROBE = z.object({ name: z.string(), exists: z.boolean() }).strict();
+const PREFLIGHT_RESULT = z
+    .object({
+        name: z.string(),
+        pathURI: z.string(),
+        type: z.string(),
+        profile: z.string(),
+        sameDocument: z.boolean(),
+        outputFiles: z.array(OUTPUT_PROBE),
+        playerTarget: z.string().optional(),
+        platformPath: z.string().optional(),
+    })
+    .strict();
+const AUDIT_RESULT = z
+    .object({
+        document: z.string(),
+        findings: z.array(
+            z
+                .object({
+                    category: z.enum(["unusedLibraryItem", "emptyKeyframe", "defaultName"]),
+                    severity: z.enum(["info", "warning"]),
+                    location: z.string(),
+                    message: z.string(),
+                    item: z.string().optional(),
+                    linkage: z.boolean().optional(),
+                })
+                .strict(),
+        ),
+        warnings: z.array(z.string()),
+    })
+    .strict();
 
 /**
  * Extracts enabled formats and output filename candidates from profile XML.
@@ -374,9 +378,7 @@ async function checkAir(flaPath: string, playerTarget: string) {
  * @returns Individual preflight checks and audit findings.
  */
 export async function runPreflightPublish(document: string | undefined, deps: ToolDeps) {
-    const { runner, bundle } = deps;
-    const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
-    const info = JSON.parse(String(await runner.execute(`${prelude}${bundle("preflight-publish")}`))) as DocumentInfo;
+    const info = await deps.jsfl.run("output/preflight-publish", { __docName: document ?? "" }, PREFLIGHT_RESULT);
     const supported = info.type === "Flash" || info.type === "htmlcanvas";
     const airTarget =
         info.type === "Flash" && info.playerTarget?.startsWith("AIR ")
@@ -403,25 +405,23 @@ export async function runPreflightPublish(document: string | undefined, deps: To
             },
         };
     }
-    const audit = JSON.parse(
-        String(await runner.execute(jsflRun("audit-document", { __docName: document ?? "" }, bundle))),
-    ) as AuditResult;
+    const audit = await deps.jsfl.run("document/audit-document", { __docName: document ?? "" }, AUDIT_RESULT);
     if (audit.document !== info.name) {
         throw new Error(`Document changed during preflight (audit: ${audit.document}, info: ${info.name})`);
     }
     const checkedUris = candidates
         .map((name) => ({ name, uri: outputCandidateUri(name, info.pathURI) }))
         .filter((candidate): candidate is { name: string; uri: string } => candidate.uri !== null);
-    const probe = JSON.parse(
-        String(
-            await runner.execute(
-                prelude +
-                    `var __expectedName = ${JSON.stringify(info.name)};\n` +
-                    `var __expectedPath = ${JSON.stringify(info.pathURI)};\n` +
-                    `var __outputFiles = ${JSON.stringify(checkedUris)};\n${bundle("preflight-publish")}`,
-            ),
-        ),
-    ) as DocumentInfo & { sameDocument: boolean; outputFiles: OutputProbe[] };
+    const probe = await deps.jsfl.run(
+        "output/preflight-publish",
+        {
+            __docName: document ?? "",
+            __expectedName: info.name,
+            __expectedPath: info.pathURI,
+            __outputFiles: checkedUris,
+        },
+        PREFLIGHT_RESULT,
+    );
     if (!probe.sameDocument || probe.name !== info.name || probe.pathURI !== info.pathURI) {
         throw new Error("Document changed during preflight; results were not reported.");
     }

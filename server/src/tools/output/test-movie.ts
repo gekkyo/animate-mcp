@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
+import { PANEL_RESULT } from "./lib/panel-result.js";
 import { type Diagnostic, parseCompilerOutput } from "./publish.js";
 
 const TEST_MOVIE_INPUT = {
@@ -14,39 +15,12 @@ const OUTPUT_POLL_INTERVAL_MS = 500;
 const OUTPUT_MAX_WAIT_MS = 6_000;
 const FINAL_EMPTY_OUTPUT_GRACE_MS = 2_000;
 const STABLE_OUTPUT_READS = 2;
-
-/** Parses the length-prefixed panel text returned by read-output.jsfl.
- * @param result Encoded Compiler Errors availability and panel text
- * @returns Compiler Errors panel availability and raw Output/Compiler Errors text
- */
-function parsePanelSnapshot(result: string) {
-    let offset = 0;
-    const compilerPanelAvailable = result.charAt(offset++) === "1";
-    /**
-     * Reads one length-prefixed field from the encoded panel snapshot.
-     * @returns The next decoded panel string.
-     */
-    const readField = () => {
-        const separator = result.indexOf(":", offset);
-        if (separator < 0 || !/^\d+$/.test(result.slice(offset, separator))) {
-            throw new Error("Animate returned an invalid test_movie panel result");
-        }
-        const length = Number(result.slice(offset, separator));
-        offset = separator + 1;
-        const field = result.slice(offset, offset + length);
-        if (field.length !== length) {
-            throw new Error("Animate returned an invalid test_movie panel result");
-        }
-        offset += length;
-        return field;
-    };
-    const outputPanel = readField();
-    const compilerErrorsPanel = readField();
-    if (offset !== result.length) {
-        throw new Error("Animate returned an invalid test_movie panel result");
-    }
-    return { compilerPanelAvailable, outputPanel, compilerErrorsPanel };
-}
+const LAUNCH_RESULT = z
+    .object({
+        startedAt: z.number().positive(),
+        before: PANEL_RESULT,
+    })
+    .strict();
 
 /**
  * Returns output appended since the initial panel snapshot, or the full text after a reset.
@@ -62,7 +36,7 @@ function outputPanelDelta(before: string, after: string): string {
  * @param snapshot Parsed panel snapshot.
  * @returns Whether compilation errors are present.
  */
-function hasCompilerErrors(snapshot: ReturnType<typeof parsePanelSnapshot>): boolean {
+function hasCompilerErrors(snapshot: z.infer<typeof PANEL_RESULT>): boolean {
     try {
         return snapshot.compilerPanelAvailable && parseCompilerOutput(snapshot.compilerErrorsPanel).errors.length > 0;
     } catch {
@@ -84,38 +58,26 @@ export const testMovieTool: ToolDefinition<typeof TEST_MOVIE_INPUT> = {
      * @returns Runtime output, compiler panel text, and parsed diagnostics when available.
      */
     run: async ({ document }: Parameters<ToolCallback<typeof TEST_MOVIE_INPUT>>[0], deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
         const id = randomUUID();
         const outputPath = join(tmpdir(), `animate-mcp-test-movie-${id}-output.txt`);
         const compilerPath = join(tmpdir(), `animate-mcp-test-movie-${id}-compiler-errors.txt`);
-        const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
-        const panelPrelude = `var __readOutputPath = ${JSON.stringify(outputPath)};\nvar __readCompilerPath = ${JSON.stringify(compilerPath)};\n`;
-        const validate = `if (document.type !== "Flash" || String(document.asVersion).indexOf("3") < 0) throw new Error("test_movie supports AS3 documents only");\n  if (!document.pathURI) throw new Error("Document is not saved; save first");`;
-        // Animate applies setActiveWindow only after the Run returns; the next Run snapshots panels and launches.
-        await runner.execute(
-            `${prelude}${bundle("select-document")}\n(function () {\n  var document = selectDocument();\n  ${validate}\n  fl.setActiveWindow(document);\n})()`,
+        const vars = {
+            __docName: document ?? "",
+            __readOutputPath: outputPath,
+            __readCompilerPath: compilerPath,
+        };
+        // Animate applies setActiveWindow only after the Run returns; launch and its before-snapshot use the next Run.
+        await deps.jsfl.run("output/test-movie", { ...vars, __testMovieAction: "activate" }, z.literal(true));
+        const { startedAt, before } = await deps.jsfl.run(
+            "output/test-movie",
+            { ...vars, __testMovieAction: "launch" },
+            LAUNCH_RESULT,
         );
-
-        const launchResult = String(
-            await runner.execute(
-                `${prelude}${panelPrelude}${bundle("select-document")}\n(function () {\n  var document = selectDocument();\n  ${validate}\n  var before = ${bundle("read-output")};\n  var startedAt = ${bundle("test-movie")};\n  return String(startedAt) + "|" + before;\n})()`,
-            ),
-        );
-        const separator = launchResult.indexOf("|");
-        if (separator < 0) {
-            throw new Error("Animate returned an invalid test_movie launch result");
-        }
-        const startedAt = Number(launchResult.slice(0, separator));
-        const before = parsePanelSnapshot(launchResult.slice(separator + 1));
-        if (!Number.isFinite(startedAt) || startedAt <= 0) {
-            throw new Error("Animate returned an invalid test_movie start time");
-        }
         /** Reads the latest Output and Compiler Errors panel snapshot.
          * @returns Parsed panel snapshot.
          */
         const readPanels = async () =>
-            parsePanelSnapshot(String(await runner.execute(`${panelPrelude}${bundle("read-output")}`)));
+            deps.jsfl.run("output/test-movie", { ...vars, __testMovieAction: "read" }, PANEL_RESULT);
         await new Promise((resolve) =>
             setTimeout(resolve, Math.max(0, startedAt + FIRST_OUTPUT_SNAPSHOT_MS - Date.now())),
         );

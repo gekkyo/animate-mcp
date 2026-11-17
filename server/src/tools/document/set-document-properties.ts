@@ -1,6 +1,5 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const SET_DOCUMENT_PROPERTIES_INPUT = {
@@ -13,6 +12,19 @@ const SET_DOCUMENT_PROPERTIES_INPUT = {
         .optional(),
     document: z.string().min(1).optional(),
 };
+const SET_DOCUMENT_PROPERTIES_RESULT = z
+    .object({
+        document: z.string(),
+        properties: z
+            .object({
+                width: z.number().optional(),
+                height: z.number().optional(),
+                frameRate: z.number().optional(),
+                backgroundColor: z.string().optional(),
+            })
+            .strict(),
+    })
+    .strict();
 
 export const setDocumentPropertiesTool: ToolDefinition<typeof SET_DOCUMENT_PROPERTIES_INPUT> = {
     name: "set_document_properties",
@@ -39,23 +51,17 @@ export const setDocumentPropertiesTool: ToolDefinition<typeof SET_DOCUMENT_PROPE
             backgroundColor,
             document,
         }: Parameters<ToolCallback<typeof SET_DOCUMENT_PROPERTIES_INPUT>>[0],
-        deps: ToolDeps,
+        { jsfl }: ToolDeps,
     ) => {
-        const { runner, bundle } = deps;
-
         const properties = { width, height, frameRate, backgroundColor };
         if (Object.values(properties).every((value) => value === undefined)) {
             throw new Error("Set at least one of width, height, frameRate, or backgroundColor");
         }
-        const code = jsflRun(
-            "set-document-properties",
+        const result = await jsfl.run(
+            "document/set-document-properties",
             { __docName: document ?? "", __properties: properties },
-            bundle,
+            SET_DOCUMENT_PROPERTIES_RESULT,
         );
-        const result = JSON.parse(String(await runner.execute(code))) as {
-            document: string;
-            properties: typeof properties;
-        };
         return { data: result };
     },
 };

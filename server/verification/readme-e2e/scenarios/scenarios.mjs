@@ -1,22 +1,22 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { getDocumentInfoTool } from "../../dist/tools/document/get-document-info.js";
-import { getStatusTool } from "../../dist/tools/document/get-status.js";
-import { setDocumentPropertiesTool } from "../../dist/tools/document/set-document-properties.js";
-import { editLibraryTool } from "../../dist/tools/library/edit-library.js";
-import { importAssetsTool } from "../../dist/tools/library/import-assets.js";
-import { captureFrameTool } from "../../dist/tools/output/capture-frame.js";
-import { publishTool } from "../../dist/tools/output/publish.js";
-import { testMovieTool } from "../../dist/tools/output/test-movie.js";
-import { verifyCanvasOutputTool } from "../../dist/tools/output/verify-canvas-output.js";
-import { exportScriptsTool } from "../../dist/tools/scripts/export-scripts.js";
-import { convertToSymbolTool } from "../../dist/tools/timeline/convert-to-symbol.js";
-import { editElementsTool } from "../../dist/tools/timeline/edit-elements.js";
-import { editTextTool } from "../../dist/tools/timeline/edit-text.js";
-import { editTimelineTool } from "../../dist/tools/timeline/edit-timeline.js";
-import { editTweenTool } from "../../dist/tools/timeline/edit-tween.js";
-import { inspectTimelineTool } from "../../dist/tools/timeline/inspect-timeline.js";
+import { getDocumentInfoTool } from "../../../dist/tools/document/get-document-info.js";
+import { getStatusTool } from "../../../dist/tools/document/get-status.js";
+import { setDocumentPropertiesTool } from "../../../dist/tools/document/set-document-properties.js";
+import { editLibraryTool } from "../../../dist/tools/library/edit-library.js";
+import { importAssetsTool } from "../../../dist/tools/library/import-assets.js";
+import { captureFrameTool } from "../../../dist/tools/output/capture-frame.js";
+import { publishTool } from "../../../dist/tools/output/publish.js";
+import { testMovieTool } from "../../../dist/tools/output/test-movie.js";
+import { verifyCanvasOutputTool } from "../../../dist/tools/output/verify-canvas-output.js";
+import { exportScriptsTool } from "../../../dist/tools/scripts/export-scripts.js";
+import { convertToSymbolTool } from "../../../dist/tools/timeline/convert-to-symbol.js";
+import { editElementsTool } from "../../../dist/tools/timeline/edit-elements.js";
+import { editTextTool } from "../../../dist/tools/timeline/edit-text.js";
+import { editTimelineTool } from "../../../dist/tools/timeline/edit-timeline.js";
+import { editTweenTool } from "../../../dist/tools/timeline/edit-tween.js";
+import { inspectTimelineTool } from "../../../dist/tools/timeline/inspect-timeline.js";
 
 export const scenarios = {
     layer: {

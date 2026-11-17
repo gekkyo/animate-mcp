@@ -1,3 +1,4 @@
+// @requires timeline/helpers, timeline/distribute
   /** Applies a layer operation.
    * @param ctx Document and timeline state.
     * @param ctx Document and timeline state.

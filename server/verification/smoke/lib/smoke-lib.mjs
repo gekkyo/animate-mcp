@@ -8,7 +8,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const execFileAsync = promisify(execFile);
-const serverPath = fileURLToPath(new URL("../../dist/index.js", import.meta.url));
+const serverPath = fileURLToPath(new URL("../../../dist/index.js", import.meta.url));
 let client;
 let clientTransport;
 let connecting;
@@ -86,15 +86,16 @@ function modalHint(diagnostic) {
     }
 }
 
-/** Creates and saves a disposable AS3 document for saved-path smoke operations.
+/** Creates and saves a disposable document for saved-path smoke operations.
  * @param runJsfl run_jsfl tool handler.
  * @param fileUri file URI where the temporary FLA will be saved.
- * @param actionScript Frame-one ActionScript source.
+ * @param type Animate document type.
+ * @param actionScript Optional frame-one ActionScript source for AS3 documents.
  * @returns Promise resolving to the document name and normalized path URI.
  */
-export async function createSavedAs3Document(runJsfl, fileUri, actionScript) {
+async function createSavedDocument(runJsfl, fileUri, type, actionScript) {
     const result = await runJsfl({
-        code: `(function () { var doc = null, created = false, existing = []; for (var i = 0; i < fl.documents.length; i++) existing.push(fl.documents[i]); try { fl.createDocument("timeline", 550, 400, 24); doc = fl.getDocumentDOM(); var wasExisting = false; for (var j = 0; j < existing.length; j++) if (existing[j] === doc) wasExisting = true; if (!doc || wasExisting) throw new Error("Animate did not create a new document"); created = true; if (doc.type !== "Flash" || String(doc.asVersion).indexOf("3") < 0) throw new Error("Created document is not AS3"); doc.getTimeline().layers[0].frames[0].actionScript = ${JSON.stringify(actionScript)}; if (fl.saveDocument(doc, ${JSON.stringify(fileUri)}) !== true) throw new Error("fl.saveDocument returned false"); if (!doc.name || !doc.pathURI) throw new Error("Saved document has no name or pathURI"); return doc.name + "\\t" + doc.pathURI; } catch (error) { if (created) { try { doc.close(false); } catch (cleanupError) { throw new Error(String(error) + "; closing disposable document also failed: " + String(cleanupError)); } } throw error; } })()`,
+        code: `(function () { var doc = null, created = false, existing = []; for (var i = 0; i < fl.documents.length; i++) existing.push(fl.documents[i]); try { fl.createDocument(${JSON.stringify(type)}, 550, 400, 24); doc = fl.getDocumentDOM(); var wasExisting = false; for (var j = 0; j < existing.length; j++) if (existing[j] === doc) wasExisting = true; if (!doc || wasExisting) throw new Error("Animate did not create a new document"); created = true; if (${JSON.stringify(type)} === "timeline" && (doc.type !== "Flash" || String(doc.asVersion).indexOf("3") < 0)) throw new Error("Created document is not AS3"); if (${JSON.stringify(type)} === "htmlcanvas" && doc.type !== "htmlcanvas") throw new Error("Created document is not HTML5 Canvas"); ${actionScript === undefined ? "" : `doc.getTimeline().layers[0].frames[0].actionScript = ${JSON.stringify(actionScript)};`} if (fl.saveDocument(doc, ${JSON.stringify(fileUri)}) !== true) throw new Error("fl.saveDocument returned false"); if (!doc.name || !doc.pathURI) throw new Error("Saved document has no name or pathURI"); return doc.name + "\\t" + doc.pathURI; } catch (error) { if (created) { try { doc.close(false); } catch (cleanupError) { throw new Error(String(error) + "; closing disposable document also failed: " + String(cleanupError)); } } throw error; } })()`,
     });
     if (result.isError) {
         throw new Error(result.content?.[0]?.text ?? "run_jsfl failed");
@@ -110,6 +111,25 @@ export async function createSavedAs3Document(runJsfl, fileUri, actionScript) {
         throw new Error("Animate returned invalid saved document details");
     }
     return { name, pathURI };
+}
+
+/** Creates and saves a disposable AS3 document for saved-path smoke operations.
+ * @param runJsfl run_jsfl tool handler.
+ * @param fileUri file URI where the temporary FLA will be saved.
+ * @param actionScript Frame-one ActionScript source.
+ * @returns Promise resolving to the document name and normalized path URI.
+ */
+export async function createSavedAs3Document(runJsfl, fileUri, actionScript) {
+    return createSavedDocument(runJsfl, fileUri, "timeline", actionScript);
+}
+
+/** Creates and saves a disposable HTML5 Canvas document.
+ * @param runJsfl run_jsfl tool handler.
+ * @param fileUri file URI where the temporary FLA will be saved.
+ * @returns Promise resolving to the document name and normalized path URI.
+ */
+export async function createSavedHtmlCanvasDocument(runJsfl, fileUri) {
+    return createSavedDocument(runJsfl, fileUri, "htmlcanvas");
 }
 
 /** Closes only the document with this exact path URI, discarding edits.

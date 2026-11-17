@@ -1,8 +1,46 @@
 import assert from "node:assert/strict";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { INSTRUCTIONS, TOOLS } from "../../src/index.js";
 import { createToolRegistry } from "../../src/tools/core/registry.js";
-import { text, withServer } from "./helpers/fake-animate.js";
+import { text, withServer } from "../helpers/fake-animate.js";
+
+const TOOL_ROOT = fileURLToPath(new URL("../../src/tools/", import.meta.url));
+
+/**
+ * Recursively lists source modules under the tools directory.
+ * @param directory Directory to inspect
+ * @returns Absolute module paths
+ */
+async function listToolModules(directory: string): Promise<string[]> {
+    const entries = await readdir(directory, { withFileTypes: true });
+    const descendants = await Promise.all(
+        entries.map(async (entry) => {
+            const path = join(directory, entry.name);
+            if (entry.isDirectory()) {
+                return listToolModules(path);
+            }
+            return entry.isFile() && entry.name.endsWith(".ts") ? [path] : [];
+        }),
+    );
+    return descendants.flat();
+}
+
+test("TOOLS includes every exported *Tool definition", async () => {
+    const modules = await Promise.all(
+        (await listToolModules(TOOL_ROOT)).map((path) => import(pathToFileURL(path).href)),
+    );
+    const exportedTools = modules.flatMap((module) =>
+        Object.entries(module)
+            .filter(([name]) => name.endsWith("Tool"))
+            .map(([, tool]) => tool),
+    );
+
+    assert.equal(exportedTools.length, TOOLS.length);
+    assert.deepEqual(new Set(exportedTools), new Set(TOOLS));
+});
 
 test("default registry exposes only Entrances and compact instructions", async () => {
     assert.equal(TOOLS.length, 29);

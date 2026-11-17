@@ -6,12 +6,12 @@ import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { scoped } from "../lib/mcp-server.mjs";
+import { readExportFile, writeExportScript } from "../lib/workspace.mjs";
 import {
     assertScriptInvestigationReply,
     assertSuccessfulScriptEdit,
     assertSuccessfulScriptInvestigation,
 } from "../scenarios/scripts.mjs";
-import { readExportFile, writeExportScript } from "../lib/workspace.mjs";
 
 test("script investigation requires a successful read-only export/read and fixture-specific diagnosis", () => {
     assertSuccessfulScriptInvestigation(
@@ -175,7 +175,7 @@ test("script export/apply pin paths, document, and force to disposable values", 
 test("script MCP discovery exposes only scoped script workflow tools", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -208,7 +208,7 @@ test("script MCP discovery exposes only scoped script workflow tools", async () 
 test("investigation MCP discovery exposes only get_status, export_scripts, and read_export_file", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",

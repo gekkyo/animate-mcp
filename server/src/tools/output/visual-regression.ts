@@ -36,7 +36,30 @@ const INPUT = {
     maxChangedPercent: z.number().min(0).max(100).optional(),
 };
 type Capture = { path: string; pathURI?: string; frame: number; timeline: string; width: number; height: number };
+const CAPTURE_RESULT = z
+    .object({
+        path: z.string(),
+        pathURI: z.string().optional(),
+        frame: z.number().int(),
+        timeline: z.string(),
+        width: z.number(),
+        height: z.number(),
+    })
+    .strict();
+const CAPTURE_RESPONSE = z.union([CAPTURE_RESULT, z.object({ captures: z.array(CAPTURE_RESULT) }).strict()]);
 type Baseline = { captures: Array<Omit<Capture, "path" | "pathURI">>; documentId: string };
+type DocumentIdentity = { pathURI: string; name: string };
+type CaptureMetadata = Omit<Capture, "path" | "pathURI">;
+type BaselineContext = {
+    name: string;
+    identity: DocumentIdentity;
+    documentId: string;
+    target: string;
+    documentDir: string;
+    captures: Capture[];
+    docPaths: string[];
+    capturesMeta: CaptureMetadata[];
+};
 const STALE_LOCK_AGE_MS = 60_000;
 
 /**
@@ -122,6 +145,200 @@ async function acquireSaveLock(lock: string): Promise<void> {
 }
 
 /**
+ * Resolves a single saved FLA identity from Capture metadata.
+ * @param captures Captures returned for this tool call.
+ * @returns The private normalized URI and display name.
+ */
+function documentIdentity(captures: Capture[]): DocumentIdentity {
+    const uris = captures.map(({ pathURI }) => pathURI);
+    if (uris.some((pathURI) => !pathURI) || uris.some((pathURI) => pathURI !== uris[0])) {
+        throw new Error("Capture set must have one saved document identity");
+    }
+    try {
+        const uri = new URL(uris[0] as string);
+        if (
+            uri.protocol !== "file:" ||
+            (uri.hostname !== "" && uri.hostname !== "localhost") ||
+            uri.search ||
+            uri.hash ||
+            !uri.pathname.toLowerCase().endsWith(".fla")
+        ) {
+            throw new Error();
+        }
+        const name = basename(decodeURIComponent(uri.pathname)).replace(/\.fla$/i, "");
+        if (!name) {
+            throw new Error();
+        }
+        return { pathURI: uri.href, name };
+    } catch {
+        throw new Error("Capture set has an invalid or ambiguous saved document identity");
+    }
+}
+
+/**
+ * Saves captures as a Baseline using a lock and staged replacement.
+ * @param context Validated paths and capture metadata.
+ * @returns Baseline metadata.
+ */
+async function saveBaseline(
+    context: BaselineContext & { overwrite?: boolean },
+): Promise<{ data: { action: "save"; name: string; document: string; captures: CaptureMetadata[] } }> {
+    const { name, identity, documentId, target, documentDir, captures, docPaths, capturesMeta, overwrite } = context;
+    const lock = join(documentDir, `.${name}.lock`);
+    await acquireSaveLock(lock).catch((error) => {
+        if (error instanceof Error && error.message === "Baseline save is already in progress") {
+            throw new Error(`Baseline save is already in progress: ${name}`);
+        }
+        throw error;
+    });
+    try {
+        const exists = await access(target).then(
+            () => true,
+            () => false,
+        );
+        if (exists && !overwrite) {
+            throw new Error(`Baseline already exists: ${name}; set overwrite: true to replace it`);
+        }
+        const stage = join(documentDir, `.${name}.tmp-${randomUUID()}`);
+        const backup = join(documentDir, `.${name}.old-${randomUUID()}`);
+        await mkdir(stage);
+        try {
+            for (let i = 0; i < captures.length; i++) {
+                await writeFile(join(stage, `${captures[i].frame}.png`), await readFile(docPaths[i]), {
+                    flag: "wx",
+                });
+            }
+            await writeFile(
+                join(stage, "metadata.json"),
+                JSON.stringify({ documentId, captures: capturesMeta } satisfies Baseline),
+                { flag: "wx" },
+            );
+            let hadOld = false;
+            try {
+                await rename(target, backup);
+                hadOld = true;
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+                    throw error;
+                }
+            }
+            try {
+                await rename(stage, target);
+            } catch (error) {
+                if (hadOld) {
+                    await rename(backup, target);
+                }
+                throw error;
+            }
+            if (hadOld) {
+                await rm(backup, { recursive: true, force: true });
+            }
+        } catch (error) {
+            await rm(stage, { recursive: true, force: true });
+            throw error;
+        }
+    } finally {
+        await rm(lock, { recursive: true, force: true });
+    }
+    return { data: { action: "save", name, document: identity.name, captures: capturesMeta } };
+}
+
+/**
+ * Compares captures with a saved Baseline and records failed diffs.
+ * @param context Validated paths, capture metadata, and comparison thresholds.
+ * @returns Comparison metadata and any failed diff images.
+ */
+async function compareBaseline(context: BaselineContext & { tolerance: number; maxChangedPercent: number }): Promise<{
+    data: {
+        action: "compare";
+        name: string;
+        document: string;
+        passed: boolean;
+        frames: Array<Record<string, unknown>>;
+    };
+    content: Array<{ type: "image"; data: string; mimeType: "image/png" } | { type: "text"; text: string }>;
+}> {
+    const { name, identity, documentId, target, documentDir, captures, docPaths, tolerance, maxChangedPercent } =
+        context;
+    const metadataPath = join(target, "metadata.json");
+    let baseline: Baseline;
+    try {
+        const safeTarget = await realpath(target);
+        const safeMetadata = await realpath(metadataPath);
+        if (!isInside(documentDir, safeTarget) || !isInside(safeTarget, safeMetadata)) {
+            throw new Error("Unsafe Baseline path");
+        }
+        baseline = JSON.parse(await readFile(safeMetadata, "utf8")) as Baseline;
+    } catch {
+        throw new Error(`Baseline not found: ${name}`);
+    }
+    if (baseline.documentId !== documentId) {
+        throw new Error(`Baseline belongs to a different document: ${name}`);
+    }
+    const diffRoot = join(target, "diffs");
+    await mkdir(diffRoot, { recursive: true });
+    const safeDiffRoot = await realpath(diffRoot);
+    if (!isInside(await realpath(target), safeDiffRoot)) {
+        throw new Error("Unsafe Baseline path");
+    }
+    const frames = [];
+    const content = [];
+    for (let i = 0; i < captures.length; i++) {
+        const capture = captures[i];
+        const prior = baseline.captures.find(
+            (item) => item.frame === capture.frame && item.timeline === capture.timeline,
+        );
+        if (!prior) {
+            frames.push({ frame: capture.frame, passed: false, reason: "Baseline frame is missing" });
+            continue;
+        }
+        if (prior.width !== capture.width || prior.height !== capture.height) {
+            frames.push({
+                frame: capture.frame,
+                passed: false,
+                reason: `Stage size differs: ${prior.width}x${prior.height} vs ${capture.width}x${capture.height}`,
+            });
+            continue;
+        }
+        const baselinePng = join(target, `${capture.frame}.png`);
+        const safePng = await realpath(baselinePng).catch(() => {
+            throw new Error(`Baseline frame is missing: ${capture.frame}`);
+        });
+        if (!isInside(await realpath(target), safePng)) {
+            throw new Error("Unsafe Baseline path");
+        }
+        const before = decodePng(safePng, await readFile(safePng));
+        const after = decodePng(docPaths[i], await readFile(docPaths[i]));
+        if (before.width !== after.width || before.height !== after.height) {
+            frames.push({
+                frame: capture.frame,
+                passed: false,
+                reason: `Image dimensions differ: ${before.width}x${before.height} vs ${after.width}x${after.height}`,
+            });
+            continue;
+        }
+        const { diff, changedPixels, changedPercent } = comparePixels(before, after, tolerance);
+        const passed = changedPercent <= maxChangedPercent;
+        const bytes = PNG.sync.write(diff);
+        let diffPath: string | undefined;
+        if (!passed && changedPixels) {
+            diffPath = join(safeDiffRoot, `${capture.frame}-${randomUUID()}.png`);
+            await writeFile(diffPath, bytes, { flag: "wx" });
+            content.push({
+                type: "image" as const,
+                data: bytes.toString("base64"),
+                mimeType: "image/png" as const,
+            });
+        }
+        frames.push({ frame: capture.frame, passed, changedPixels, changedPercent, diff: diffPath });
+    }
+    const passed = frames.length === captures.length && frames.every((item) => item.passed);
+    const data = { action: "compare" as const, name, document: identity.name, passed, frames };
+    content.push({ type: "text" as const, text: JSON.stringify(data) });
+    return { data, content };
+}
+
+/**
  * Saves named frame captures as a Baseline or compares them with one.
  * @param args Validated tool arguments.
  * @param deps Tool dependencies.
@@ -145,8 +362,6 @@ export const visualRegressionTool: ToolDefinition<typeof INPUT> = {
         if (action === "compare" && args.overwrite !== undefined) {
             throw new Error("overwrite is only valid for save");
         }
-        const tolerance = action === "compare" ? (args.tolerance ?? 8) : 8;
-        const maxChangedPercent = action === "compare" ? (args.maxChangedPercent ?? 0) : 0;
         if (frame !== undefined && range !== undefined) {
             throw new Error("Specify either frame or range, not both");
         }
@@ -155,17 +370,17 @@ export const visualRegressionTool: ToolDefinition<typeof INPUT> = {
         }
         const captureRoot = capturesDir();
         const baselineRoot = baselinesDir();
-        const captureJson = await deps.runner.execute(
-            [
-                `var __captureFrame = ${frame ?? "null"};`,
-                `var __captureRange = ${JSON.stringify(range ?? null)};`,
-                `var __captureDir = "";`,
-                "var __captureIncludeDocumentURI = true;",
-                `var __captureRoot = ${JSON.stringify(captureRoot)};`,
-                deps.bundle("capture-frame"),
-            ].join("\n"),
+        const result = await deps.jsfl.run(
+            "output/capture-frame",
+            {
+                __captureFrame: frame ?? null,
+                __captureRange: range ?? null,
+                __captureDir: "",
+                __captureIncludeDocumentURI: true,
+                __captureRoot: captureRoot,
+            },
+            CAPTURE_RESPONSE,
         );
-        const result = JSON.parse(String(captureJson)) as Capture | { captures: Capture[] };
         const captures = "captures" in result ? result.captures : [result];
         if (!captures.length || captures.length > 24) {
             throw new Error("Capture range cannot exceed 24 frames");
@@ -216,175 +431,16 @@ export const visualRegressionTool: ToolDefinition<typeof INPUT> = {
             width,
             height,
         }));
-        if (action === "save") {
-            const lock = join(documentDir, `.${name}.lock`);
-            await acquireSaveLock(lock).catch((error) => {
-                if (error instanceof Error && error.message === "Baseline save is already in progress") {
-                    throw new Error(`Baseline save is already in progress: ${name}`);
-                }
-                throw error;
-            });
-            try {
-                const exists = await access(target).then(
-                    () => true,
-                    () => false,
-                );
-                if (exists && !args.overwrite) {
-                    throw new Error(`Baseline already exists: ${name}; set overwrite: true to replace it`);
-                }
-                const stage = join(documentDir, `.${name}.tmp-${randomUUID()}`);
-                const backup = join(documentDir, `.${name}.old-${randomUUID()}`);
-                await mkdir(stage);
-                try {
-                    for (let i = 0; i < captures.length; i++) {
-                        await writeFile(join(stage, `${captures[i].frame}.png`), await readFile(docPaths[i]), {
-                            flag: "wx",
-                        });
-                    }
-                    await writeFile(
-                        join(stage, "metadata.json"),
-                        JSON.stringify({ documentId, captures: capturesMeta } satisfies Baseline),
-                        { flag: "wx" },
-                    );
-                    let hadOld = false;
-                    try {
-                        await rename(target, backup);
-                        hadOld = true;
-                    } catch (error) {
-                        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-                            throw error;
-                        }
-                    }
-                    try {
-                        await rename(stage, target);
-                    } catch (error) {
-                        if (hadOld) {
-                            await rename(backup, target);
-                        }
-                        throw error;
-                    }
-                    if (hadOld) {
-                        await rm(backup, { recursive: true, force: true });
-                    }
-                } catch (error) {
-                    await rm(stage, { recursive: true, force: true });
-                    throw error;
-                }
-            } finally {
-                await rm(lock, { recursive: true, force: true });
-            }
-            return { data: { action, name, document: identity.name, captures: capturesMeta } };
-        }
-
-        const metadataPath = join(target, "metadata.json");
-        let baseline: Baseline;
-        try {
-            const safeTarget = await realpath(target);
-            const safeMetadata = await realpath(metadataPath);
-            if (!isInside(documentDir, safeTarget) || !isInside(safeTarget, safeMetadata)) {
-                throw new Error("Unsafe Baseline path");
-            }
-            baseline = JSON.parse(await readFile(safeMetadata, "utf8")) as Baseline;
-        } catch {
-            throw new Error(`Baseline not found: ${name}`);
-        }
-        if (baseline.documentId !== documentId) {
-            throw new Error(`Baseline belongs to a different document: ${name}`);
-        }
-        const diffRoot = join(target, "diffs");
-        await mkdir(diffRoot, { recursive: true });
-        const safeDiffRoot = await realpath(diffRoot);
-        if (!isInside(await realpath(target), safeDiffRoot)) {
-            throw new Error("Unsafe Baseline path");
-        }
-        const frames = [];
-        const content = [];
-        for (let i = 0; i < captures.length; i++) {
-            const capture = captures[i];
-            const prior = baseline.captures.find(
-                (item) => item.frame === capture.frame && item.timeline === capture.timeline,
-            );
-            if (!prior) {
-                frames.push({ frame: capture.frame, passed: false, reason: "Baseline frame is missing" });
-                continue;
-            }
-            if (prior.width !== capture.width || prior.height !== capture.height) {
-                frames.push({
-                    frame: capture.frame,
-                    passed: false,
-                    reason: `Stage size differs: ${prior.width}x${prior.height} vs ${capture.width}x${capture.height}`,
-                });
-                continue;
-            }
-            const baselinePng = join(target, `${capture.frame}.png`);
-            const safePng = await realpath(baselinePng).catch(() => {
-                throw new Error(`Baseline frame is missing: ${capture.frame}`);
-            });
-            if (!isInside(await realpath(target), safePng)) {
-                throw new Error("Unsafe Baseline path");
-            }
-            const before = decodePng(safePng, await readFile(safePng));
-            const after = decodePng(docPaths[i], await readFile(docPaths[i]));
-            if (before.width !== after.width || before.height !== after.height) {
-                frames.push({
-                    frame: capture.frame,
-                    passed: false,
-                    reason: `Image dimensions differ: ${before.width}x${before.height} vs ${after.width}x${after.height}`,
-                });
-                continue;
-            }
-            const { diff, changedPixels, changedPercent } = comparePixels(before, after, tolerance);
-            const passed = changedPercent <= maxChangedPercent;
-            const bytes = PNG.sync.write(diff);
-            let diffPath: string | undefined;
-            if (!passed && changedPixels) {
-                diffPath = join(safeDiffRoot, `${capture.frame}-${randomUUID()}.png`);
-                await writeFile(diffPath, bytes, { flag: "wx" });
-                content.push({
-                    type: "image" as const,
-                    data: bytes.toString("base64"),
-                    mimeType: "image/png" as const,
-                });
-            }
-            frames.push({ frame: capture.frame, passed, changedPixels, changedPercent, diff: diffPath });
-        }
-        const passed = frames.length === captures.length && frames.every((item) => item.passed);
-        const data = { action, name, document: identity.name, passed, frames };
-        content.push({ type: "text" as const, text: JSON.stringify(data) });
-        return { data, content };
+        const context = { name, identity, documentId, target, documentDir, captures, docPaths, capturesMeta };
+        return action === "save"
+            ? saveBaseline({ ...context, overwrite: args.overwrite })
+            : compareBaseline({
+                  ...context,
+                  tolerance: args.tolerance ?? 8,
+                  maxChangedPercent: args.maxChangedPercent ?? 0,
+              });
     },
 };
-
-/**
- * Resolves a single saved FLA identity from Capture metadata.
- * @param captures Captures returned for this tool call.
- * @returns The private normalized URI and display name.
- */
-function documentIdentity(captures: Capture[]): { pathURI: string; name: string } {
-    const uris = captures.map(({ pathURI }) => pathURI);
-    if (uris.some((pathURI) => !pathURI) || uris.some((pathURI) => pathURI !== uris[0])) {
-        throw new Error("Capture set must have one saved document identity");
-    }
-    try {
-        const uri = new URL(uris[0] as string);
-        if (
-            uri.protocol !== "file:" ||
-            (uri.hostname !== "" && uri.hostname !== "localhost") ||
-            uri.search ||
-            uri.hash ||
-            !uri.pathname.toLowerCase().endsWith(".fla")
-        ) {
-            throw new Error();
-        }
-        const name = basename(decodeURIComponent(uri.pathname)).replace(/\.fla$/i, "");
-        if (!name) {
-            throw new Error();
-        }
-        return { pathURI: uri.href, name };
-    } catch {
-        throw new Error("Capture set has an invalid or ambiguous saved document identity");
-    }
-}
 
 /**
  * Registers visual_regression with the MCP server.

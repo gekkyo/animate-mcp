@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common
 // Concatenated and evaluated after export-common and edit-state. `var __docName`, `var __edits`
 // ([{file, scene, layer, start, expected, script, item?}]) and `var __newScripts`
 // ([{file, scene, layer, start, script, item?, layerDir, asLayer}]) and `var __fingerprints`

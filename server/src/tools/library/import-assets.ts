@@ -3,13 +3,13 @@ import { basename, extname, isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const IMPORT_ASSETS_INPUT = {
     paths: z.array(z.string().min(1)).min(1),
     document: z.string().min(1).optional(),
 };
+const IMPORT_ASSETS_RESULT = z.object({ document: z.string(), items: z.array(z.string()) }).strict();
 const SUPPORTED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".wav", ".mp3"]);
 
 export const importAssetsTool: ToolDefinition<typeof IMPORT_ASSETS_INPUT> = {
@@ -27,8 +27,6 @@ export const importAssetsTool: ToolDefinition<typeof IMPORT_ASSETS_INPUT> = {
      * @returns The target document and imported Library item names.
      */
     run: async ({ paths, document }: Parameters<ToolCallback<typeof IMPORT_ASSETS_INPUT>>[0], deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
         const assets = paths.map((path) => {
             if (!isAbsolute(path)) {
                 throw new Error(`Asset path must be absolute: ${path}`);
@@ -56,12 +54,11 @@ export const importAssetsTool: ToolDefinition<typeof IMPORT_ASSETS_INPUT> = {
             }),
         );
 
-        const code = jsflRun(
-            "import-assets",
+        const result = await deps.jsfl.run(
+            "library/import-assets",
             { __docName: document ?? "", __assets: assets.map(({ name, uri }) => ({ name, uri })) },
-            bundle,
+            IMPORT_ASSETS_RESULT,
         );
-        const result = JSON.parse(String(await runner.execute(code))) as { document: string; items: string[] };
         return { data: result };
     },
 };

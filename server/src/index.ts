@@ -4,8 +4,11 @@ import { pathToFileURL } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { isAnimateRunning, launcher } from "./runtime/animate-launcher.js";
-import { bundle } from "./runtime/jsfl-bundle.js";
 import { createRunner } from "./runtime/runner.js";
+import { runsDir } from "./tools/core/paths.js";
+import { createToolRegistry } from "./tools/core/registry.js";
+import { runJsflTool } from "./tools/core/run-jsfl.js";
+import { createJsflRunner } from "./tools/core/shared.js";
 import { auditDocumentTool } from "./tools/document/audit-document.js";
 import { closeDocumentTool } from "./tools/document/close-document.js";
 import { getDocumentInfoTool } from "./tools/document/get-document-info.js";
@@ -25,9 +28,6 @@ import { setAirDescriptorTool } from "./tools/output/set-air-descriptor.js";
 import { testMovieTool } from "./tools/output/test-movie.js";
 import { verifyCanvasOutputTool } from "./tools/output/verify-canvas-output.js";
 import { visualRegressionTool } from "./tools/output/visual-regression.js";
-import { runsDir } from "./tools/core/paths.js";
-import { createToolRegistry } from "./tools/core/registry.js";
-import { runJsflTool } from "./tools/core/run-jsfl.js";
 import { applyScriptsTool } from "./tools/scripts/apply-scripts.js";
 import { exportScriptsTool } from "./tools/scripts/export-scripts.js";
 import { installGreensockTool } from "./tools/scripts/install-greensock.js";
@@ -96,7 +96,7 @@ export async function serve(activeRegistry: ReturnType<typeof createToolRegistry
         { name: "animate-mcp", version: PACKAGE_VERSION },
         { instructions: activeRegistry.instructions },
     );
-    activeRegistry.register(server, { runner, bundle });
+    activeRegistry.register(server, { runner, jsfl: createJsflRunner(runner) });
 
     const transport = new StdioServerTransport();
     await server.connect(transport);

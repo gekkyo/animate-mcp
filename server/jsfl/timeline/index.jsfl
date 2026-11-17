@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common, timeline/layers, timeline/frames
 (function () {
   var document = selectDocument(), timeline = null;
   var originalTimeline = document.getTimeline(), originalLayerIndex = originalTimeline.currentLayer;

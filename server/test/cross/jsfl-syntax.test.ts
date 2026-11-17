@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-const JSFL_ROOT = fileURLToPath(new URL("../jsfl/", import.meta.url));
+const JSFL_ROOT = fileURLToPath(new URL("../../jsfl/", import.meta.url));
 
 /**
  * Find syntax constructs unsupported by Animate's ES3-era JSFL engine.

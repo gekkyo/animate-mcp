@@ -152,13 +152,17 @@ export async function resolveAirDescriptor(
         }
         return { path: args.descriptorPath };
     }
-    const info = JSON.parse(
-        String(
-            await deps.runner.execute(
-                `var __docName = ${JSON.stringify(args.document ?? "")};\n${deps.bundle("preflight-publish")}`,
-            ),
-        ),
-    ) as { name: string; platformPath?: string; playerTarget?: string };
+    const info = await deps.jsfl.run(
+        "output/preflight-publish",
+        { __docName: args.document ?? "" },
+        z
+            .object({
+                name: z.string(),
+                platformPath: z.string().optional(),
+                playerTarget: z.string().optional(),
+            })
+            .passthrough(),
+    );
     if (!info.platformPath) {
         throw new Error("Document has no AIR descriptor path.");
     }

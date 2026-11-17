@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -7,18 +6,13 @@ import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
 import { z } from "zod";
+import { createJsflRunner, type ToolDeps } from "../../src/tools/core/shared.js";
 import { registerImportAssets } from "../../src/tools/library/import-assets.js";
 
-const jsflParts = {
-    "select-document": readFileSync(new URL("../../jsfl/shared/select-document.jsfl", import.meta.url), "utf8"),
-    "export-common": readFileSync(new URL("../../jsfl/shared/export-common.jsfl", import.meta.url), "utf8"),
-    "import-assets": readFileSync(new URL("../../jsfl/library/import-assets.jsfl", import.meta.url), "utf8"),
-};
-
 /**
- * Registers import_assets against a fake document and bundled JSFL runner.
+ * Registers import_assets against a fake document and the validated JSFL seam.
  * @param document Fake document exposed to JSFL
- * @returns Tool-call helpers and requested bundle history
+ * @returns Tool-call helpers and recorded JSFL calls
  */
 function setup(document: object) {
     let registered:
@@ -33,18 +27,23 @@ function setup(document: object) {
             registered = { ...options, handler: handler as (input: unknown) => Promise<unknown> };
         },
     };
-    const bundleNames: string[][] = [];
+    const jsflCalls: { entry: string; vars: Record<string, unknown> }[] = [];
+    const runner: ToolDeps["runner"] = {
+        execute: async (code) =>
+            runInNewContext(code, {
+                fl: { documents: [document] },
+            }),
+    };
+    const jsflRunner = createJsflRunner(runner);
+    const jsfl: ToolDeps["jsfl"] = {
+        async run(entry, vars, schema, opts) {
+            jsflCalls.push({ entry, vars });
+            return jsflRunner.run(entry, vars, schema, opts);
+        },
+    };
     registerImportAssets(server as unknown as Parameters<typeof registerImportAssets>[0], {
-        runner: {
-            execute: async (code) =>
-                runInNewContext(code, {
-                    fl: { documents: [document] },
-                }),
-        },
-        bundle: (...names) => {
-            bundleNames.push(names);
-            return names.map((name) => jsflParts[name as keyof typeof jsflParts]).join("\n");
-        },
+        runner,
+        jsfl,
     });
     assert.ok(registered);
     const tool = registered;
@@ -52,7 +51,7 @@ function setup(document: object) {
     return {
         call: (input: Record<string, unknown>) => tool.handler(schema.parse(input)),
         annotations: tool.annotations,
-        bundleNames,
+        jsflCalls,
         schema,
     };
 }
@@ -132,7 +131,18 @@ test("import_assets imports supported absolute files to the Library without chan
             { uri: pathToFileURL(sound).href, toLibrary: true, showDialog: false },
         ]);
         assert.deepEqual(appState.stage, [{ name: "stage-content" }]);
-        assert.deepEqual(app.bundleNames, [["select-document", "export-common", "import-assets"]]);
+        assert.deepEqual(app.jsflCalls, [
+            {
+                entry: "library/import-assets",
+                vars: {
+                    __docName: "sample.fla",
+                    __assets: [
+                        { name: "hero image.PNG", uri: pathToFileURL(image).href },
+                        { name: "theme.mp3", uri: pathToFileURL(sound).href },
+                    ],
+                },
+            },
+        ]);
     } finally {
         await rm(dir, { recursive: true, force: true });
     }
@@ -151,7 +161,7 @@ test("import_assets validates every path before running Animate", async () => {
             assert.equal(result.isError, true);
             assert.match(result.content[0].text, /absolute|supported|exist/i);
         }
-        assert.deepEqual(app.bundleNames, []);
+        assert.deepEqual(app.jsflCalls, []);
         assert.equal(app.schema.safeParse({ paths: [] }).success, false);
     } finally {
         await rm(dir, { recursive: true, force: true });
@@ -182,7 +192,18 @@ test("import_assets refuses root and nested basename collisions before importing
             ["Assets", "Nested/taken.wav"],
         );
         assert.deepEqual(appState.selectedItems(), ["Assets"]);
-        assert.deepEqual(app.bundleNames, [["select-document", "export-common", "import-assets"]]);
+        assert.deepEqual(app.jsflCalls, [
+            {
+                entry: "library/import-assets",
+                vars: {
+                    __docName: "",
+                    __assets: [
+                        { name: "new.png", uri: pathToFileURL(first).href },
+                        { name: "taken.wav", uri: pathToFileURL(collision).href },
+                    ],
+                },
+            },
+        ]);
     } finally {
         await rm(dir, { recursive: true, force: true });
     }

@@ -1,6 +1,5 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const EASE_PRESETS = [
@@ -131,6 +130,30 @@ const EDIT_TWEEN_INPUT = {
     ops: z.array(EDIT_TWEEN_OP).min(1),
     document: z.string().optional(),
 };
+const EDIT_TWEEN_RESULT = z
+    .object({
+        applied: z.array(z.record(z.string(), z.unknown())),
+        failed: z
+            .object({
+                op: z.record(z.string(), z.unknown()),
+                error: z.string(),
+            })
+            .passthrough()
+            .nullable(),
+        skipped: z.array(z.record(z.string(), z.unknown())),
+        warnings: z.array(z.string()),
+        layers: z.array(
+            z
+                .object({
+                    name: z.string(),
+                    type: z.string(),
+                    parent: z.string().optional(),
+                    locked: z.boolean(),
+                })
+                .passthrough(),
+        ),
+    })
+    .passthrough();
 
 export const editTweenTool: ToolDefinition<typeof EDIT_TWEEN_INPUT> = {
     name: "edit_tween",
@@ -150,16 +173,11 @@ export const editTweenTool: ToolDefinition<typeof EDIT_TWEEN_INPUT> = {
      * @returns Applied, failed, and skipped operations with current layer metadata.
      */
     run: async ({ timeline, ops, document }: Parameters<ToolCallback<typeof EDIT_TWEEN_INPUT>>[0], deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
-        const code = jsflRun("tween-index", { __docName: document ?? "", __timelineRef: timeline, __ops: ops }, bundle);
-        const result = JSON.parse(String(await runner.execute(code))) as {
-            applied: typeof ops;
-            failed: { op: (typeof ops)[number]; error: string } | null;
-            skipped: typeof ops;
-            warnings: string[];
-            layers: { name: string; type: string; parent?: string; locked: boolean }[];
-        };
+        const result = await deps.jsfl.run(
+            "timeline/tween",
+            { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
+            EDIT_TWEEN_RESULT,
+        );
         return { data: result, text: `Export again before apply_scripts.\n${JSON.stringify(result)}` };
     },
 };

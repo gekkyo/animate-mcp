@@ -1,5 +1,5 @@
 // Real-Animate smoke test (not in CI): `node server/verification/smoke/scenarios/smoke-publish.mjs <name.fla>...` (docs open in Animate).
-import { registerPublish } from "../../dist/tools/output/publish.js";
+import { registerPublish } from "../../../dist/tools/output/publish.js";
 import { toolHandler } from "../lib/smoke-lib.mjs";
 
 const handle = toolHandler(registerPublish);

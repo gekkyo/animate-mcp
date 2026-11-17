@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { PNG } from "pngjs";
+import { scoped } from "../lib/mcp-server.mjs";
 import {
     assertAssetsFixtureAvailable,
     assertAssetsImported,
@@ -17,7 +18,6 @@ import {
     assertSuccessfulLibraryListing,
     readAssetsDocumentState,
 } from "../scenarios/document.mjs";
-import { scoped } from "../lib/mcp-server.mjs";
 import { createAssetsFixture } from "../scenarios/scenarios.mjs";
 
 test("assets scenario generates disposable fixtures and substitutes their absolute paths", async () => {
@@ -232,7 +232,7 @@ test("assets MCP discovery exposes only get_status and import_assets", async () 
     const assetPaths = [join(outDir, "hero.png"), join(outDir, "bgm.mp3")];
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -271,7 +271,7 @@ test("assets MCP discovery exposes only get_status and import_assets", async () 
 test("library MCP discovery exposes only get_status and edit_library", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",

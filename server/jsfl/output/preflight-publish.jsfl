@@ -1,3 +1,4 @@
+// @requires shared/export-common
 // Reads document facts and checks only explicitly supplied candidate output URIs.
 /** Returns active document facts needed by Preflight.
  * @returns Serialized document metadata and profile XML.

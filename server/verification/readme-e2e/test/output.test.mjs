@@ -555,7 +555,7 @@ test("capture_frame is scoped to the sole disposable document and pins frame and
 test("capture MCP discovery exposes only get_status and capture_frame", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -592,7 +592,7 @@ test("capture MCP discovery exposes only get_status and capture_frame", async ()
 test("publish MCP discovery exposes only get_status and publish with its document schema", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -630,7 +630,7 @@ test("publish MCP discovery exposes only get_status and publish with its documen
 test("testmovie MCP discovery exposes only get_status and test_movie without run_jsfl", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -667,7 +667,7 @@ test("testmovie MCP discovery exposes only get_status and test_movie without run
 test("Canvas MCP discovery exposes only get_status and verify_canvas_output without run_jsfl", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",

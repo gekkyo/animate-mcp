@@ -1,6 +1,5 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const ELEMENT_REFERENCE = z.union([z.number().int().nonnegative(), z.string().min(1)]);
@@ -36,6 +35,13 @@ const CONVERT_TO_SYMBOL_INPUT = {
     type: z.enum(["movie clip", "button", "graphic"]),
     registrationPoint: REGISTRATION_POINT.default("center"),
 };
+const CONVERT_TO_SYMBOL_RESULT = z
+    .object({
+        name: z.string(),
+        type: z.string(),
+        registrationPoint: z.string(),
+    })
+    .passthrough();
 
 export const convertToSymbolTool: ToolDefinition<typeof CONVERT_TO_SYMBOL_INPUT> = {
     name: "convert_to_symbol",
@@ -68,22 +74,15 @@ export const convertToSymbolTool: ToolDefinition<typeof CONVERT_TO_SYMBOL_INPUT>
         }: Parameters<ToolCallback<typeof CONVERT_TO_SYMBOL_INPUT>>[0],
         deps: ToolDeps,
     ) => {
-        const { runner, bundle } = deps;
-
-        const code = jsflRun(
-            "convert-to-symbol",
+        const result = await deps.jsfl.run(
+            "timeline/convert-to-symbol",
             {
                 __docName: document ?? "",
                 __timelineRef: timeline,
                 __request: { frame, elements, name, type, registrationPoint },
             },
-            bundle,
+            CONVERT_TO_SYMBOL_RESULT,
         );
-        const result = JSON.parse(String(await runner.execute(code))) as {
-            name: string;
-            type: string;
-            registrationPoint: string;
-        };
         return { data: result };
     },
 };

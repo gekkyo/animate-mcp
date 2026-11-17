@@ -2,17 +2,52 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
+import type { ZodType } from "zod";
+import {
+    invokeToolDefinition,
+    type ToolDeps,
+    type ToolExtra,
+    validateJsflResult,
+} from "../../src/tools/core/shared.js";
 import { testMovieTool } from "../../src/tools/output/test-movie.js";
-import { invokeToolDefinition, type ToolDeps, type ToolExtra } from "../../src/tools/core/shared.js";
 import { text, withServer } from "../helpers/fake-animate.js";
 
-/** Encodes the Output and Compiler Errors panel fields used by read-output.jsfl.
- * @param output Output-panel text.
- * @param compiler Compiler Errors panel text.
- * @returns Length-prefixed panel snapshot.
+/** Builds a recording seam fake for the Test Movie action and panel reads.
+ * @param beforeOutput Initial Output-panel text.
+ * @param readPanels Provides each later panel snapshot.
+ * @returns Tool dependencies and recorded calls.
  */
-function encodePanelSnapshot(output: string, compiler = "0 Error(s), 0 Warning(s)") {
-    return `1${output.length}:${output}${compiler.length}:${compiler}`;
+function testMovieDeps(beforeOutput: string, readPanels: () => unknown) {
+    const calls: { entry: string; vars: Record<string, unknown> }[] = [];
+    const deps: ToolDeps = {
+        runner: {
+            execute: async () => {
+                throw new Error("test_movie should not call Runner directly");
+            },
+        },
+        jsfl: {
+            async run<T>(entry: string, vars: Record<string, unknown>, schema: ZodType<T>) {
+                calls.push({ entry, vars });
+                let result: unknown;
+                if (vars.__testMovieAction === "activate") {
+                    result = true;
+                } else if (vars.__testMovieAction === "launch") {
+                    result = {
+                        startedAt: Date.now(),
+                        before: {
+                            compilerPanelAvailable: true,
+                            outputPanel: beforeOutput,
+                            compilerErrorsPanel: "0 Error(s), 0 Warning(s)",
+                        },
+                    };
+                } else if (vars.__testMovieAction === "read") {
+                    result = readPanels();
+                }
+                return validateJsflResult(entry, result, schema);
+            },
+        },
+    };
+    return { deps, calls };
 }
 
 test("test_movie runs AS3 Test Movie and returns the Output delta and compiler diagnostics", {
@@ -83,26 +118,14 @@ test("test_movie returns a marker that appears on a later poll and uses the last
     const finalCompiler =
         "**Warning** Scene 1, Layer 'Layer_1', Frame 1, Line 3, Column 7\tWarning: 1098: Late panel warning.\n\n0 Error(s), 1 Warning(s)";
     const snapshotTimes: number[] = [];
-    let executions = 0;
-    const deps: ToolDeps = {
-        runner: {
-            execute: async () => {
-                const call = executions++;
-                if (call === 0) {
-                    return "Flash";
-                }
-                if (call === 1) {
-                    return `${Date.now()}|${encodePanelSnapshot(previousOutput)}`;
-                }
-                snapshotTimes.push(Date.now());
-                return encodePanelSnapshot(
-                    Date.now() < 3_500 ? previousOutput : markerOutput,
-                    Date.now() < 4_000 ? "0 Error(s), 0 Warning(s)" : finalCompiler,
-                );
-            },
-        },
-        bundle: (...names) => names.join("\n"),
-    };
+    const { deps, calls } = testMovieDeps(previousOutput, () => {
+        snapshotTimes.push(Date.now());
+        return {
+            compilerPanelAvailable: true,
+            outputPanel: Date.now() < 3_500 ? previousOutput : markerOutput,
+            compilerErrorsPanel: Date.now() < 4_000 ? "0 Error(s), 0 Warning(s)" : finalCompiler,
+        };
+    });
     let settled = false;
     const pending = invokeToolDefinition(testMovieTool, { document: "b.fla" }, deps, {} as ToolExtra).finally(() => {
         settled = true;
@@ -113,6 +136,10 @@ test("test_movie returns a marker that appears on a later poll and uses the last
     }
     assert.equal(settled, true, "mock timers did not settle test_movie polling");
     const result = await pending;
+    assert.deepEqual(
+        calls.map(({ vars }) => vars.__testMovieAction),
+        ["activate", "launch", "read", "read", "read"],
+    );
     assert.deepEqual(snapshotTimes, [3_000, 3_500, 4_000]);
     assert.equal(result.structuredContent?.runtimeOutput, "\nREADME_TEST_MOVIE_OK");
     assert.equal(result.structuredContent?.compilerErrorsPanel, finalCompiler);
@@ -133,22 +160,11 @@ test("test_movie returns a marker that appears on a later poll and uses the last
 
 test("test_movie returns the full output when the Output panel prefix changes", async (t) => {
     t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000 });
-    let executions = 0;
-    const deps: ToolDeps = {
-        runner: {
-            execute: async () => {
-                const call = executions++;
-                if (call === 0) {
-                    return "Flash";
-                }
-                if (call === 1) {
-                    return `${Date.now()}|${encodePanelSnapshot("old panel")}`;
-                }
-                return encodePanelSnapshot("new panel output");
-            },
-        },
-        bundle: (...names) => names.join("\n"),
-    };
+    const { deps } = testMovieDeps("old panel", () => ({
+        compilerPanelAvailable: true,
+        outputPanel: "new panel output",
+        compilerErrorsPanel: "0 Error(s), 0 Warning(s)",
+    }));
     let settled = false;
     const pending = invokeToolDefinition(testMovieTool, { document: "b.fla" }, deps, {} as ToolExtra).finally(() => {
         settled = true;
@@ -165,23 +181,14 @@ test("test_movie returns an empty runtime delta after the poll cap and final gra
     t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000 });
     const previousOutput = "previous trace";
     const snapshotTimes: number[] = [];
-    let executions = 0;
-    const deps: ToolDeps = {
-        runner: {
-            execute: async () => {
-                const call = executions++;
-                if (call === 0) {
-                    return "Flash";
-                }
-                if (call === 1) {
-                    return `${Date.now()}|${encodePanelSnapshot(previousOutput)}`;
-                }
-                snapshotTimes.push(Date.now());
-                return encodePanelSnapshot(previousOutput);
-            },
-        },
-        bundle: (...names) => names.join("\n"),
-    };
+    const { deps } = testMovieDeps(previousOutput, () => {
+        snapshotTimes.push(Date.now());
+        return {
+            compilerPanelAvailable: true,
+            outputPanel: previousOutput,
+            compilerErrorsPanel: "0 Error(s), 0 Warning(s)",
+        };
+    });
     let settled = false;
     const pending = invokeToolDefinition(testMovieTool, { document: "b.fla" }, deps, {} as ToolExtra).finally(() => {
         settled = true;
@@ -202,22 +209,11 @@ test("test_movie recovers output arriving during the final Player startup grace"
     t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000 });
     const previousOutput = "previous trace";
     const markerOutput = `${previousOutput}\nREADME_TEST_MOVIE_OK`;
-    let executions = 0;
-    const deps: ToolDeps = {
-        runner: {
-            execute: async () => {
-                const call = executions++;
-                if (call === 0) {
-                    return "Flash";
-                }
-                if (call === 1) {
-                    return `${Date.now()}|${encodePanelSnapshot(previousOutput)}`;
-                }
-                return encodePanelSnapshot(Date.now() >= 9_000 ? markerOutput : previousOutput);
-            },
-        },
-        bundle: (...names) => names.join("\n"),
-    };
+    const { deps } = testMovieDeps(previousOutput, () => ({
+        compilerPanelAvailable: true,
+        outputPanel: Date.now() >= 9_000 ? markerOutput : previousOutput,
+        compilerErrorsPanel: "0 Error(s), 0 Warning(s)",
+    }));
     let settled = false;
     const pending = invokeToolDefinition(testMovieTool, { document: "b.fla" }, deps, {} as ToolExtra).finally(() => {
         settled = true;

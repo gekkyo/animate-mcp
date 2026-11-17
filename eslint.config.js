@@ -34,6 +34,21 @@ export default [
     rules: jsdocRules,
   },
   {
+    files: ["server/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        Buffer: "readonly",
+        clearTimeout: "readonly",
+        console: "readonly",
+        process: "readonly",
+        setInterval: "readonly",
+        setTimeout: "readonly",
+        URL: "readonly",
+      },
+    },
+    rules: { "no-undef": "error" },
+  },
+  {
     files: ["server/jsfl/**/*.jsfl"],
     languageOptions: {
       ecmaVersion: 5,

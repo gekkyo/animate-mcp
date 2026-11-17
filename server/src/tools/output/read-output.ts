@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
+import { PANEL_RESULT } from "./lib/panel-result.js";
 import { type Diagnostic, parseCompilerOutput } from "./publish.js";
 
 export const readOutputTool: ToolDefinition = {
@@ -20,38 +21,17 @@ export const readOutputTool: ToolDefinition = {
      * @returns Raw panel contents and parsed compiler diagnostics when available.
      */
     run: async (_args: never, deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
         const id = randomUUID();
         const outputPath = join(tmpdir(), `animate-mcp-read-output-${id}-output.txt`);
         const compilerPath = join(tmpdir(), `animate-mcp-read-output-${id}-compiler-errors.txt`);
-        const prelude = `var __readOutputPath = ${JSON.stringify(outputPath)};\nvar __readCompilerPath = ${JSON.stringify(compilerPath)};\n`;
-        const result = String(await runner.execute(`${prelude}${bundle("read-output")}`));
-        let offset = 0;
-        const compilerPanelAvailable = result.charAt(offset++) === "1";
-        /**
-         * Reads one length-prefixed field from the panel response.
-         * @returns The next decoded panel field.
-         */
-        const readField = () => {
-            const separator = result.indexOf(":", offset);
-            if (separator < 0 || !/^\d+$/.test(result.slice(offset, separator))) {
-                throw new Error("Animate returned an invalid read_output result");
-            }
-            const length = Number(result.slice(offset, separator));
-            offset = separator + 1;
-            const field = result.slice(offset, offset + length);
-            if (field.length !== length) {
-                throw new Error("Animate returned an invalid read_output result");
-            }
-            offset += length;
-            return field;
-        };
-        const outputPanel = readField();
-        const compilerErrorsPanel = readField();
-        if (offset !== result.length) {
-            throw new Error("Animate returned an invalid read_output result");
-        }
+        const { compilerPanelAvailable, outputPanel, compilerErrorsPanel } = await deps.jsfl.run(
+            "output/read-output-json",
+            {
+                __readOutputPath: outputPath,
+                __readCompilerPath: compilerPath,
+            },
+            PANEL_RESULT,
+        );
 
         let compilerDiagnostics: {
             status: "parsed" | "unavailable";

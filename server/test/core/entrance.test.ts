@@ -9,7 +9,7 @@ import { ProgressNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { INSTRUCTIONS } from "../../src/index.js";
 import { registerEntrances } from "../../src/tools/core/entrance.js";
 import type { ToolDefinition } from "../../src/tools/core/shared.js";
-import { text, withServer } from "./helpers/fake-animate.js";
+import { text, withServer } from "../helpers/fake-animate.js";
 
 test("entrances search exact names, all query terms, and prioritize name matches", { timeout: 20_000 }, async () => {
     await withServer(
@@ -155,7 +155,11 @@ test("execute_write forwards request cancellation to the target tool", { timeout
     const server = new McpServer({ name: "t", version: "0" });
     registerEntrances(server, [slowTool], {
         runner: { execute: async () => Promise.reject(new Error("unused")) },
-        bundle: () => "",
+        jsfl: {
+            run: async () => {
+                throw new Error("unused");
+            },
+        },
     });
     const client = new Client({ name: "c", version: "0" });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

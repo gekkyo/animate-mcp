@@ -1,3 +1,4 @@
+// @requires shared/export-common
 // Captures one frame or an inclusive range from the active document's currently edited timeline.
 /** Exports one or more timeline frames as PNG files and restores the current frame.
  * @returns Serialized capture metadata.

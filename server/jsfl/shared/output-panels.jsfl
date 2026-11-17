@@ -1,20 +1,13 @@
 // Reads Animate's global Output and Compiler Errors panels through temporary files.
 /** Reads Output and Compiler Errors panel contents and removes the temporary files.
- * @returns Length-prefixed panel text with a compiler-panel availability flag.
+ * @returns Panel data.
  */
-(function () {
+function readOutputPanels() {
   var outputURI = FLfile.platformPathToURI(__readOutputPath);
   var compilerURI = FLfile.platformPathToURI(__readCompilerPath);
   var output = "";
   var compiler = "";
   var compilerAvailable = true;
-  /** Encodes text with its character length so panel contents can contain delimiters.
-   * @param text Panel content to encode.
-   * @returns Length-prefixed text.
-   */
-  function encode(text) {
-    return String(text).length + ":" + String(text);
-  }
   try {
     fl.outputPanel.save(outputURI);
     if (FLfile.exists(outputURI)) output = FLfile.read(outputURI);
@@ -24,9 +17,13 @@
     } catch (error) {
       compilerAvailable = false;
     }
-    return (compilerAvailable ? "1" : "0") + encode(output) + encode(compiler);
+    return {
+      compilerPanelAvailable: compilerAvailable,
+      outputPanel: output,
+      compilerErrorsPanel: compiler
+    };
   } finally {
     if (FLfile.exists(outputURI)) FLfile.remove(outputURI);
     if (FLfile.exists(compilerURI)) FLfile.remove(compilerURI);
   }
-})()
+}

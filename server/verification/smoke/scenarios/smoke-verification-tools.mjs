@@ -4,15 +4,15 @@ import { access, mkdtemp, readFile, rm, stat, unlink } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { PNG } from "pngjs";
-import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
-import { registerAuditDocument } from "../../dist/tools/document/audit-document.js";
-import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
-import { registerSaveDocument } from "../../dist/tools/document/save-document.js";
-import { registerCaptureFrame } from "../../dist/tools/output/capture-frame.js";
-import { registerDiffCaptures } from "../../dist/tools/output/diff-captures.js";
-import { registerVerifyCanvasOutput } from "../../dist/tools/output/verify-canvas-output.js";
+import { isAnimateRunning } from "../../../dist/runtime/animate-launcher.js";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
-import { toolHandler } from "../lib/smoke-lib.mjs";
+import { registerAuditDocument } from "../../../dist/tools/document/audit-document.js";
+import { registerOpenDocument } from "../../../dist/tools/document/open-document.js";
+import { registerSaveDocument } from "../../../dist/tools/document/save-document.js";
+import { registerCaptureFrame } from "../../../dist/tools/output/capture-frame.js";
+import { registerDiffCaptures } from "../../../dist/tools/output/diff-captures.js";
+import { registerVerifyCanvasOutput } from "../../../dist/tools/output/verify-canvas-output.js";
+import { closeDocumentByPath, toolHandler } from "../lib/smoke-lib.mjs";
 
 assert.equal(await isAnimateRunning(), true, "Animate must already be running; refusing to launch it");
 
@@ -185,10 +185,7 @@ try {
 } finally {
     if (savedPath) {
         try {
-            await runValue(
-                `(function () { var __docs = fl.documents || [], __matches = []; for (var __i = 0; __i < __docs.length; __i++) if (__docs[__i].pathURI === ${JSON.stringify(savedPath)}) __matches.push(__docs[__i]); if (__matches.length > 1) throw new Error("Multiple documents match disposable path"); if (__matches.length) __matches[0].close(false); for (__i = 0; __i < (fl.documents || []).length; __i++) if (fl.documents[__i].pathURI === ${JSON.stringify(savedPath)}) throw new Error("Disposable document remained open"); return true; })()`,
-                "close exact disposable Canvas FLA",
-            );
+            await closeDocumentByPath(runJsfl, savedPath);
         } catch (error) {
             failure = failure ? new AggregateError([failure, error], "Smoke and document cleanup failed") : error;
         }

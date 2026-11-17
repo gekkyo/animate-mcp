@@ -1,11 +1,20 @@
 // Real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/scenarios/smoke-edit-elements.mjs`.
 // Creates and closes a disposable document; Animate must be running.
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
-import { registerEditElements } from "../../dist/tools/timeline/edit-elements.js";
-import { registerEditTween } from "../../dist/tools/timeline/edit-tween.js";
-import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timeline.js";
-import { toolHandler } from "../lib/smoke-lib.mjs";
+import { registerEditElements } from "../../../dist/tools/timeline/edit-elements.js";
+import { registerEditTween } from "../../../dist/tools/timeline/edit-tween.js";
+import { registerInspectTimeline } from "../../../dist/tools/timeline/inspect-timeline.js";
+import {
+    closeDocumentByPath,
+    createSavedAs3Document,
+    createSavedHtmlCanvasDocument,
+    toolHandler,
+} from "../lib/smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
 const editElements = toolHandler(registerEditElements);
@@ -34,11 +43,19 @@ const verifyTool = (result, description) => {
 const near = (actual, expected, description) =>
     assert.ok(Math.abs(actual - expected) < 0.1, `${description}: ${actual}`);
 
-const setup = await runJsfl({
-    code: `var __smokeDoc = null, __canvasDoc = null;
+const tempDir = await mkdtemp(join(tmpdir(), "animate-mcp-edit-elements-"));
+const smokePath = join(tempDir, "edit-elements-as3.fla");
+const canvasPath = join(tempDir, "edit-elements-canvas.fla");
+let smokeDocument;
+let canvasDocument;
+let documentName;
+let canvasDocumentName;
+let failure;
 try {
-  fl.createDocument("timeline", 550, 400, 24);
-  __smokeDoc = fl.getDocumentDOM();
+    smokeDocument = await createSavedAs3Document(runJsfl, pathToFileURL(smokePath).href, "");
+    documentName = smokeDocument.name;
+    const setup = await runJsfl({
+        code: `(function () { var __smokeDoc = null, __documents = fl.documents || []; for (var __index = 0; __index < __documents.length; __index++) if (__documents[__index].pathURI === ${JSON.stringify(smokeDocument.pathURI)}) __smokeDoc = __documents[__index]; if (!__smokeDoc) throw new Error("Disposable AS3 smoke document not found");
   var __symbol = "EditElementsSmokeSymbol";
   __smokeDoc.library.addNewItem("movie clip", __symbol);
   var __graphic = "EditElementsSmokeGraphic", __graphicTarget = "EditElementsSmokeGraphicTarget";
@@ -89,10 +106,31 @@ try {
   __smokeDoc.library.addItemToDocument({ x: 50, y: 50 }, __symbol);
   __sceneTwoTimeline.layers[__sceneTwoLayer].frames[0].elements[0].name = "sceneTwoInstance";
   __smokeDoc.editScene(0);
+  fl.setActiveWindow(__smokeDoc);
+  return __smokeDoc.name;
+})()`,
+    });
+    if (setup.isError || setup.structuredContent?.result !== documentName) {
+        throw new Error(`Could not prepare Animate smoke document: ${message(setup)}`);
+    }
 
-  fl.createDocument("htmlcanvas", 550, 400, 24);
-  __canvasDoc = fl.getDocumentDOM();
-  var __canvasGraphic = "EditElementsCanvasGraphic", __canvasGraphicTarget = "EditElementsCanvasGraphicTarget";
+    canvasDocument = await createSavedHtmlCanvasDocument(runJsfl, pathToFileURL(canvasPath).href);
+    canvasDocumentName = canvasDocument.name;
+    const canvasSetup = await runJsfl({
+        code: `(function () { var __documents = fl.documents || [], __canvasDoc = null, __smokeDoc = null; for (var __index = 0; __index < __documents.length; __index++) { if (__documents[__index].pathURI === ${JSON.stringify(canvasDocument.pathURI)}) __canvasDoc = __documents[__index]; if (__documents[__index].pathURI === ${JSON.stringify(smokeDocument.pathURI)}) __smokeDoc = __documents[__index]; } if (!__canvasDoc || !__smokeDoc) throw new Error("Disposable smoke document not found");
+   var __canvasGraphic = "EditElementsCanvasGraphic", __canvasGraphicTarget = "EditElementsCanvasGraphicTarget";
+   /** Creates a three-frame graphic symbol in the supplied document.
+    * @param __doc Animate document.
+    * @param __name Library name for the symbol.
+    */
+   function __makeGraphic(__doc, __name) {
+    __doc.library.addNewItem("graphic", __name);
+    __doc.library.editItem(__name);
+    var __graphicTimeline = __doc.getTimeline();
+    __graphicTimeline.insertFrames(2, true, 0);
+    if (__graphicTimeline.frameCount < 3) throw new Error("Could not create the 3-frame graphic " + __name);
+    __doc.exitEditMode();
+  }
   __makeGraphic(__canvasDoc, __canvasGraphic);
   __makeGraphic(__canvasDoc, __canvasGraphicTarget);
   var __canvasTimeline = __canvasDoc.getTimeline();
@@ -102,23 +140,13 @@ try {
   __canvasDoc.library.addItemToDocument({ x: 50, y: 50 }, __canvasGraphic);
   __canvasTimeline.layers[__canvasLayer].frames[0].elements[0].name = "graphicInstance";
   fl.setActiveWindow(__smokeDoc);
-  __smokeDoc.name + "\\t" + __canvasDoc.name;
-} catch (__error) {
-  if (__canvasDoc && __canvasDoc !== __smokeDoc) __canvasDoc.close(false);
-  if (__smokeDoc) __smokeDoc.close(false);
-  throw __error;
-}`,
-});
-if (setup.isError) {
-    throw new Error(`Could not prepare Animate smoke document: ${message(setup)}`);
-}
-const [documentName, canvasDocumentName] = String(setup.structuredContent?.result ?? "").split("\t");
-if (!documentName || !canvasDocumentName) {
-    throw new Error(`Setup did not return both document names: ${message(setup)}`);
-}
+  return __smokeDoc.name + "\\t" + __canvasDoc.name;
+})()`,
+    });
+    if (canvasSetup.isError || canvasSetup.structuredContent?.result !== `${documentName}\t${canvasDocumentName}`) {
+        throw new Error(`Could not prepare Canvas smoke document: ${message(canvasSetup)}`);
+    }
 
-let failure;
-try {
     const initialTimeline = verifyTool(
         await inspectTimeline({ document: documentName, timeline: 0, frame: 1 }),
         "inspect prepared timeline",
@@ -503,22 +531,19 @@ try {
 } catch (error) {
     failure = error;
 } finally {
-    try {
-        const closed = await runJsfl({
-            code: `var __names = [${JSON.stringify(documentName)}, ${JSON.stringify(canvasDocumentName)}];
-for (var __nameIndex = 0; __nameIndex < __names.length; __nameIndex++) {
-  var __doc = null;
-  for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __names[__nameIndex]) __doc = fl.documents[__index];
-  if (__doc) __doc.close(false);
-}
-'closed';`,
-        });
-        if (closed.isError) {
-            const error = new Error(`Could not close the smoke document: ${message(closed)}`);
-            failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup failed") : error;
-        } else {
-            console.log(`Closed smoke document ${documentName}`);
+    for (const disposable of [canvasDocument, smokeDocument]) {
+        if (!disposable) {
+            continue;
         }
+        try {
+            await closeDocumentByPath(runJsfl, disposable.pathURI);
+            console.log(`Closed smoke document ${disposable.name}`);
+        } catch (error) {
+            failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup failed") : error;
+        }
+    }
+    try {
+        await rm(tempDir, { recursive: true, force: true });
     } catch (error) {
         failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup failed") : error;
     }

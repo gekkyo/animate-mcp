@@ -1,40 +1,26 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { createJsflRunner, type ToolDeps } from "../../src/tools/core/shared.js";
 import { registerGetDocumentInfo } from "../../src/tools/document/get-document-info.js";
 import { registerSetDocumentProperties } from "../../src/tools/document/set-document-properties.js";
-
-const jsflParts = {
-    "select-document": readFileSync(new URL("../../jsfl/shared/select-document.jsfl", import.meta.url), "utf8"),
-    "export-common": readFileSync(new URL("../../jsfl/shared/export-common.jsfl", import.meta.url), "utf8"),
-    "document-runtime-info": readFileSync(
-        new URL("../../jsfl/document/document-runtime-info.jsfl", import.meta.url),
-        "utf8",
-    ),
-    "set-document-properties": readFileSync(
-        new URL("../../jsfl/document/set-document-properties.jsfl", import.meta.url),
-        "utf8",
-    ),
-    "get-document-info": readFileSync(new URL("../../jsfl/document/get-document-info.jsfl", import.meta.url), "utf8"),
-};
+import { createFakeJsfl } from "../helpers/fake-jsfl.js";
 
 /**
  * Registers a document tool against selected fake globals.
  * @param register Tool registration function under test
  * @param globals Animate API globals exposed to JSFL
  * @param expectedName Expected registered tool name
+ * @param jsfl JSFL seam supplied to the tool
  * @returns The captured tool registration
  */
 function registerTool(
-    register: (
-        server: McpServer,
-        deps: { runner: { execute: (code: string) => Promise<unknown> }; bundle: (...names: string[]) => string },
-    ) => void,
+    register: (server: McpServer, deps: ToolDeps) => void,
     globals: Record<string, unknown>,
     expectedName: string,
+    jsfl?: ToolDeps["jsfl"],
 ) {
     let registered:
         | {
@@ -54,12 +40,9 @@ function registerTool(
             registered = { name, ...options, handler: handler as (input: unknown) => Promise<unknown> };
         },
     };
-    register(server as unknown as McpServer, {
-        runner: {
-            execute: async (code) => runInNewContext(code, globals),
-        },
-        bundle: (...names) => names.map((name) => jsflParts[name as keyof typeof jsflParts]).join("\n"),
-    });
+    const runner = { execute: async (code: string) => runInNewContext(code, globals) };
+    const deps: ToolDeps = { runner, jsfl: jsfl ?? createJsflRunner(runner) };
+    register(server as unknown as McpServer, deps);
     assert.equal(registered?.name, expectedName);
     return registered;
 }
@@ -148,6 +131,18 @@ test("set_document_properties requires at least one valid property", async () =>
 
 test("get_document_info includes the document background color", async () => {
     const document = makeDocument("sample.fla");
+    const fake = createFakeJsfl({
+        "document/get-document-info": {
+            name: "sample.fla",
+            width: 550,
+            height: 400,
+            frameRate: 24,
+            backgroundColor: "#FFFFFF",
+            timelines: ["Scene 1"],
+            asVersion: "AS3",
+            folder: null,
+        },
+    });
     const tool = registerTool(
         registerGetDocumentInfo,
         {
@@ -157,8 +152,10 @@ test("get_document_info includes the document background color", async () => {
             },
         },
         "get_document_info",
+        fake.jsfl,
     );
     const result = (await tool?.handler({})) as { structuredContent: Record<string, unknown> };
 
     assert.equal(result.structuredContent.backgroundColor, "#FFFFFF");
+    assert.deepEqual(fake.calls, [{ entry: "document/get-document-info", vars: {} }]);
 });

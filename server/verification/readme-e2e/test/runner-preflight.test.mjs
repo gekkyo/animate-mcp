@@ -3,7 +3,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { aggregateFailure, prepareReadmeE2eScenario, runFixturePreflight } from "./runner.mjs";
+import { aggregateFailure, prepareReadmeE2eScenario, runFixturePreflight } from "../runner.mjs";
 import { CANVAS_FRAME_SCRIPT } from "../scenarios/scenarios.mjs";
 
 /** Returns a fake status handler scoped to one disposable document.

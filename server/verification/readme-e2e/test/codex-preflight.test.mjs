@@ -76,7 +76,7 @@ test("Codex preflight parses generated config under isolated homes and handshake
     const diagnosticsHome = join(directory, "diagnostics-home");
     const executableDirectory = await mkdtemp(join(tmpdir(), "readme-e2e-codex-parser-"));
     const codexPath = await createFakeCodexParser(executableDirectory);
-    const serverPath = fileURLToPath(new URL("./runner.mjs", import.meta.url));
+    const serverPath = fileURLToPath(new URL("../runner.mjs", import.meta.url));
     try {
         const result = await runCodexPreflight({
             serverPath,
@@ -160,7 +160,7 @@ test("restricted MCP handshake needs only the allowlisted environment and perfor
     const directory = await mkdtemp(join(tmpdir(), "readme-e2e-mcp-handshake-test-"));
     const isolatedHome = join(directory, "home");
     const outDir = join(directory, "workspace");
-    const serverPath = fileURLToPath(new URL("./runner.mjs", import.meta.url));
+    const serverPath = fileURLToPath(new URL("../runner.mjs", import.meta.url));
     try {
         await mkdir(isolatedHome);
         await mkdir(outDir);

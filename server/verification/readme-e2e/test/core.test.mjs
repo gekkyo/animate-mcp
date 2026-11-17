@@ -384,7 +384,7 @@ test("Claude timeout waits for the fake process group to close", async () => {
 test("restricted MCP discovery omits run_jsfl and document operations", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: { ...process.env, README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla" },
     });
     const client = new Client({ name: "readme-e2e-test", version: "1.0.0" });

@@ -5,14 +5,19 @@ import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
-import { registerGetStatus } from "../../dist/tools/document/get-status.js";
-import { registerPreflightPublish } from "../../dist/tools/output/preflight-publish.js";
-import { registerVisualRegression } from "../../dist/tools/output/visual-regression.js";
+import { isAnimateRunning } from "../../../dist/runtime/animate-launcher.js";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
-import { registerEditTween } from "../../dist/tools/timeline/edit-tween.js";
-import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timeline.js";
-import { closeDocumentByPath, toolHandler } from "../lib/smoke-lib.mjs";
+import { registerGetStatus } from "../../../dist/tools/document/get-status.js";
+import { registerPreflightPublish } from "../../../dist/tools/output/preflight-publish.js";
+import { registerVisualRegression } from "../../../dist/tools/output/visual-regression.js";
+import { registerEditTween } from "../../../dist/tools/timeline/edit-tween.js";
+import { registerInspectTimeline } from "../../../dist/tools/timeline/inspect-timeline.js";
+import {
+    closeDocumentByPath,
+    createSavedAs3Document,
+    createSavedHtmlCanvasDocument,
+    toolHandler,
+} from "../lib/smoke-lib.mjs";
 
 assert.equal(await isAnimateRunning(), true, "Animate must already be running; refusing to launch it");
 const getStatus = toolHandler(registerGetStatus);
@@ -54,49 +59,45 @@ const run = async (code) => {
 };
 
 try {
-    const identity = await run(`(function () {
-      var prior = fl.documents.length, doc = null;
-      try {
-        fl.createDocument("timeline", 550, 400, 24);
-        doc = fl.getDocumentDOM();
-        if (!doc || fl.documents.length !== prior + 1) throw new Error("Could not create disposable document");
-        doc.getTimeline().insertFrames(4, true, 0);
-        doc.addNewRectangle({ left: 40, top: 40, right: 120, bottom: 120 }, 0);
-        doc.library.addNewItem("movie clip", "V021SmokeSymbol");
-        doc.library.editItem("V021SmokeSymbol");
-        doc.addNewRectangle({ left: 0, top: 0, right: 50, bottom: 50 }, 0);
-        doc.exitEditMode();
-        doc.library.addNewItem("graphic", "V021SmokeGraphic");
-        doc.library.editItem("V021SmokeGraphic");
-        var graphicTimeline = doc.getTimeline();
-        graphicTimeline.insertFrames(2, true, 0);
-        doc.addNewRectangle({ left: 0, top: 0, right: 40, bottom: 40 }, 0);
-        doc.exitEditMode();
-        var timeline = doc.getTimeline();
-        for (var i = 0; i < 2; i++) {
-          var layer = i === 0 ? "classicTween" : "motionTween";
-          var index = timeline.addNewLayer(layer, "normal", true);
-          timeline.currentLayer = index;
-          timeline.currentFrame = 0;
-          doc.library.addItemToDocument({ x: 50, y: 50 }, "V021SmokeSymbol");
-          timeline.layers[index].frames[0].elements[0].name = i === 0 ? "classicInstance" : "motionInstance";
-        }
-        var graphicLayer = timeline.addNewLayer("graphicPlayback", "normal", true);
-        timeline.currentLayer = graphicLayer;
+    const created = await createSavedAs3Document(runJsfl, pathToFileURL(flaPath).href, "");
+    documentName = created.name;
+    savedPath = created.pathURI;
+    await run(`(function () {
+      var docs = fl.documents || [], doc = null;
+      for (var i = 0; i < docs.length; i++) if (docs[i].pathURI === ${JSON.stringify(savedPath)}) doc = docs[i];
+      if (!doc) throw new Error("Disposable AS3 document not found");
+      doc.getTimeline().insertFrames(4, true, 0);
+      doc.addNewRectangle({ left: 40, top: 40, right: 120, bottom: 120 }, 0);
+      doc.library.addNewItem("movie clip", "V021SmokeSymbol");
+      doc.library.editItem("V021SmokeSymbol");
+      doc.addNewRectangle({ left: 0, top: 0, right: 50, bottom: 50 }, 0);
+      doc.exitEditMode();
+      doc.library.addNewItem("graphic", "V021SmokeGraphic");
+      doc.library.editItem("V021SmokeGraphic");
+      var graphicTimeline = doc.getTimeline();
+      graphicTimeline.insertFrames(2, true, 0);
+      doc.addNewRectangle({ left: 0, top: 0, right: 40, bottom: 40 }, 0);
+      doc.exitEditMode();
+      var timeline = doc.getTimeline();
+      for (var i = 0; i < 2; i++) {
+        var layer = i === 0 ? "classicTween" : "motionTween";
+        var index = timeline.addNewLayer(layer, "normal", true);
+        timeline.currentLayer = index;
         timeline.currentFrame = 0;
-        doc.library.addItemToDocument({ x: 180, y: 60 }, "V021SmokeGraphic");
-        timeline.layers[graphicLayer].frames[0].elements[0].name = "graphicPlaybackInstance";
-        timeline.layers[graphicLayer].frames[0].elements[0].loop = "play once";
-        timeline.layers[graphicLayer].frames[0].elements[0].firstFrame = 2;
-        if (fl.saveDocument(doc, ${JSON.stringify(pathToFileURL(flaPath).href)}) !== true) throw new Error("Could not save disposable AS3 document");
-        fl.setActiveWindow(doc);
-        return doc.name + "\\t" + doc.pathURI;
-      } catch (error) { if (doc) doc.close(false); throw error; }
+        doc.library.addItemToDocument({ x: 50, y: 50 }, "V021SmokeSymbol");
+        timeline.layers[index].frames[0].elements[0].name = i === 0 ? "classicInstance" : "motionInstance";
+      }
+      var graphicLayer = timeline.addNewLayer("graphicPlayback", "normal", true);
+      timeline.currentLayer = graphicLayer;
+      timeline.currentFrame = 0;
+      doc.library.addItemToDocument({ x: 180, y: 60 }, "V021SmokeGraphic");
+      timeline.layers[graphicLayer].frames[0].elements[0].name = "graphicPlaybackInstance";
+      timeline.layers[graphicLayer].frames[0].elements[0].loop = "play once";
+      timeline.layers[graphicLayer].frames[0].elements[0].firstFrame = 2;
+      if (fl.saveDocument(doc, ${JSON.stringify(pathToFileURL(flaPath).href)}) !== true) throw new Error("Could not save disposable AS3 document");
+      fl.setActiveWindow(doc);
+      return true;
     })()`);
-    const [name, pathURI] = String(identity).split("\t");
-    assert.ok(name && pathURI, "No saved document identity returned");
-    documentName = name;
-    savedPath = pathURI;
     await run(`(function(){var d=fl.getDocumentDOM(); d.getTimeline().currentLayer=0; return true;})()`);
     console.log("PASS setup: created and saved disposable AS3 document in os.tmpdir().");
 
@@ -189,20 +190,12 @@ try {
     );
 
     const canvasFlaPath = join(tempDir, "v021-canvas.fla");
-    const canvasIdentity = await run(`(function(){
-      var doc=null;
-      try {
-        fl.createDocument("htmlcanvas",550,400,24);
-        doc=fl.getDocumentDOM();
-        if(!doc || doc.type!=="htmlcanvas") throw new Error("Could not create disposable Canvas document");
-        if(fl.saveDocument(doc,${JSON.stringify(pathToFileURL(canvasFlaPath).href)})!==true) throw new Error("Could not save disposable Canvas document");
-        fl.setActiveWindow(doc);
-        return doc.name+"\\t"+doc.pathURI;
-      } catch(error) { if(doc) doc.close(false); throw error; }
-    })()`);
-    const [canvasName, savedCanvasPath] = String(canvasIdentity).split("\t");
-    assert.ok(canvasName && savedCanvasPath, "No saved Canvas identity returned");
-    canvasPath = savedCanvasPath;
+    const canvasCreated = await createSavedHtmlCanvasDocument(runJsfl, pathToFileURL(canvasFlaPath).href);
+    const canvasName = canvasCreated.name;
+    canvasPath = canvasCreated.pathURI;
+    await run(
+        `(function(){var docs=fl.documents||[]; for(var i=0;i<docs.length;i++) if(docs[i].pathURI===${JSON.stringify(canvasPath)}) {fl.setActiveWindow(docs[i]); return true;} throw new Error("Saved Canvas document not found");})()`,
+    );
     const canvasProfile = String(
         await run(
             `(function(){var docs=fl.documents; for(var i=0;i<docs.length;i++) if(docs[i].pathURI===${JSON.stringify(canvasPath)}) return docs[i].exportPublishProfileString(); throw new Error("Saved Canvas document not found");})()`,
@@ -271,7 +264,7 @@ try {
         homedir(),
         ".animate-mcp",
         "baselines",
-        `doc-${createHash("sha256").update(pathURI).digest("hex").slice(0, 24)}`,
+        `doc-${createHash("sha256").update(savedPath).digest("hex").slice(0, 24)}`,
     );
     const baselinePath = join(baselineRoot, baselineName);
     const saved = verify(

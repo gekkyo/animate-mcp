@@ -3,8 +3,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { TOOLS } from "../../dist/index.js";
-import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
+import { TOOLS } from "../../../dist/index.js";
+import { isAnimateRunning } from "../../../dist/runtime/animate-launcher.js";
 import { createToolRegistry } from "../../../dist/tools/core/registry.js";
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "../lib/smoke-lib.mjs";
 

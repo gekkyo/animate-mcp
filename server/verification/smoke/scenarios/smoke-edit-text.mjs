@@ -1,10 +1,19 @@
 // Real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/scenarios/smoke-edit-text.mjs`.
 // Creates and closes disposable AS3 and HTML5 Canvas documents; Animate must be running.
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
-import { registerEditText } from "../../dist/tools/timeline/edit-text.js";
-import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timeline.js";
-import { toolHandler } from "../lib/smoke-lib.mjs";
+import { registerEditText } from "../../../dist/tools/timeline/edit-text.js";
+import { registerInspectTimeline } from "../../../dist/tools/timeline/inspect-timeline.js";
+import {
+    closeDocumentByPath,
+    createSavedAs3Document,
+    createSavedHtmlCanvasDocument,
+    toolHandler,
+} from "../lib/smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
 const editText = toolHandler(registerEditText);
@@ -33,45 +42,33 @@ const expectRefusal = (result, description, expectedMessage) => {
     assert.match(message(result), expectedMessage, `${description} returned an unexpected error`);
 };
 
-const setup = await runJsfl({
-    code: `(function () {
-  var created = [], names = [];
-  try {
-    fl.createDocument("timeline", 550, 400, 24);
-    var as3 = fl.getDocumentDOM();
-    created.push(as3);
-    if (!as3 || as3.type !== "Flash" || String(as3.asVersion).indexOf("3") < 0) throw new Error("Could not create an AS3 smoke document");
-    var as3Timeline = as3.getTimeline(), as3Layer = as3Timeline.addNewLayer("TextSmokeAS3", "normal", true);
-    as3Timeline.layers[as3Layer].locked = true;
-    names.push(as3.name);
-
-    fl.createDocument("htmlcanvas", 550, 400, 24);
-    var canvas = fl.getDocumentDOM();
-    created.push(canvas);
-    if (!canvas || canvas.type !== "htmlcanvas") throw new Error("Could not create an HTML5 Canvas smoke document");
-    var canvasTimeline = canvas.getTimeline(), canvasLayer = canvasTimeline.addNewLayer("TextSmokeCanvas", "normal", true);
-    canvasTimeline.layers[canvasLayer].locked = true;
-    names.push(canvas.name);
-    if (names[0] === names[1]) throw new Error("Animate assigned the disposable documents the same name");
-    fl.setActiveWindow(as3);
-    return names.join("\\t");
-  } catch (error) {
-    for (var index = 0; index < created.length; index++) if (created[index]) created[index].close(false);
-    throw error;
-  }
-})()`,
-});
-if (setup.isError) {
-    throw new Error(`Could not prepare text smoke documents: ${message(setup)}`);
-}
-const names = String(setup.structuredContent?.result ?? "").split("\t");
-if (names.length !== 2 || names.some((name) => !name)) {
-    throw new Error(`Setup returned invalid document names: ${message(setup)}`);
-}
-const [as3Document, canvasDocument] = names;
+const tempDir = await mkdtemp(join(tmpdir(), "animate-mcp-edit-text-"));
+const as3Path = join(tempDir, "edit-text-as3.fla");
+const canvasPath = join(tempDir, "edit-text-canvas.fla");
+let as3Disposable;
+let canvasDisposable;
+let as3Document;
+let canvasDocument;
 let failure;
 
 try {
+    as3Disposable = await createSavedAs3Document(runJsfl, pathToFileURL(as3Path).href, "");
+    as3Document = as3Disposable.name;
+    const as3Setup = await runJsfl({
+        code: `(function () { var __docs = fl.documents || [], as3 = null; for (var __index = 0; __index < __docs.length; __index++) if (__docs[__index].pathURI === ${JSON.stringify(as3Disposable.pathURI)}) as3 = __docs[__index]; if (!as3) throw new Error("Disposable AS3 smoke document not found"); var timeline = as3.getTimeline(), layer = timeline.addNewLayer("TextSmokeAS3", "normal", true); timeline.layers[layer].locked = true; return as3.name; })()`,
+    });
+    if (as3Setup.isError || as3Setup.structuredContent?.result !== as3Document) {
+        throw new Error(`Could not prepare AS3 text smoke document: ${message(as3Setup)}`);
+    }
+    canvasDisposable = await createSavedHtmlCanvasDocument(runJsfl, pathToFileURL(canvasPath).href);
+    canvasDocument = canvasDisposable.name;
+    const canvasSetup = await runJsfl({
+        code: `(function () { var __docs = fl.documents || [], canvas = null, as3 = null; for (var __index = 0; __index < __docs.length; __index++) { if (__docs[__index].pathURI === ${JSON.stringify(canvasDisposable.pathURI)}) canvas = __docs[__index]; if (__docs[__index].pathURI === ${JSON.stringify(as3Disposable.pathURI)}) as3 = __docs[__index]; } if (!canvas || canvas.type !== "htmlcanvas") throw new Error("Disposable Canvas smoke document not found"); var timeline = canvas.getTimeline(), layer = timeline.addNewLayer("TextSmokeCanvas", "normal", true); timeline.layers[layer].locked = true; if (!as3 || as3.name === canvas.name) throw new Error("Animate assigned the disposable documents invalid names"); fl.setActiveWindow(as3); return canvas.name; })()`,
+    });
+    if (canvasSetup.isError || canvasSetup.structuredContent?.result !== canvasDocument) {
+        throw new Error(`Could not prepare Canvas text smoke document: ${message(canvasSetup)}`);
+    }
+
     const as3Added = verifyTool(
         await editText({
             document: as3Document,
@@ -239,14 +236,20 @@ try {
 } catch (error) {
     failure = error;
 } finally {
-    const cleanup = await runJsfl({
-        code: `(function () { var names = ${JSON.stringify(names)}, docs = fl.documents || [], matches = []; for (var i = 0; i < names.length; i++) { var found = []; for (var j = 0; j < docs.length; j++) if (docs[j].name === names[i]) found.push(docs[j]); if (found.length !== 1) throw new Error("Expected exactly one disposable document named " + names[i] + "; found " + found.length); matches.push(found[0]); } for (i = 0; i < matches.length; i++) matches[i].close(false); return matches.length; })()`,
-    });
-    if (cleanup.isError || cleanup.structuredContent?.result !== 2) {
-        const cleanupError = new Error(`Could not close disposable text smoke documents: ${message(cleanup)}`);
-        failure = failure
-            ? new AggregateError([failure, cleanupError], "Smoke test and cleanup both failed")
-            : cleanupError;
+    for (const disposable of [canvasDisposable, as3Disposable]) {
+        if (!disposable) {
+            continue;
+        }
+        try {
+            await closeDocumentByPath(runJsfl, disposable.pathURI);
+        } catch (error) {
+            failure = failure ? new AggregateError([failure, error], "Smoke test and cleanup both failed") : error;
+        }
+    }
+    try {
+        await rm(tempDir, { recursive: true, force: true });
+    } catch (error) {
+        failure = failure ? new AggregateError([failure, error], "Smoke test and temporary cleanup failed") : error;
     }
 }
 

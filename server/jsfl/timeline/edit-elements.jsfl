@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common, timeline/helpers, shared/element-read
 (function () {
 // `var __docName`, `var __timelineRef`, and `var __ops` are injected before this file.
   var document = selectDocument(), timeline = null;

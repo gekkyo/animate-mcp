@@ -8,8 +8,9 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PNG } from "pngjs";
+import type { ZodType } from "zod";
+import { type ToolDeps, type ToolExtra, validateJsflResult } from "../../src/tools/core/shared.js";
 import { registerVisualRegression, visualRegressionTool } from "../../src/tools/output/visual-regression.js";
-import type { ToolExtra } from "../../src/tools/core/shared.js";
 
 /**
  * Encodes a single opaque pixel for baseline comparison tests.
@@ -35,34 +36,46 @@ async function fixture() {
     let captures: Array<{ frame: number; width: number; height: number; bytes: Buffer }> = [];
     let documentURI: string | undefined = "file:///projects/doc.fla";
     let failure: Error | undefined;
-    const deps = {
+    const calls: { entry: string; vars: Record<string, unknown> }[] = [];
+    const deps: ToolDeps = {
         runner: {
             execute: async () => {
+                throw new Error("Unexpected direct Runner call");
+            },
+        },
+        jsfl: {
+            async run<T>(entry: string, vars: Record<string, unknown>, schema: ZodType<T>) {
+                calls.push({ entry, vars });
                 if (failure) {
                     throw failure;
                 }
-                return JSON.stringify({
-                    captures: await Promise.all(
-                        captures.map(async ({ frame, width, height, bytes }, index) => {
-                            const path = join(captureDir, `${frame}.png`);
-                            await writeFile(path, bytes);
-                            return {
-                                path,
-                                pathURI: Array.isArray(documentURI) ? documentURI[index] : documentURI,
-                                frame,
-                                timeline: "Scene 1",
-                                width,
-                                height,
-                            };
-                        }),
-                    ),
-                });
+                return validateJsflResult(
+                    entry,
+                    {
+                        captures: await Promise.all(
+                            captures.map(async ({ frame, width, height, bytes }, index) => {
+                                const path = join(captureDir, `${frame}.png`);
+                                await writeFile(path, bytes);
+                                return {
+                                    path,
+                                    pathURI: Array.isArray(documentURI) ? documentURI[index] : documentURI,
+                                    frame,
+                                    timeline: "Scene 1",
+                                    width,
+                                    height,
+                                };
+                            }),
+                        ),
+                    },
+                    schema,
+                );
             },
         },
-        bundle: () => "",
     };
     return {
         home,
+        deps,
+        calls,
         set: (items: typeof captures, uri?: string | Array<string | undefined>) => {
             captures = items;
             if (uri !== undefined) {
@@ -125,6 +138,14 @@ test("visual_regression handles missing frames, stage mismatches, pass results, 
             { frame: 2, width: 1, height: 1, bytes: image(20) },
         ]);
         const saved = await f.run({ action: "save", name: "golden", range: { start: 1, end: 2 } });
+        assert.equal(f.calls[0].entry, "output/capture-frame");
+        assert.deepEqual(f.calls[0].vars, {
+            __captureFrame: null,
+            __captureRange: { start: 1, end: 2 },
+            __captureDir: "",
+            __captureIncludeDocumentURI: true,
+            __captureRoot: join(f.home, ".animate-mcp", "captures"),
+        });
         assert.equal(saved.data.action, "save");
         await assert.rejects(f.run({ action: "save", name: "golden", frame: 1 }), /already exists/);
         f.fail(new Error("simulated capture failure"));
@@ -181,19 +202,7 @@ test("visual_regression rejects oversized ranges and unsafe baseline names throu
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     try {
         f.set([{ frame: 1, width: 1, height: 1, bytes: image(20) }]);
-        registerVisualRegression(server, {
-            runner: {
-                execute: async () =>
-                    JSON.stringify({
-                        path: join(f.home, ".animate-mcp", "captures", "doc", "1.png"),
-                        frame: 1,
-                        timeline: "Scene 1",
-                        width: 1,
-                        height: 1,
-                    }),
-            },
-            bundle: () => "",
-        });
+        registerVisualRegression(server, f.deps);
         await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
         const listed = await client.listTools();
         const schema = listed.tools.find(({ name }) => name === "visual_regression")?.inputSchema as {

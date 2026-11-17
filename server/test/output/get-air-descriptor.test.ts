@@ -3,14 +3,19 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { runGetAirDescriptor } from "../../src/tools/output/get-air-descriptor.js";
 import type { ToolDeps } from "../../src/tools/core/shared.js";
+import { runGetAirDescriptor } from "../../src/tools/output/get-air-descriptor.js";
+import { createFakeJsfl } from "../helpers/fake-jsfl.js";
 
 const deps: ToolDeps = {
-    bundle: (...names) => names.join(" "),
     runner: {
         execute: async () => {
             throw new Error("Animate should not run");
+        },
+    },
+    jsfl: {
+        run: async () => {
+            throw new Error("Animate should not use jsfl.run");
         },
     },
 };
@@ -70,21 +75,26 @@ test("document resolution uses Animate and reports playerTarget", async () => {
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {
         await writeFile(join(dir, "desktop-app.xml"), await readFile("air-sample/desktop-app.xml"));
+        const fake = createFakeJsfl({
+            "output/preflight-publish": {
+                name: "desktop.fla",
+                platformPath: join(dir, "desktop.fla"),
+                playerTarget: "AIR 51.3 for Desktop",
+            },
+        });
         const result = await runGetAirDescriptor(
             { document: "desktop.fla" },
             {
-                bundle: () => "bundle",
                 runner: {
-                    execute: async () =>
-                        JSON.stringify({
-                            name: "desktop.fla",
-                            platformPath: join(dir, "desktop.fla"),
-                            playerTarget: "AIR 51.3 for Desktop",
-                        }),
+                    execute: async () => {
+                        throw new Error("Unexpected direct Runner call");
+                    },
                 },
+                jsfl: fake.jsfl,
             },
         );
         assert.equal(result.playerTarget, "AIR 51.3 for Desktop");
+        assert.deepEqual(fake.calls, [{ entry: "output/preflight-publish", vars: { __docName: "desktop.fla" } }]);
     } finally {
         await rm(dir, { recursive: true, force: true });
     }

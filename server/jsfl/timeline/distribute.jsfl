@@ -1,3 +1,4 @@
+// @requires timeline/helpers
   /** Splits a single-span layer of symbol instances into one normal layer per instance.
    * @param ctx Document and timeline state.
     * @param ctx Document and timeline state.

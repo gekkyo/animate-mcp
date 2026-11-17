@@ -5,10 +5,10 @@ import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
-import { registerGetDocumentInfo } from "../../dist/tools/document/get-document-info.js";
-import { registerSetDocumentProperties } from "../../dist/tools/document/set-document-properties.js";
-import { registerImportAssets } from "../../dist/tools/library/import-assets.js";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
+import { registerGetDocumentInfo } from "../../../dist/tools/document/get-document-info.js";
+import { registerSetDocumentProperties } from "../../../dist/tools/document/set-document-properties.js";
+import { registerImportAssets } from "../../../dist/tools/library/import-assets.js";
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "../lib/smoke-lib.mjs";
 
 const TEMP_ROOT = "/private/var/folders/c2/dmv_gdrs3jzcjpbgsv8t2k4c0000gn/T/opencode";

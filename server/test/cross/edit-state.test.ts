@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 
-const EDIT_STATE_SOURCE = fileURLToPath(new URL("../jsfl/shared/edit-state.jsfl", import.meta.url));
+const EDIT_STATE_SOURCE = fileURLToPath(new URL("../../jsfl/shared/edit-state.jsfl", import.meta.url));
 
 /**
  * Build two timelines with a saved nonempty selection for edit-state restoration tests.

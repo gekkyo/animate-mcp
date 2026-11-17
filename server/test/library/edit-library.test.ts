@@ -1,29 +1,25 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createJsflRunner, type ToolDeps } from "../../src/tools/core/shared.js";
 import { registerEditLibrary } from "../../src/tools/library/edit-library.js";
 import { text, withServer } from "../helpers/fake-animate.js";
-
-const libraryJsflParts = {
-    "select-document": readFileSync(new URL("../../jsfl/shared/select-document.jsfl", import.meta.url), "utf8"),
-    "edit-state": readFileSync(new URL("../../jsfl/shared/edit-state.jsfl", import.meta.url), "utf8"),
-    "export-common": readFileSync(new URL("../../jsfl/shared/export-common.jsfl", import.meta.url), "utf8"),
-    "library-helpers": readFileSync(new URL("../../jsfl/library/helpers.jsfl", import.meta.url), "utf8"),
-    "library-ops": readFileSync(new URL("../../jsfl/library/ops.jsfl", import.meta.url), "utf8"),
-    "library-index": readFileSync(new URL("../../jsfl/library/index.jsfl", import.meta.url), "utf8"),
-};
+import { createFakeJsfl } from "../helpers/fake-jsfl.js";
 
 /**
  * Registers edit_library against a minimal fake document.
  * @param document Fake document exposed to the JSFL runner
+ * @param jsfl Optional JSFL seam override
  * @returns Captured tool handler
  */
-function libraryToolFor(document: Record<string, unknown>) {
+function libraryToolFor(document: Record<string, unknown>, jsfl?: ToolDeps["jsfl"]) {
     let handler: ((input: unknown) => Promise<unknown>) | undefined;
+    const runner: ToolDeps["runner"] = {
+        execute: async (code) => runInNewContext(code, { fl: { documents: [document] } }),
+    };
     registerEditLibrary(
         {
             registerTool(_name: string, _options: unknown, callback: ToolCallback) {
@@ -31,11 +27,8 @@ function libraryToolFor(document: Record<string, unknown>) {
             },
         } as unknown as McpServer,
         {
-            runner: {
-                execute: async (code) => runInNewContext(code, { fl: { documents: [document] } }),
-            },
-            bundle: (...names) =>
-                names.map((name) => libraryJsflParts[name as keyof typeof libraryJsflParts]).join("\n"),
+            runner,
+            jsfl: jsfl ?? createJsflRunner(runner),
         },
     );
     assert.ok(handler);
@@ -106,6 +99,27 @@ function makeLibraryDocument(items: { name: string; itemType: string }[], frame:
     };
     return document;
 }
+
+test("edit_library uses the recording JSFL seam and preserves result keys", async () => {
+    const ops = [{ op: "createFolder", path: "Actors" }];
+    const result = {
+        applied: ops,
+        results: [{ op: ops[0], result: { path: "Actors" } }],
+        failed: null,
+        skipped: [],
+        warnings: [],
+    };
+    const fake = createFakeJsfl({ "library/index": result });
+    const handler = libraryToolFor(makeLibraryDocument([], {}), fake.jsfl);
+
+    const response = (await handler({ document: "sample.fla", ops })) as {
+        structuredContent: unknown;
+        content: { type: string; text?: string }[];
+    };
+
+    assert.deepEqual(response.structuredContent, result);
+    assert.deepEqual(fake.calls, [{ entry: "library/index", vars: { __docName: "sample.fla", __ops: ops } }]);
+});
 
 test("edit_library creates folders, moves and renames items, and lists unused items", { timeout: 30_000 }, () =>
     withServer({}, async (client, tempDir) => {

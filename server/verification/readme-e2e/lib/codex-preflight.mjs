@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { createAssetsFixture, selectedScenario } from "../scenarios/scenarios.mjs";
 import { CODEX_MCP_ENV_VARS, codexArgs } from "./codex.mjs";
 import { writeReadmeDiagnostic } from "./diagnostics.mjs";
-import { createAssetsFixture, selectedScenario } from "../scenarios/scenarios.mjs";
 
 const MAX_CODEX_OUTPUT_BYTES = 16_384;
 

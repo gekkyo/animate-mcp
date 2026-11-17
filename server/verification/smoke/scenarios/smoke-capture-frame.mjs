@@ -1,12 +1,13 @@
 // Real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/scenarios/smoke-capture-frame.mjs [frame] [dir]` or `--range start:end[:step] [dir]`.
-// Creates a temporary 5-frame document, activates it, and closes it with close(false) afterwards; never saves or publishes. Animate must be running.
+// Creates a temporary saved 5-frame document, activates it, and closes it with close(false) afterwards; never publishes. Animate must be running.
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { registerCaptureFrame } from "../../dist/tools/output/capture-frame.js";
+import { pathToFileURL } from "node:url";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
-import { toolHandler } from "../lib/smoke-lib.mjs";
+import { registerCaptureFrame } from "../../../dist/tools/output/capture-frame.js";
+import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "../lib/smoke-lib.mjs";
 
 const handle = toolHandler(registerCaptureFrame);
 const runJsfl = toolHandler(registerRunJsfl);
@@ -40,20 +41,16 @@ if (args[0] === "--range") {
     dir = dirArg;
 }
 
-// fl.setActiveWindow takes effect only after the Run returns, so setup is its own Run.
-const documentName = await executeJsfl(`var __smokeDoc = null;
-try {
-  fl.createDocument("timeline", 550, 400, 24);
-  __smokeDoc = fl.getDocumentDOM();
-  __smokeDoc.getTimeline().insertFrames(4, true, 0);
-  fl.setActiveWindow(__smokeDoc);
-  __smokeDoc.name;
-} catch (__error) {
-  if (__smokeDoc) __smokeDoc.close(false);
-  throw __error;
-}`);
 const disposableDir = dir ? undefined : await mkdtemp(join(tmpdir(), "animate-mcp-capture-smoke-"));
+const documentDir = await mkdtemp(join(tmpdir(), "animate-mcp-capture-document-"));
+const flaPath = join(documentDir, "capture-frame.fla");
+let disposable;
 try {
+    disposable = await createSavedAs3Document(runJsfl, pathToFileURL(flaPath).href, "");
+    // fl.setActiveWindow takes effect only after the Run returns, so setup is its own Run.
+    await executeJsfl(
+        `(function () { var __documents = fl.documents || [], __smokeDoc = null; for (var __index = 0; __index < __documents.length; __index++) if (__documents[__index].pathURI === ${JSON.stringify(disposable.pathURI)}) __smokeDoc = __documents[__index]; if (!__smokeDoc) throw new Error("Disposable capture smoke document not found"); __smokeDoc.getTimeline().insertFrames(4, true, 0); fl.setActiveWindow(__smokeDoc); return __smokeDoc.name; })()`,
+    );
     if ("range" in input) {
         const originalFrame = Number(await executeJsfl("fl.getDocumentDOM().getTimeline().currentFrame"));
         const frameCount = Number(await executeJsfl("fl.getDocumentDOM().getTimeline().frameCount"));
@@ -115,7 +112,8 @@ try {
     if (disposableDir) {
         await rm(disposableDir, { recursive: true, force: true });
     }
-    await executeJsfl(
-        `var __closeName = ${JSON.stringify(documentName)}; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __closeName) { fl.documents[__index].close(false); break; } true;`,
-    );
+    if (disposable) {
+        await closeDocumentByPath(runJsfl, disposable.pathURI);
+    }
+    await rm(documentDir, { recursive: true, force: true });
 }

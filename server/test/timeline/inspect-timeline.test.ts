@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
+import { createJsflRunner } from "../../src/tools/core/shared.js";
 import { registerInspectTimeline } from "../../src/tools/timeline/inspect-timeline.js";
 import { stateLog, text, withServer } from "../helpers/fake-animate.js";
 
@@ -152,20 +151,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
         context,
     );
     let handler: ((input: unknown) => Promise<unknown>) | undefined;
-    const bundlePaths: Record<string, string> = {
-        "select-document": "server/jsfl/shared/select-document.jsfl",
-        "edit-state": "server/jsfl/shared/edit-state.jsfl",
-        "export-common": "server/jsfl/shared/export-common.jsfl",
-        "element-read": "server/jsfl/shared/element-read.jsfl",
-        "inspect-timeline": "server/jsfl/timeline/inspect-timeline.jsfl",
-    };
-    /**
-     * Loads requested JSFL source files for the fixture.
-     * @param names Requested bundle names.
-     * @returns Concatenated JSFL source.
-     */
-    const bundle = (...names: string[]) =>
-        names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
+    const runner = { execute: async (code: string) => runInContext(code, context) };
     registerInspectTimeline(
         {
             registerTool: (_name: string, _config: unknown, callback: (input: unknown) => unknown) => {
@@ -173,8 +159,8 @@ var fl = { documents: [__doc], trace: function () {} };`,
             },
         } as unknown as Parameters<typeof registerInspectTimeline>[0],
         {
-            runner: { execute: async (code) => runInContext(code, context) },
-            bundle,
+            runner,
+            jsfl: createJsflRunner(runner),
         },
     );
 
@@ -227,20 +213,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
         context,
     );
     let handler: ((input: unknown) => Promise<unknown>) | undefined;
-    const bundlePaths: Record<string, string> = {
-        "select-document": "server/jsfl/shared/select-document.jsfl",
-        "edit-state": "server/jsfl/shared/edit-state.jsfl",
-        "export-common": "server/jsfl/shared/export-common.jsfl",
-        "element-read": "server/jsfl/shared/element-read.jsfl",
-        "inspect-timeline": "server/jsfl/timeline/inspect-timeline.jsfl",
-    };
-    /**
-     * Loads requested JSFL source files for the fixture.
-     * @param names Requested bundle names.
-     * @returns Concatenated JSFL source.
-     */
-    const bundle = (...names: string[]) =>
-        names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
+    const runner = { execute: async (code: string) => runInContext(code, context) };
     registerInspectTimeline(
         {
             registerTool: (_name: string, _config: unknown, callback: (input: unknown) => unknown) => {
@@ -248,8 +221,8 @@ var fl = { documents: [__doc], trace: function () {} };`,
             },
         } as unknown as Parameters<typeof registerInspectTimeline>[0],
         {
-            runner: { execute: async (code) => runInContext(code, context) },
-            bundle,
+            runner,
+            jsfl: createJsflRunner(runner),
         },
     );
 
@@ -286,8 +259,11 @@ var fl = { documents: [__doc], trace: function () {} };`,
 
     runInContext("__keyframe.tweenType = 'shape'; __frameAssignments.length = 0;", context);
     const shapeTween = (await handler?.({ timeline: 0, frame: 2, geometry: true })) as {
+        isError?: boolean;
+        content?: { text: string }[];
         structuredContent: { layers: { elements: Record<string, unknown>[] }[] };
     };
+    assert.equal(shapeTween.isError, undefined, shapeTween.content?.[0].text);
     assert.equal("interpolated" in shapeTween.structuredContent.layers[0].elements[0], false);
     assert.deepEqual(JSON.parse(JSON.stringify(runInContext("__frameAssignments", context))), []);
 

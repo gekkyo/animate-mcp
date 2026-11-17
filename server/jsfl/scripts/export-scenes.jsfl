@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common
 // Concatenated and evaluated after export-common. `var __docName = "..."` (empty string = unspecified) is injected before it.
 // The result is a JSON string (hand-built, since JSFL has no JSON).
 /** Exports scene timelines and structure fingerprints as JSON text.

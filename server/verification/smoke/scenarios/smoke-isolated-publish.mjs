@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
-import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
-import { registerSaveDocument } from "../../dist/tools/document/save-document.js";
-import { registerPublish } from "../../dist/tools/output/publish.js";
+import { isAnimateRunning } from "../../../dist/runtime/animate-launcher.js";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
-import { toolHandler } from "../lib/smoke-lib.mjs";
+import { registerOpenDocument } from "../../../dist/tools/document/open-document.js";
+import { registerSaveDocument } from "../../../dist/tools/document/save-document.js";
+import { registerPublish } from "../../../dist/tools/output/publish.js";
+import { closeDocumentByPath, toolHandler } from "../lib/smoke-lib.mjs";
 
 assert.equal(await isAnimateRunning(), true, "Animate must already be running; refusing to launch it");
 
@@ -113,10 +113,14 @@ try {
 } finally {
     if (savedPath || documentName) {
         try {
-            await runValue(
-                `(function () { var __docs = fl.documents || [], __matches = []; for (var __i = 0; __i < __docs.length; __i++) { var __doc = __docs[__i]; if ((${JSON.stringify(savedPath)} && __doc.pathURI === ${JSON.stringify(savedPath)}) || (!${JSON.stringify(savedPath)} && __doc.name === ${JSON.stringify(documentName)} && !__doc.pathURI)) __matches.push(__doc); } if (__matches.length > 1) throw new Error("Multiple matching disposable documents found"); if (__matches.length) __matches[0].close(false); return __matches.length; })()`,
-                "close disposable document without saving",
-            );
+            if (savedPath) {
+                await closeDocumentByPath(runJsfl, savedPath);
+            } else {
+                await runValue(
+                    `(function () { var __docs = fl.documents || [], __matches = []; for (var __i = 0; __i < __docs.length; __i++) if (__docs[__i].name === ${JSON.stringify(documentName)} && !__docs[__i].pathURI) __matches.push(__docs[__i]); if (__matches.length > 1) throw new Error("Multiple matching disposable documents found"); if (__matches.length) __matches[0].close(false); return __matches.length; })()`,
+                    "close disposable document without saving",
+                );
+            }
         } catch (error) {
             failure = failure ? new AggregateError([failure, error], "Smoke and document cleanup failed") : error;
         }

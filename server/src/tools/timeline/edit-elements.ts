@@ -1,6 +1,5 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const COLOR_EFFECT = z.discriminatedUnion("mode", [
@@ -79,6 +78,12 @@ const EDIT_ELEMENTS_INPUT = {
     document: z.string().optional(),
     ops: z.array(EDIT_ELEMENT_OP).min(1),
 };
+const EDIT_ELEMENTS_RESULT = z
+    .object({
+        applied: z.number(),
+        elements: z.array(z.record(z.string(), z.unknown())),
+    })
+    .passthrough();
 
 export const editElementsTool: ToolDefinition<typeof EDIT_ELEMENTS_INPUT> = {
     name: "edit_elements",
@@ -101,17 +106,11 @@ export const editElementsTool: ToolDefinition<typeof EDIT_ELEMENTS_INPUT> = {
         { timeline, document, ops }: Parameters<ToolCallback<typeof EDIT_ELEMENTS_INPUT>>[0],
         deps: ToolDeps,
     ) => {
-        const { runner, bundle } = deps;
-
-        const code = jsflRun(
-            "edit-elements",
+        const result = await deps.jsfl.run(
+            "timeline/edit-elements",
             { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
-            bundle,
+            EDIT_ELEMENTS_RESULT,
         );
-        const result = JSON.parse(String(await runner.execute(code))) as {
-            applied: number;
-            elements: Record<string, unknown>[];
-        };
         return { data: result };
     },
 };

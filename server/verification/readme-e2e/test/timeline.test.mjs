@@ -409,7 +409,7 @@ test("successful trace requires a successful edit_timeline call", () => {
 test("stage MCP discovery exposes only its three tools", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -434,7 +434,7 @@ test("stage MCP discovery exposes only its three tools", async () => {
 test("text MCP discovery exposes only get_status, inspect_timeline, and edit_text", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -462,7 +462,7 @@ test("text MCP discovery exposes only get_status, inspect_timeline, and edit_tex
 test("instance MCP discovery exposes only get_status, inspect_timeline, and edit_elements", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -490,7 +490,7 @@ test("instance MCP discovery exposes only get_status, inspect_timeline, and edit
 test("symbol MCP discovery exposes only get_status, inspect_timeline, and convert_to_symbol", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -535,7 +535,7 @@ test("symbol MCP discovery exposes only get_status, inspect_timeline, and conver
 test("inspect MCP discovery exposes only get_status and inspect_timeline", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",
@@ -568,7 +568,7 @@ test("inspect MCP discovery exposes only get_status and inspect_timeline", async
 test("tween MCP discovery exposes only get_status, inspect_timeline, and edit_tween", async () => {
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [new URL("./runner.mjs", import.meta.url).pathname, "--mcp-server"],
+        args: [new URL("../runner.mjs", import.meta.url).pathname, "--mcp-server"],
         env: {
             ...process.env,
             README_E2E_DOCUMENT_URI: "file:///tmp/disposable.fla",

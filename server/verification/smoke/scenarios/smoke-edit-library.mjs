@@ -1,9 +1,13 @@
 // Disposable real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/scenarios/smoke-edit-library.mjs`.
-// Creates and closes a temporary AS3 document without saving or publishing it; Animate must be running.
+// Creates and closes a temporary AS3 document; Animate must be running.
 import assert from "node:assert/strict";
-import { registerEditLibrary } from "../../dist/tools/library/edit-library.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
-import { toolHandler } from "../lib/smoke-lib.mjs";
+import { registerEditLibrary } from "../../../dist/tools/library/edit-library.js";
+import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "../lib/smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
 const editLibrary = toolHandler(registerEditLibrary);
@@ -24,36 +28,6 @@ const verifyTool = (result, description) => {
     return content;
 };
 
-const setup = await runJsfl({
-    code: `var __smokeDoc = null;
-try {
-  fl.createDocument("timeline", 550, 400, 24);
-  __smokeDoc = fl.getDocumentDOM();
-  if (__smokeDoc.type !== "Flash" || String(__smokeDoc.asVersion).indexOf("3") < 0) throw new Error("Could not create a Flash/AS3 smoke document");
-  __smokeDoc.library.addNewItem("movie clip", "EditLibraryLinkageSmokeSymbol");
-  __smokeDoc.library.addNewItem("movie clip", "EditLibrarySelectionSmokeSymbol");
-  fl.setActiveWindow(__smokeDoc);
-  __smokeDoc.name;
-} catch (__error) {
-  if (__smokeDoc) __smokeDoc.close(false);
-  throw __error;
-}`,
-});
-if (setup.isError) {
-    throw new Error(`Could not prepare linkage smoke document: ${message(setup)}`);
-}
-const documentName = setup.structuredContent?.result;
-if (!documentName) {
-    throw new Error(`Setup did not return a document name: ${message(setup)}`);
-}
-
-const selected = await runJsfl({
-    code: `var __smokeName = ${JSON.stringify(documentName)}; var __smokeDoc = null; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __smokeName) __smokeDoc = fl.documents[__index]; __smokeDoc.library.selectNone(); __smokeDoc.library.selectItem("EditLibrarySelectionSmokeSymbol"); __smokeDoc.name;`,
-});
-if (selected.isError) {
-    throw new Error(`Could not prepare Library selection: ${message(selected)}`);
-}
-
 /** Verifies an operation preserved the selected Library item.
  * @param description Operation description for assertion errors.
  */
@@ -69,8 +43,27 @@ const assertSelectionPreserved = async (description) => {
     );
 };
 
+const tempDir = await mkdtemp(join(tmpdir(), "animate-mcp-edit-library-"));
+const flaPath = join(tempDir, "edit-library.fla");
+let disposable;
+let documentName;
 let failure;
 try {
+    disposable = await createSavedAs3Document(runJsfl, pathToFileURL(flaPath).href, "");
+    documentName = disposable.name;
+    const setup = await runJsfl({
+        code: `(function () { var __smokeDoc = null, __documents = fl.documents || []; for (var __index = 0; __index < __documents.length; __index++) if (__documents[__index].pathURI === ${JSON.stringify(disposable.pathURI)}) __smokeDoc = __documents[__index]; if (!__smokeDoc) throw new Error("Disposable Library smoke document not found"); __smokeDoc.library.addNewItem("movie clip", "EditLibraryLinkageSmokeSymbol"); __smokeDoc.library.addNewItem("movie clip", "EditLibrarySelectionSmokeSymbol"); fl.setActiveWindow(__smokeDoc); return __smokeDoc.name; })()`,
+    });
+    if (setup.isError || setup.structuredContent?.result !== documentName) {
+        throw new Error(`Could not prepare linkage smoke document: ${message(setup)}`);
+    }
+    const selected = await runJsfl({
+        code: `var __smokeName = ${JSON.stringify(documentName)}; var __smokeDoc = null; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __smokeName) __smokeDoc = fl.documents[__index]; __smokeDoc.library.selectNone(); __smokeDoc.library.selectItem("EditLibrarySelectionSmokeSymbol"); __smokeDoc.name;`,
+    });
+    if (selected.isError) {
+        throw new Error(`Could not prepare Library selection: ${message(selected)}`);
+    }
+
     const createdSymbols = verifyTool(
         await editLibrary({
             document: documentName,
@@ -220,16 +213,17 @@ try {
 } catch (error) {
     failure = error;
 } finally {
-    try {
-        const cleanup = await runJsfl({
-            code: `var __closeName = ${JSON.stringify(documentName)}; for (var __index = 0; __index < fl.documents.length; __index++) if (fl.documents[__index].name === __closeName) { fl.documents[__index].close(false); break; } true;`,
-        });
-        if (cleanup.isError) {
-            const error = new Error(`Could not close disposable linkage smoke document: ${message(cleanup)}`);
+    if (disposable) {
+        try {
+            await closeDocumentByPath(runJsfl, disposable.pathURI);
+        } catch (error) {
             failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup failed") : error;
         }
+    }
+    try {
+        await rm(tempDir, { recursive: true, force: true });
     } catch (error) {
-        failure = failure ? new AggregateError([failure, error], "Smoke test and document cleanup failed") : error;
+        failure = failure ? new AggregateError([failure, error], "Smoke test and temporary cleanup failed") : error;
     }
 }
 if (failure) {

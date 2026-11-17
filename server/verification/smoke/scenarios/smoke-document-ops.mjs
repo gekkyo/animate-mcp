@@ -4,11 +4,11 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { registerCloseDocument } from "../../dist/tools/document/close-document.js";
-import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
-import { registerSaveDocument } from "../../dist/tools/document/save-document.js";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
-import { registerConvertToSymbol } from "../../dist/tools/timeline/convert-to-symbol.js";
+import { registerCloseDocument } from "../../../dist/tools/document/close-document.js";
+import { registerOpenDocument } from "../../../dist/tools/document/open-document.js";
+import { registerSaveDocument } from "../../../dist/tools/document/save-document.js";
+import { registerConvertToSymbol } from "../../../dist/tools/timeline/convert-to-symbol.js";
 import { closeDocumentByPath, toolHandler } from "../lib/smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
 import { z } from "zod";
+import { createJsflRunner } from "../../src/tools/core/shared.js";
 import { registerCloseDocument } from "../../src/tools/document/close-document.js";
 
 type FakeDocument = {
@@ -12,14 +12,11 @@ type FakeDocument = {
     close: (prompt: boolean) => void;
 };
 
-const targetJSFL = readFileSync(new URL("../../jsfl/document/document-target.jsfl", import.meta.url), "utf8");
-const closeJSFL = readFileSync(new URL("../../jsfl/document/close-document.jsfl", import.meta.url), "utf8");
-
 /**
- * Captures the close-document tool and records the JSFL bundle requested.
+ * Captures the close-document tool and executes its JSFL against fake Animate globals.
  * @param runner Executes bundled JSFL against the test's fake Animate globals
  * @param runner.execute Runs the supplied JSFL code in the fake application
- * @returns Registered tool and bundle-call history
+ * @returns Registered tool
  */
 function register(runner: { execute: (code: string) => Promise<unknown> }) {
     let registered:
@@ -40,16 +37,13 @@ function register(runner: { execute: (code: string) => Promise<unknown> }) {
             registered = { name, ...options, handler: handler as (input: unknown) => Promise<unknown> };
         },
     };
-    const bundleNames: string[][] = [];
+    const jsfl = createJsflRunner(runner);
     registerCloseDocument(server as unknown as Parameters<typeof registerCloseDocument>[0], {
         runner,
-        bundle: (...names) => {
-            bundleNames.push(names);
-            return names.map((name) => (name === "document-target" ? targetJSFL : closeJSFL)).join("\n");
-        },
+        jsfl,
     });
     assert.ok(registered);
-    return { tool: registered, bundleNames };
+    return { tool: registered };
 }
 
 test("close_document requires explicit discard consent and does not run without it", async () => {
@@ -106,7 +100,7 @@ test("close_document closes only the exact target without prompting or saving", 
         },
     };
     let code = "";
-    const { tool, bundleNames } = register({
+    const { tool } = register({
         execute: async (value) => {
             code = value;
             return runInNewContext(value, globals);
@@ -117,7 +111,6 @@ test("close_document closes only the exact target without prompting or saving", 
         structuredContent: { name: string; path: string | null };
     };
 
-    assert.deepEqual(bundleNames, [["document-target", "close-document"]]);
     assert.ok(code.includes(`var __closeDocumentTarget = ${JSON.stringify(uri)};`));
     assert.equal("isError" in result, false);
     assert.deepEqual(result.structuredContent, { name: "scene.fla", path: uri });

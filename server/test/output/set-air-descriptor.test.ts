@@ -4,15 +4,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { SaxesParser } from "saxes";
-import { runSetAirDescriptor } from "../../src/tools/output/set-air-descriptor.js";
 import type { ToolDeps } from "../../src/tools/core/shared.js";
+import { runSetAirDescriptor } from "../../src/tools/output/set-air-descriptor.js";
 import { text, withServer } from "../helpers/fake-animate.js";
+import { createFakeJsfl } from "../helpers/fake-jsfl.js";
 
 const deps: ToolDeps = {
-    bundle: (...names) => names.join(" "),
     runner: {
         execute: async () => {
             throw new Error("Animate should not run");
+        },
+    },
+    jsfl: {
+        run: async () => {
+            throw new Error("Animate should not use jsfl.run");
         },
     },
 };
@@ -277,6 +282,13 @@ test("supports document resolution, cross-platform notes, icons, and extensions"
     try {
         const path = join(dir, "desktop-app.xml");
         await writeFile(path, await readFile("air-sample/desktop-app.xml"));
+        const fake = createFakeJsfl({
+            "output/preflight-publish": {
+                name: "desktop.fla",
+                platformPath: join(dir, "desktop.fla"),
+                playerTarget: "AIR 51.3 for Android",
+            },
+        });
         const result = await runSetAirDescriptor(
             {
                 document: "desktop.fla",
@@ -286,17 +298,15 @@ test("supports document resolution, cross-platform notes, icons, and extensions"
                 extensions: ["com.example.extension"],
             },
             {
-                bundle: () => "bundle",
                 runner: {
-                    execute: async () =>
-                        JSON.stringify({
-                            name: "desktop.fla",
-                            platformPath: join(dir, "desktop.fla"),
-                            playerTarget: "AIR 51.3 for Android",
-                        }),
+                    execute: async () => {
+                        throw new Error("Unexpected direct Runner call");
+                    },
                 },
+                jsfl: fake.jsfl,
             },
         );
+        assert.deepEqual(fake.calls, [{ entry: "output/preflight-publish", vars: { __docName: "desktop.fla" } }]);
         assert.equal(result.playerTarget, "AIR 51.3 for Android");
         assert.ok(result.notes);
         const updated = await readFile(path, "utf8");

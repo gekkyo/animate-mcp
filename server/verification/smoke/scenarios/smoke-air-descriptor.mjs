@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
-import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
-import { registerGetAirDescriptor } from "../../dist/tools/output/get-air-descriptor.js";
-import { registerSetAirDescriptor } from "../../dist/tools/output/set-air-descriptor.js";
+import { isAnimateRunning } from "../../../dist/runtime/animate-launcher.js";
 import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
+import { registerOpenDocument } from "../../../dist/tools/document/open-document.js";
+import { registerGetAirDescriptor } from "../../../dist/tools/output/get-air-descriptor.js";
+import { registerSetAirDescriptor } from "../../../dist/tools/output/set-air-descriptor.js";
 import { closeDocumentByPath, toolHandler } from "../lib/smoke-lib.mjs";
 
 assert.equal(await isAnimateRunning(), true, "Animate must already be running; refusing to launch it");

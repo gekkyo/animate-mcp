@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import {
     registerToolDefinition,
     TIMELINES_PER_RUN,
@@ -9,10 +8,42 @@ import {
     type ToolDeps,
     type ToolExtra,
 } from "../core/shared.js";
-import type { AppliedNewScript, ApplyPayload, ApplyResult, TimelineFingerprint } from "./workspace/apply-contract.js";
+import type { AppliedNewScript, ApplyPayload, TimelineFingerprint } from "./workspace/apply-contract.js";
 import { collectChanges, recordApplied } from "./workspace/export-workspace.js";
 
 const APPLY_SCRIPTS_INPUT = { dir: z.string(), document: z.string().optional() };
+const APPLY_RESULT_SCHEMA = z
+    .object({
+        applied: z.array(z.string()),
+        failed: z.array(z.object({ file: z.string(), error: z.string() }).strict()),
+        warning: z.string(),
+        warnings: z.array(z.string()),
+        newApplied: z.array(
+            z
+                .object({
+                    file: z.string(),
+                    scene: z.number(),
+                    layer: z.number(),
+                    start: z.number(),
+                    script: z.string(),
+                    layerDir: z.string(),
+                    layerName: z.string(),
+                    asLayer: z.boolean(),
+                    item: z.string().optional(),
+                })
+                .strict(),
+        ),
+        fingerprints: z.array(
+            z
+                .object({
+                    scene: z.number(),
+                    item: z.string().optional(),
+                    structureFingerprint: z.string(),
+                })
+                .strict(),
+        ),
+    })
+    .strict();
 
 /** Selects scene entries or entries belonging to a selected library-item batch.
  * @param entries Edits, new scripts, or fingerprints to select
@@ -89,7 +120,7 @@ export const applyScriptsTool: ToolDefinition<typeof APPLY_SCRIPTS_INPUT> = {
     },
     /** Applies exported script changes to Animate and records successful results.
      * @param args Validated apply options
-     * @param deps Runtime runner and JSFL bundler
+     * @param deps Runtime dependencies
      * @param extra MCP callback metadata and notification helpers
      * @returns Apply results, failures, and warnings
      */
@@ -98,8 +129,6 @@ export const applyScriptsTool: ToolDefinition<typeof APPLY_SCRIPTS_INPUT> = {
         deps: ToolDeps,
         extra: ToolExtra,
     ) => {
-        const { runner, bundle } = deps;
-
         const exportDirectory = resolve(dir);
         const {
             document: exportedDocument,
@@ -119,7 +148,7 @@ export const applyScriptsTool: ToolDefinition<typeof APPLY_SCRIPTS_INPUT> = {
          * @param newChunk New frame scripts in this batch
          * @param chunkFingerprints Timeline fingerprints used to detect stale exports
          * @param libraryFingerprint Expected library fingerprint, when recorded by Export
-         * @returns Parsed Apply result from Animate
+         * @returns Validated Apply result from Animate
          */
         const applyChunk = async (
             chunk: typeof edits,
@@ -133,8 +162,8 @@ export const applyScriptsTool: ToolDefinition<typeof APPLY_SCRIPTS_INPUT> = {
                 fingerprints: chunkFingerprints,
                 ...(libraryFingerprint ? { libraryFingerprint } : {}),
             };
-            const code = jsflRun(
-                "apply-scenes",
+            return deps.jsfl.run(
+                "scripts/apply-scenes",
                 {
                     __docName: exportedDocument,
                     __edits: payload.edits,
@@ -142,9 +171,8 @@ export const applyScriptsTool: ToolDefinition<typeof APPLY_SCRIPTS_INPUT> = {
                     __fingerprints: payload.fingerprints,
                     __libraryFingerprint: payload.libraryFingerprint ?? null,
                 },
-                bundle,
+                APPLY_RESULT_SCHEMA,
             );
-            return JSON.parse(String(await runner.execute(code))) as ApplyResult;
         };
         const applied: string[] = [];
         const warnings: string[] = [...collectWarnings];

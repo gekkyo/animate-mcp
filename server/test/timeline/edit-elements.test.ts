@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
 import { z } from "zod";
+import { createJsflRunner } from "../../src/tools/core/shared.js";
 import { registerEditElements } from "../../src/tools/timeline/edit-elements.js";
 import { layersLog, stateLog, text, withServer } from "../helpers/fake-animate.js";
 
@@ -47,21 +46,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
     );
     let handler: ((input: unknown) => Promise<unknown>) | undefined;
     let inputSchema: z.ZodRawShape = {};
-    const bundlePaths: Record<string, string> = {
-        "select-document": "server/jsfl/shared/select-document.jsfl",
-        "edit-state": "server/jsfl/shared/edit-state.jsfl",
-        "export-common": "server/jsfl/shared/export-common.jsfl",
-        "timeline-helpers": "server/jsfl/timeline/helpers.jsfl",
-        "element-read": "server/jsfl/shared/element-read.jsfl",
-        "edit-elements": "server/jsfl/timeline/edit-elements.jsfl",
-    };
-    /**
-     * Loads requested JSFL source files for the fixture.
-     * @param names Requested bundle names.
-     * @returns Concatenated JSFL source.
-     */
-    const bundle = (...names: string[]) =>
-        names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
+    const runner = { execute: async (code: string) => runInContext(code, context) };
     registerEditElements(
         {
             registerTool: (_name: string, config: { inputSchema: unknown }, callback: (input: unknown) => unknown) => {
@@ -70,8 +55,8 @@ var fl = { documents: [__doc], trace: function () {} };`,
             },
         } as unknown as Parameters<typeof registerEditElements>[0],
         {
-            runner: { execute: async (code) => runInContext(code, context) },
-            bundle,
+            runner,
+            jsfl: createJsflRunner(runner),
         },
     );
     const parsed = z.object(inputSchema).safeParse(input);

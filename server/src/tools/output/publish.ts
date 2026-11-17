@@ -86,14 +86,19 @@ export function parseCompilerOutput(output: string): { errors: Diagnostic[]; war
  * @returns Publish status, compiler diagnostics, and any availability note.
  */
 export async function runPublish(document: string | undefined, deps: ToolDeps): Promise<BuildResult> {
-    const { runner, bundle } = deps;
-    const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n`;
-    const activate = `${prelude}${bundle("select-document")}\n(function () {\n  var document = selectDocument();\n  if (!document.pathURI) throw new Error("Document is not saved; save first");\n  fl.setActiveWindow(document);\n  return document.type;\n})()`;
-    const documentType = await runner.execute(activate);
+    const documentType = await deps.jsfl.run(
+        "output/activate-publish",
+        { __docName: document ?? "" },
+        z.enum(["Flash", "htmlcanvas"]),
+    );
 
     const outputPath = join(tmpdir(), `animate-mcp-publish-${randomUUID()}.txt`);
-    const publish = `${prelude}var __publishOutputPath = ${JSON.stringify(outputPath)};\n${bundle("publish")}`;
-    const firstOutput = String(await runner.execute(publish));
+    const publishResult = z.union([z.string(), z.literal(true)]);
+    const firstOutput = await deps.jsfl.run(
+        "output/publish",
+        { __docName: document ?? "", __publishOutputPath: outputPath },
+        publishResult,
+    );
     if (documentType === "htmlcanvas") {
         return {
             ok: true,
@@ -103,7 +108,15 @@ export async function runPublish(document: string | undefined, deps: ToolDeps): 
             note: "HTML5 Canvas: compile errors are unverified; ok only means Publish ran",
         };
     }
-    const output = firstOutput || String(await runner.execute(publish));
+    const output =
+        String(firstOutput) ||
+        String(
+            await deps.jsfl.run(
+                "output/publish",
+                { __docName: document ?? "", __publishOutputPath: outputPath },
+                publishResult,
+            ),
+        );
     if (!output) {
         return {
             ok: true,

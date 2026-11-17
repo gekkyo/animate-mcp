@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { runPreflightPublish } from "../../src/tools/output/preflight-publish.js";
+import type { ZodType } from "zod";
 import type { ToolDeps } from "../../src/tools/core/shared.js";
+import { validateJsflResult } from "../../src/tools/core/shared.js";
+import { runPreflightPublish } from "../../src/tools/output/preflight-publish.js";
 
 const fixture = JSON.parse(await readFile("server/test/fixtures/preflight-publish/active-canvas.json", "utf8")) as {
     document: { name: string; pathURI: string; type: string; profile: string };
@@ -12,45 +14,46 @@ const fixture = JSON.parse(await readFile("server/test/fixtures/preflight-publis
 };
 fixture.document.profile = await readFile("server/test/fixtures/preflight-publish/canvas-profile.xml", "utf8");
 const preflightJsfl = await readFile("server/jsfl/output/preflight-publish.jsfl", "utf8");
+
 /**
- * Returns the requested JSFL fixture bundle.
- * @param names Bundle names requested by the tool.
- * @returns The requested JSFL source.
+ * Creates a recording seam fake with the active-document result followed by its output probe.
+ * @param info Initial document facts.
+ * @param audit Existing audit result.
+ * @param probe Optional output-probe document facts.
+ * @returns Tool dependencies and recorded entry calls.
  */
-function fakeBundle(...names: string[]) {
-    return names.includes("preflight-publish") ? preflightJsfl : names.join(" ");
+function fakeDeps(info: Record<string, unknown>, audit = fixture.audit, probe = info) {
+    const results: Record<string, unknown[]> = {
+        "output/preflight-publish": [
+            { sameDocument: true, outputFiles: [], ...info },
+            { sameDocument: true, outputFiles: [], ...probe },
+        ],
+        "document/audit-document": [audit],
+    };
+    const calls: { entry: string; vars: Record<string, unknown> }[] = [];
+    const deps: ToolDeps = {
+        runner: {
+            execute: async () => {
+                throw new Error("Unexpected direct Runner call");
+            },
+        },
+        jsfl: {
+            async run<T>(entry: string, vars: Record<string, unknown>, schema: ZodType<T>) {
+                calls.push({ entry, vars });
+                const result = results[entry]?.shift();
+                if (result === undefined) {
+                    throw new Error(`Unexpected JSFL entry: ${entry}`);
+                }
+                return validateJsflResult(entry, result, schema);
+            },
+        },
+    };
+    return { deps, calls };
 }
 
 test("preflight reports documented checks and existing audit findings without publishing or writing", async () => {
-    const calls: string[] = [];
-    const result = await runPreflightPublish(undefined, {
-        bundle: (...names) => {
-            calls.push(`bundle:${names.join(",")}`);
-            return fakeBundle(...names);
-        },
-        runner: {
-            execute: async (script) => {
-                calls.push(script);
-                if (script.includes("audit-document")) {
-                    return JSON.stringify(fixture.audit);
-                }
-                if (script.includes("__expectedName")) {
-                    const requested = JSON.parse(script.match(/var __outputFiles = (.*?);\n/)?.[1] ?? "[]") as {
-                        name: string;
-                    }[];
-                    return JSON.stringify({
-                        ...fixture.document,
-                        sameDocument: true,
-                        outputFiles: requested.map(({ name }) => ({
-                            name,
-                            exists: fixture.existingOutputs.includes(name),
-                        })),
-                    });
-                }
-                return JSON.stringify(fixture.document);
-            },
-        },
-    });
+    const { deps, calls } = fakeDeps(fixture.document, fixture.audit);
+    const result = await runPreflightPublish(undefined, deps);
 
     assert.deepEqual(result, {
         document: "animation.fla",
@@ -87,26 +90,14 @@ test("preflight reports documented checks and existing audit findings without pu
             warnings: [],
         },
     });
-    assert.equal(
-        calls.some((call) => call.includes("publishDocument")),
-        false,
-    );
-    assert.equal(
-        calls.some((call) => call.includes("FLfile.write")),
-        false,
-    );
-    assert.equal(
-        calls.some((call) => call.includes("FLfile.exists")),
-        true,
-    );
-    const outputProbe = calls.find((call) => call.includes("var __outputFiles = "));
-    assert.ok(outputProbe);
     assert.deepEqual(
-        JSON.parse(outputProbe.match(/var __outputFiles = (.*?);\n/)?.[1] ?? "[]").map(
-            (candidate: { name: string }) => candidate.name,
-        ),
-        [],
+        calls.map(({ entry }) => entry),
+        ["output/preflight-publish", "document/audit-document", "output/preflight-publish"],
     );
+    assert.deepEqual(calls[2].vars.__outputFiles, []);
+    assert.equal(preflightJsfl.includes("publishDocument"), false);
+    assert.equal(preflightJsfl.includes("FLfile.write"), false);
+    assert.equal(preflightJsfl.includes("FLfile.exists"), true);
 });
 
 test("preflight does not fail an HTML5 Canvas profile without recognized format flags", async () => {
@@ -114,33 +105,16 @@ test("preflight does not fail an HTML5 Canvas profile without recognized format 
         ...fixture.document,
         profile: "<profile><PublishFormatProperties></PublishFormatProperties></profile>",
     };
-    const result = await runPreflightPublish(undefined, {
-        bundle: fakeBundle,
-        runner: {
-            execute: async (script) => {
-                if (script.includes("audit-document")) {
-                    return JSON.stringify({ ...fixture.audit, findings: [] });
-                }
-                if (script.includes("__expectedName")) {
-                    return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
-                }
-                return JSON.stringify(info);
-            },
-        },
-    });
+    const { deps } = fakeDeps(info, { ...fixture.audit, findings: [] });
+    const result = await runPreflightPublish(undefined, deps);
     assert.equal(result.checks.publishFormats.status, "unchecked");
     assert.deepEqual(result.checks.publishFormats.formats, []);
 });
 
 test("preflight marks unsaved and unsupported documents without guessing a publish result", async () => {
     const info = { name: "untitled", pathURI: "", type: "Unknown", profile: "" };
-    const result = await runPreflightPublish(undefined, {
-        bundle: fakeBundle,
-        runner: {
-            execute: async (script) =>
-                script.includes("audit-document") ? JSON.stringify(fixture.audit) : JSON.stringify(info),
-        },
-    });
+    const { deps } = fakeDeps(info);
+    const result = await runPreflightPublish(undefined, deps);
 
     assert.deepEqual(result.checks, {
         saved: { status: "unchecked", detail: "Unsupported type: Unknown." },
@@ -161,38 +135,15 @@ test("preflight fails an all-disabled publish profile and rejects a document swi
         ...fixture.document,
         profile: `<PublishFormatProperties><publishFormat id="svg-id">0</publishFormat><publishFormat id="js-id">0</publishFormat></PublishFormatProperties><PublishProperties id="svg-id" name="SVG Image"></PublishProperties><PublishProperties id="js-id" name="JavaScript/HTML"></PublishProperties>`,
     };
-    const allDisabled = await runPreflightPublish(undefined, {
-        bundle: (...names) => names.join(" "),
-        runner: {
-            execute: async (script) => {
-                if (script.includes("audit-document")) {
-                    return JSON.stringify(fixture.audit);
-                }
-                if (script.includes("__expectedName")) {
-                    return JSON.stringify({
-                        ...info,
-                        sameDocument: true,
-                        outputFiles: [{ name: "animation.html", exists: false }],
-                    });
-                }
-                return JSON.stringify(info);
-            },
-        },
+    const { deps } = fakeDeps(info, fixture.audit, {
+        ...info,
+        outputFiles: [{ name: "animation.html", exists: false }],
     });
+    const allDisabled = await runPreflightPublish(undefined, deps);
     assert.equal(allDisabled.checks.publishFormats.status, "fail");
 
-    await assert.rejects(
-        runPreflightPublish(undefined, {
-            bundle: fakeBundle,
-            runner: {
-                execute: async (script) =>
-                    script.includes("audit-document")
-                        ? JSON.stringify({ ...fixture.audit, document: "another.fla" })
-                        : JSON.stringify(info),
-            },
-        }),
-        /Document changed during preflight/,
-    );
+    const changed = fakeDeps(info, { ...fixture.audit, document: "another.fla" });
+    await assert.rejects(runPreflightPublish(undefined, changed.deps), /Document changed during preflight/);
 });
 
 test("preflight leaves traversal-like profile filenames unchecked without probing them", async () => {
@@ -201,62 +152,24 @@ test("preflight leaves traversal-like profile filenames unchecked without probin
         type: "Flash",
         profile: "<PublishProfile><html>1</html><htmlFileName>%2e%2e/secret.html</htmlFileName></PublishProfile>",
     };
-    const scripts: string[] = [];
-    const result = await runPreflightPublish(undefined, {
-        bundle: fakeBundle,
-        runner: {
-            execute: async (script) => {
-                scripts.push(script);
-                if (script.includes("audit-document")) {
-                    return JSON.stringify({ ...fixture.audit, findings: [] });
-                }
-                if (script.includes("__expectedName")) {
-                    return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
-                }
-                return JSON.stringify(info);
-            },
-        },
-    });
+    const { deps, calls } = fakeDeps(info, { ...fixture.audit, findings: [] });
+    const result = await runPreflightPublish(undefined, deps);
 
     assert.equal(result.checks.outputFiles.status, "unchecked");
-    const probeScript = scripts.find((script) => script.includes("__outputFiles ="));
-    assert.ok(probeScript);
-    assert.match(probeScript, /__outputFiles = \[\]/);
-    assert.equal(probeScript.includes("FLfile.exists"), true);
+    assert.deepEqual(calls[2].vars.__outputFiles, []);
 });
 
 test("preflight probes only enabled format filenames and leaves default or incomplete mappings unchecked", async () => {
     /**
      * Runs preflight against a publish profile fixture.
      * @param profile XML profile content to test.
-     * @returns The tool result and captured scripts.
+     * @returns The tool result and captured JSFL calls.
      */
     async function runWithProfile(profile: string) {
-        const scripts: string[] = [];
         const info = { ...fixture.document, type: "Flash", profile };
-        const result = await runPreflightPublish(undefined, {
-            bundle: fakeBundle,
-            runner: {
-                execute: async (script) => {
-                    scripts.push(script);
-                    if (script.includes("audit-document")) {
-                        return JSON.stringify({ ...fixture.audit, findings: [] });
-                    }
-                    if (script.includes("__expectedName")) {
-                        const requested = JSON.parse(script.match(/var __outputFiles = (.*?);\n/)?.[1] ?? "[]") as {
-                            name: string;
-                        }[];
-                        return JSON.stringify({
-                            ...info,
-                            sameDocument: true,
-                            outputFiles: requested.map(({ name }) => ({ name, exists: false })),
-                        });
-                    }
-                    return JSON.stringify(info);
-                },
-            },
-        });
-        return { result, scripts };
+        const { deps, calls } = fakeDeps(info, { ...fixture.audit, findings: [] });
+        const result = await runPreflightPublish(undefined, deps);
+        return { result, calls };
     }
 
     const enabledOnly = await runWithProfile(
@@ -283,10 +196,7 @@ test("preflight probes only enabled format filenames and leaves default or incom
     );
     assert.equal(defaultNames.result.checks.outputFiles.status, "unchecked");
     assert.deepEqual(defaultNames.result.checks.outputFiles.candidates, []);
-    assert.equal(
-        defaultNames.scripts.some((script) => script.includes("__outputFiles = []")),
-        true,
-    );
+    assert.deepEqual(defaultNames.calls[2].vars.__outputFiles, []);
 
     const ambiguous = await runWithProfile(
         "<PublishProfile><html>1</html><gif>1</gif>" + "<htmlFileName>animation.html</htmlFileName></PublishProfile>",
@@ -325,20 +235,7 @@ test("preflight checks AIR descriptors, icons, and target-specific assets", asyn
             playerTarget: `AIR 51.3.1.2 for ${target === "ios" ? "iOS" : target[0].toUpperCase() + target.slice(1)}`,
             profile: "",
         };
-        const deps: ToolDeps = {
-            bundle: fakeBundle,
-            runner: {
-                execute: async (script) => {
-                    if (script.includes("audit-document")) {
-                        return JSON.stringify({ ...fixture.audit, document: info.name, findings: [] });
-                    }
-                    if (script.includes("__expectedName")) {
-                        return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
-                    }
-                    return JSON.stringify(info);
-                },
-            },
-        };
+        const { deps } = fakeDeps(info, { ...fixture.audit, document: info.name, findings: [] });
         const result = await runPreflightPublish(undefined, deps);
         assert.equal(result.checks.air.target.target, target, name);
         assert.equal(result.checks.air.icons.status, iconStatus, name);
@@ -380,20 +277,7 @@ test("preflight checks AIR descriptors, icons, and target-specific assets", asyn
 
 test("non-AIR Flash preflight does not add AIR checks", async () => {
     const info = { ...fixture.document, type: "Flash" };
-    const deps: ToolDeps = {
-        bundle: fakeBundle,
-        runner: {
-            execute: async (script) => {
-                if (script.includes("audit-document")) {
-                    return JSON.stringify({ ...fixture.audit, findings: [] });
-                }
-                if (script.includes("__expectedName")) {
-                    return JSON.stringify({ ...info, sameDocument: true, outputFiles: [] });
-                }
-                return JSON.stringify(info);
-            },
-        },
-    };
+    const { deps } = fakeDeps(info, { ...fixture.audit, findings: [] });
     const result = await runPreflightPublish(undefined, deps);
     assert.equal("air" in result.checks, false);
 });
