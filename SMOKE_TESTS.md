@@ -46,12 +46,14 @@ Most scripts create a disposable FLA, exercise it and close it without touching 
 
 ## README prompt E2E
 
-`server/verification/readme-e2e/` holds a separate harness: it sends README prompts through Claude CLI and a restricted MCP server to real Animate.
+`server/verification/readme-e2e/` holds a separate harness: it sends README prompts through Claude or Codex CLI and a restricted MCP server to real Animate. Claude remains the default; select Codex explicitly with `README_PROMPT_E2E_PROVIDER=codex`.
 
-- **Nonpaid checks:** `npm run test:readme-e2e` builds the server and runs fixture, file-scope, MCP discovery and fake-CLI tests. It does not launch a real Claude CLI or Animate, and runs as a separate CI step; `npm test` is unchanged.
-- **Real E2E (explicit approval required):** Start Animate with no documents open, authenticate Claude CLI, then run from the repository root:
+- **Nonpaid checks:** `npm run test:readme-e2e` builds the server and runs fixture, file-scope, MCP discovery and fake-CLI tests. It does not launch a real Claude/Codex CLI or Animate, and runs as a separate CI step; `npm test` is unchanged.
+- **Real E2E (explicit approval required):** Start Animate with no documents open, authenticate the selected CLI, then run from the repository root:
 
       npm run build
       RUN_README_PROMPT_E2E=1 README_PROMPT_E2E_SCENARIO=layer node server/verification/readme-e2e/runner.mjs
 
-  The run consumes Claude CLI usage and operates on a disposable FLA. Do not interact with Animate while the test runs. Other scenarios are `stage`, `script`, `investigate`, `text`, `tween`, `instance`, `symbol`, `inspect`, `library`, `capture`, `assets`, `publish`, `testmovie`, and `canvas`. GreenSock installation is not covered. `canvas` also needs Chrome.
+  For Codex, add `README_PROMPT_E2E_PROVIDER=codex` to the command. It uses the Codex CLI's existing authentication and does not force a model; usage and billing depend on that CLI configuration. Both providers operate on a disposable FLA. Do not interact with Animate while the test runs. Other scenarios are `stage`, `script`, `investigate`, `text`, `tween`, `instance`, `symbol`, `inspect`, `library`, `capture`, `assets`, `publish`, `testmovie`, and `canvas`. GreenSock installation is not covered. `canvas` also needs Chrome.
+
+  **Codex safety is not proven equivalent to Claude's restricted mode.** The harness requests a read-only sandbox and disables several Codex integrations, but native tools may remain available and user-level instructions may still load. Only the dedicated MCP server's `execute_write` entrance is preapproved; document-scope and scenario restrictions remain enforced by that server. Unlike Claude, Codex has no equivalent per-scenario turn-count cap; the harness timeout is five minutes. Live runs have verified this write approval, but isolation is not fully verified. Obtain safety/risk approval before running Codex E2E.

@@ -1,5 +1,6 @@
 // Manual paid check: npm run build && RUN_README_PROMPT_E2E=1 node server/verification/readme-e2e/runner.mjs
 // Select with README_PROMPT_E2E_SCENARIO=layer|stage|script|investigate|text|tween|instance|symbol|inspect|library|capture|assets|publish|testmovie|canvas (default: layer).
+// Set README_PROMPT_E2E_PROVIDER=codex to opt into Codex; Claude is the default.
 
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -15,6 +16,7 @@ import { registerEditTween } from "../../dist/tools/timeline/edit-tween.js";
 import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timeline.js";
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "../smoke/smoke-lib.mjs";
 import { runClaude } from "./claude.mjs";
+import { runCodex } from "./codex.mjs";
 import { serveRestricted } from "./mcp-server.mjs";
 import { assertChromeInstalled, closeTestMoviePlayer } from "./output.mjs";
 import {
@@ -30,17 +32,29 @@ import { createAssetsFixture, scenarios, selectedScenario } from "./scenarios.mj
 
 const scriptPath = fileURLToPath(import.meta.url);
 
+/** Resolves the explicitly selected CLI provider, keeping Claude as the default.
+ * @param provider Provider name from the environment.
+ * @returns Validated provider name.
+ */
+export function readmeE2eProvider(provider = process.env.README_PROMPT_E2E_PROVIDER ?? "claude") {
+    if (provider !== "claude" && provider !== "codex") {
+        throw new Error('README_PROMPT_E2E_PROVIDER must be "claude" or "codex".');
+    }
+    return provider;
+}
+
 /** Runs the manually approved CLI/Animate E2E.
  * @returns Resolves after persistence verification and cleanup.
  */
 async function main() {
+    const provider = readmeE2eProvider();
     const scenarioName = process.env.README_PROMPT_E2E_SCENARIO ?? "layer";
     const scenario = selectedScenario(scenarioName);
     if (process.argv.includes("--mcp-server")) {
         return serveRestricted();
     }
     if (process.env.RUN_README_PROMPT_E2E !== "1") {
-        throw new Error("Set RUN_README_PROMPT_E2E=1 only after approving the paid Claude CLI run.");
+        throw new Error(`Set RUN_README_PROMPT_E2E=1 only after approving the paid ${provider} CLI run.`);
     }
     if (!(await isAnimateRunning())) {
         throw new Error("Start Adobe Animate before running this test.");
@@ -70,14 +84,16 @@ async function main() {
     let failure;
     try {
         const assetsFixture = scenario === scenarios.assets ? await createAssetsFixture(outDir) : undefined;
-        await writeFile(
-            configPath,
-            JSON.stringify({
-                mcpServers: {
-                    "animate-readme-e2e": { command: process.execPath, args: [scriptPath, "--mcp-server"] },
-                },
-            }),
-        );
+        if (provider === "claude") {
+            await writeFile(
+                configPath,
+                JSON.stringify({
+                    mcpServers: {
+                        "animate-readme-e2e": { command: process.execPath, args: [scriptPath, "--mcp-server"] },
+                    },
+                }),
+            );
+        }
         if (scenario === scenarios.canvas) {
             const created = await openDocument({ type: "htmlcanvas" });
             if (created.isError || !created.structuredContent?.name) {
@@ -112,11 +128,18 @@ async function main() {
             throw new Error("Safety check failed: the only open Animate document is not the disposable FLA.");
         }
         const runScenario = assetsFixture ? { ...scenario, prompt: assetsFixture.prompt } : scenario;
-        const cliResult = await runClaude(configPath, tracePath, pathURI, {
-            scenario: runScenario,
-            outDir,
-            assetPaths: assetsFixture?.paths,
-        });
+        const cliResult =
+            provider === "claude"
+                ? await runClaude(configPath, tracePath, pathURI, {
+                      scenario: runScenario,
+                      outDir,
+                      assetPaths: assetsFixture?.paths,
+                  })
+                : await runCodex(scriptPath, tracePath, pathURI, {
+                      scenario: runScenario,
+                      outDir,
+                      assetPaths: assetsFixture?.paths,
+                  });
         if (scenarioNeedsPlayerCleanup(scenarioName)) {
             await closeTestMoviePlayer(runJsfl, status, pathURI);
         }
