@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/export-common
 // `var __docName` and `var __assets` are injected before this file.
 (function () {
   var document = selectDocument(), library = document.library, originalSelection = library.getSelectedItems() || [];

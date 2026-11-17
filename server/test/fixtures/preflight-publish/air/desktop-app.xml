@@ -1,0 +1,5 @@
+<application xmlns="http://ns.adobe.com/air/application/51.3">
+  <id>example.desktop</id><versionNumber>1.0.0</versionNumber><filename>Example Desktop</filename>
+  <icon><image16x16>icon16.png</image16x16></icon>
+  <initialWindow><content>example.swf</content></initialWindow>
+</application>

@@ -1,11 +1,28 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const INPUT = {
     document: z.string().optional().describe("Open document name; defaults to the only open document"),
 };
+const AUDIT_RESULT = z
+    .object({
+        document: z.string(),
+        findings: z.array(
+            z
+                .object({
+                    category: z.enum(["unusedLibraryItem", "emptyKeyframe", "defaultName"]),
+                    severity: z.enum(["info", "warning"]),
+                    location: z.string(),
+                    message: z.string(),
+                    item: z.string().optional(),
+                    linkage: z.boolean().optional(),
+                })
+                .strict(),
+        ),
+        warnings: z.array(z.string()),
+    })
+    .strict();
 
 export const auditDocumentTool: ToolDefinition<typeof INPUT> = {
     name: "audit_document",
@@ -22,22 +39,8 @@ export const auditDocumentTool: ToolDefinition<typeof INPUT> = {
      * @param deps Tool dependencies for executing Animate commands.
      * @returns Findings grouped by category with any warnings.
      */
-    run: async ({ document }: Parameters<ToolCallback<typeof INPUT>>[0], deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-        const result = JSON.parse(
-            String(await runner.execute(jsflRun("audit-document", { __docName: document ?? "" }, bundle))),
-        ) as {
-            document: string;
-            findings: {
-                category: "unusedLibraryItem" | "emptyKeyframe" | "defaultName";
-                severity: "info" | "warning";
-                location: string;
-                message: string;
-                item?: string;
-                linkage?: boolean;
-            }[];
-            warnings: string[];
-        };
+    run: async ({ document }: Parameters<ToolCallback<typeof INPUT>>[0], { jsfl }: ToolDeps) => {
+        const result = await jsfl.run("document/audit-document", { __docName: document ?? "" }, AUDIT_RESULT);
         return {
             data: {
                 ...result,

@@ -1,0 +1,13 @@
+{
+    "shape": {
+        "ok": "boolean",
+        "compilerOutput": "string",
+        "errors": ["empty"],
+        "warnings": ["empty"],
+        "note": "string"
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "document": "animate-mcp-canvas-THrsjZ.fla"
+    }
+}

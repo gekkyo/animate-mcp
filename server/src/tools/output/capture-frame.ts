@@ -1,12 +1,21 @@
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { capturesDir } from "../core/paths.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
-type CaptureResult = { path: string; frame: number; timeline: string; width: number; height: number };
-type CaptureResponse = CaptureResult | { captures: CaptureResult[] };
+const CAPTURE_RESULT = z
+    .object({
+        path: z.string(),
+        pathURI: z.string().optional(),
+        frame: z.number().int(),
+        timeline: z.string(),
+        width: z.number(),
+        height: z.number(),
+    })
+    .strict();
+const CAPTURE_RESPONSE = z.union([CAPTURE_RESULT, z.object({ captures: z.array(CAPTURE_RESULT) }).strict()]);
 
 const CAPTURE_RANGE_INPUT = z
     .object({
@@ -48,8 +57,6 @@ export const captureFrameTool: ToolDefinition<typeof CAPTURE_FRAME_INPUT> = {
      * @returns Capture metadata and PNG image content.
      */
     run: async ({ frame, range, dir }: Parameters<ToolCallback<typeof CAPTURE_FRAME_INPUT>>[0], deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
         if (frame !== undefined && range !== undefined) {
             throw new Error("Specify either frame or range, not both");
         }
@@ -57,15 +64,16 @@ export const captureFrameTool: ToolDefinition<typeof CAPTURE_FRAME_INPUT> = {
             throw new Error("Capture range cannot exceed 24 frames");
         }
         const outputDir = dir === undefined ? undefined : resolve(dir);
-        const prelude = [
-            `var __captureFrame = ${frame ?? "null"};`,
-            `var __captureRange = ${JSON.stringify(range ?? null)};`,
-            `var __captureDir = ${JSON.stringify(outputDir ?? "")};`,
-            `var __captureRoot = ${JSON.stringify(join(homedir(), ".animate-mcp", "captures"))};`,
-        ].join("\n");
-        const result = JSON.parse(
-            String(await runner.execute(`${prelude}\n${bundle("capture-frame")}`)),
-        ) as CaptureResponse;
+        const result = await deps.jsfl.run(
+            "output/capture-frame",
+            {
+                __captureFrame: frame ?? null,
+                __captureRange: range ?? null,
+                __captureDir: outputDir ?? "",
+                __captureRoot: capturesDir(),
+            },
+            CAPTURE_RESPONSE,
+        );
         if ("captures" in result) {
             const content = [];
             for (const capture of result.captures) {

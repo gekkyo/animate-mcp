@@ -9,10 +9,13 @@ export type Launcher = (runFile: string) => Promise<void>;
  * Builds the Run file: it evals code and writes the result or error to the Result file as JSON.
  * @param code JSFL source to run
  * @param resultPath Absolute path of the Result file
+ * @param startedPath Absolute path of the Started marker file
  * @returns JSFL source to write into the Run file
  */
-function runFileSource(code: string, resultPath: string): string {
-    return String.raw`// Resolve the Result file path.
+function runFileSource(code: string, resultPath: string, startedPath: string): string {
+    return String.raw`// Mark the Run as started so a timeout can tell "never ran" from "may still finish".
+FLfile.write(FLfile.platformPathToURI(${JSON.stringify(startedPath)}), '1');
+// Resolve the Result file path.
 var __path = FLfile.platformPathToURI(${JSON.stringify(resultPath)});
 
 /** Escapes a string for inclusion in the JSON result file.
@@ -137,11 +140,12 @@ export function createRunner(options: {
         const runId = randomUUID();
         const runFile = join(options.dir, `${runId}.jsfl`);
         const resultFile = join(options.dir, `${runId}.result.json`);
+        const startedFile = join(options.dir, `${runId}.started`);
         try {
             if (Date.now() >= deadline) {
                 throw timedOut();
             }
-            await writeFile(runFile, runFileSource(code, resultFile), { mode: 0o600 });
+            await writeFile(runFile, runFileSource(code, resultFile, startedFile), { mode: 0o600 });
             if (Date.now() >= deadline) {
                 throw timedOut();
             }
@@ -192,10 +196,22 @@ export function createRunner(options: {
                     (resolve) => setTimeout(resolve, options.pollMs ?? DEFAULT_POLL_MS),
                 );
             }
+            if (
+                await stat(startedFile).then(
+                    () => true,
+                    () => false,
+                )
+            ) {
+                // Animate is still running it; a retry could apply a write twice.
+                throw new Error(
+                    `Run timed out after ${timeoutMs} ms (Animate started the .jsfl but did not finish; it may still complete, so check the document state before retrying)`,
+                );
+            }
             throw timedOut();
         } finally {
             await rm(runFile, { force: true });
             await rm(resultFile, { force: true });
+            await rm(startedFile, { force: true });
         }
     }
 

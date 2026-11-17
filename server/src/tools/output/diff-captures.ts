@@ -1,11 +1,11 @@
 import { open, readFile, realpath, unlink } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PNG } from "pngjs";
 import { z } from "zod";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
-import { comparePixels, decodePng, isInside } from "./image-diff.js";
+import { capturesDir, isInside } from "../core/paths.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
+import { comparePixels, decodePng } from "./lib/image-diff.js";
 
 const INPUT = {
     before: z.string().min(1).describe("Absolute path to the earlier Capture PNG"),
@@ -49,7 +49,7 @@ export const diffCapturesTool: ToolDefinition<typeof INPUT> = {
      * @returns Comparison statistics and the generated difference image.
      */
     run: async ({ before, after, tolerance }: Parameters<ToolCallback<typeof INPUT>>[0]) => {
-        const root = await realpath(join(homedir(), ".animate-mcp", "captures")).catch(() => {
+        const root = await realpath(capturesDir()).catch(() => {
             throw new Error("Capture directory does not exist");
         });
         const beforePath = await capturePath(before, root);

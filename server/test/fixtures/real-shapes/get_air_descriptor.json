@@ -1,0 +1,21 @@
+{
+    "shape": {
+        "id": "string",
+        "versionNumber": "string",
+        "filename": "string",
+        "renderMode": "string",
+        "aspectRatio": "string",
+        "autoOrients": "boolean",
+        "fullScreen": "boolean",
+        "icon": {
+            "image128x128": "string"
+        },
+        "extensions": ["empty"],
+        "playerTarget": "string",
+        "versionLabel": "string"
+    },
+    "optionalKeys": ["versionLabel"],
+    "arguments": {
+        "document": "desktop.fla"
+    }
+}

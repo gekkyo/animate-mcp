@@ -1,3 +1,4 @@
+// @requires timeline/helpers
   /** Moves a layer's full frame sequence while preserving its original keyframe spans.
    * @param ctx Document, timeline, and warnings state.
    * @param layerIndex The layer's zero-based index.

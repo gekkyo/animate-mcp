@@ -2,7 +2,22 @@
 
 [English](TOOLS.md) | 日本語
 
-| ツール | できること | 入力・注意点 |
+## 公開している MCP ツール
+
+| MCP ツール | 用途 | 呼び出し例 |
+|------------|------|------------|
+| `search_tools` | 操作のスキーマ・説明・注意点を検索 | `{"query":"publish"}` |
+| `execute_readonly` | 読み取り専用の操作を実行 | `{"name":"get_status","arguments":{}}` |
+| `execute_write` | それ以外の操作を実行（読み取り専用の操作は拒否） | `{"name":"publish","arguments":{}}` |
+| `run_jsfl` | JSFL を直接実行（入口経由では実行不可・個別に禁止可能） | 下の一覧を参照 |
+
+許可・権限ルールは `execute_readonly` / `execute_write` 単位です。許可前に内部の `name` と `arguments` を確認してください。`execute_write` の「常に許可」は、ほかの書き込み系操作にも適用されます。「読み取り専用」はドキュメントの内容やファイルを変更しないという意味です。`inspect_timeline` と `audit_document` は実行中にタイムラインやプレイヘッドを一時的に切り替え、終了後に元へ戻します。
+
+## 操作一覧
+
+次の操作は独立した MCP ツールではなく、`execute_readonly` / `execute_write` の `name` に指定して実行します。ただし `run_jsfl` は直接呼ぶ MCP ツールで、注意点のためにここへ載せています。
+
+| 操作 | できること | 入力・注意点 |
 |--------|------------|--------------|
 | `get_document_info` | 開いているドキュメントの名前、サイズ、フレームレート、背景色、タイムライン名、ActionScript のバージョン、GreenSock の導入状況を確認します。 | 引数は不要です。 |
 | `get_status` | Animate の応答を確認し、開いているドキュメントとアクティブ文書の名前・パス・種類を返します。 | 引数不要。約5秒以内に応答しない、または起動していない場合は `animate: "not_responding"` を返します。未保存の編集状態は推測しません。 |
@@ -14,7 +29,9 @@
 | `read_output` | 現在の Output / Compiler Errors パネルを生テキストで読み、コンパイラー診断を解析します。 | 読み取り専用です。Animate は出所のドキュメントや実行を示さないため、内容は古いものや混在したものの可能性があります。`compilerDiagnostics.status: "unavailable"` はパネルが空・不完全・未対応のいずれかを示し、コンパイル成功を意味しません。 |
 | `test_movie` | 保存済み AS3 ドキュメントを現在メモリー上にある内容で Test Movie 実行します。コンパイルエラー時は Player の起動を中止し、コンパイラー診断と Output パネルの差分を返します。 | `.fla` は保存・Publish・クローズしません。起動した Player は開いたままなので手動で閉じてください。Output パネルは起動から2秒後に一度だけ取得するため、それ以降のメッセージは取得されず、同時出力が混在する場合があります。差分が空でもランタイムエラーがなかった証明にはなりません。 |
 | `publish` | AS3 または HTML5 Canvas ドキュメントを Publish し、Build result を返します。 | Publish 設定の出力を上書きします。未保存の編集も Publish されますが、`.fla` は保存しません。`compilerOutput` は解析済みの AS3 出力なら `verified`、空出力を1回再試行しても取得できなければ `unavailable`、Canvas なら `not_checked` です。取得不能・未確認の場合、`errors` が空でもエラーなしとは断定できません。サマリー行がある場合、位置やコードを解析できない診断もメッセージとして返します。Canvas のコンパイルエラーは未検証で、`ok: true` は Publish が実行されたことだけを示します。 |
-| `preflight_publish` | Publish 前に保存パス、文書形式、有効な公開形式、出力候補、ドキュメント監査の指摘を確認します。 | 読み取り専用で保存・コンパイル・Publish・修正はしません。`document` は省略可（開いている文書が1つの場合のみ）。項目ごとに `pass` / `fail` / `unchecked` を返し、コンパイルは常に未確認です。FLA と同じ場所の安全な単純ファイル名だけを存在確認して上書きの可能性を警告します。独自の出力先や曖昧なパス、未保存の編集、実際の Build 結果は確認できません。 |
+| `get_air_descriptor` | `*-app.xml` descriptor から AIR アプリ設定、アイコン、extensions、プラットフォーム追加設定を読み取ります。 | `document` または絶対パスの `descriptorPath` を指定します。両方省略できるのは開いている文書が1つの場合だけです。直接パス指定は Animate 不要ですが、descriptor は既存である必要があります。`playerTarget` は document 指定時のみ返します。AIR 設定ダイアログで OK を押すと descriptor が書き換わる可能性があります。 |
+| `set_air_descriptor` | 既存の `*-app.xml` descriptor の許可された AIR 設定を編集します。 | `document` または絶対パスの `descriptorPath` を指定し、変更するフィールドだけ渡します。`dryRun: true` は書き込まずに差分を返します。実際の書き込み前に `<descriptor>.bak` を作成・上書きします。`null` は任意項目を削除しますが、`id` と `versionNumber` は削除できません。AIR 設定ダイアログで OK を押すと descriptor が書き換わる可能性があります。 |
+| `preflight_publish` | Publish 前に保存パス、文書形式、有効な公開形式、出力候補、ドキュメント監査の指摘を確認します。 | 読み取り専用で保存・コンパイル・Publish・修正はしません。`document` は省略可（開いている文書が1つの場合のみ）。項目ごとに `pass` / `fail` / `unchecked` を返し、コンパイルは常に未確認です。FLA と同じ場所の安全な単純ファイル名だけを存在確認して上書きの可能性を警告します。独自の出力先や曖昧なパス、未保存の編集、実際の Build 結果は確認できません。AIR（Desktop/Android/iOS。公開ターゲットで判別）の文書には `checks.air` も返します。FLA と同じ場所の `<FLA名>-app.xml` が整形式 XML で `<id>` と `<versionNumber>` が空でないこと、宣言した `<icon>` の PNG が存在し寸法が一致すること、iOS は `Assets.car` の存在（中身は未確認）、Android は `mipmap-anydpi-v26/icon.xml` を含む `<resdir>` がなければ警告（adaptive icon）を確認します。descriptor 不在、descriptor フォルダ外のファイル、署名用の証明書・プロビジョニングプロファイルは `unchecked` です。AIR のパッケージ化と実行時の挙動は確認しません。 |
 | `verify_canvas_output` | 保存済み HTML5 Canvas ドキュメントを必要に応じて Publish し、インストール済み Chrome で HTML を開いて Browser output とスクリーンショットを返します。 | 既定で Publish を実行し、Publish 設定の出力を上書きします。Publish しない場合は `publish: false`、絶対パス指定には `htmlPath` を使います。既定パスは FLA と同じ場所の `<FLA名>.html` です（Animate 2027 の既定設定で確認済み）が、独自設定と異なる場合があります。Chrome は事前にインストールが必要です。HTML とローカルアセットは HTML のディレクトリだけを loopback サーバーで配信し、既知の Web アセット形式のみを提供します。HTML 内のスクリプトが実行され、外部アセットにはネットワーク接続が必要な場合があります。読み込み時と `observeMs`（既定3000ms）の console error、未捕捉例外、失敗したリクエストを報告します。問題なしでも見た目の正しさや以降のエラーがないことは保証しません。 |
 | `audit_document` | 未使用の Library アイテム、空のキーフレーム、英語・日本語の既定らしいレイヤー名／シンボル名を読み取り専用で提案します。任意の `document` で開いているドキュメント名を指定できます。省略時は開いているドキュメントが1つの場合に限り実行します。 | 各指摘に重大度と場所を含みますが、レビュー用のヒューリスティックであり欠陥の証明ではありません。未使用アイテムは外部コードから参照される可能性があり、リンケージ付きアイテムは削除して安全とは判断できないことを明示します。シーンとシンボルの直接使用箇所を調べますが、ネストや実行時参照は保証しません。実行中はタイムラインを一時的に切り替え、元の編集状態と選択を復元します。 |
 | `capture_frame` | アクティブなタイムライン（編集中のライブラリシンボルを含む）の1フレームまたは範囲を PNG 画像で返します。 | `frame` と `range` はどちらか一方を指定します（両方はエラー）。`frame` は1始まりで、省略時は現在のフレームです。`range: { start, end, step? }`（1始まり、昇順・終端を含む。`step` は省略時1、正の整数。最大24フレーム）。範囲の結果はフレーム順の画像・メタデータの組で、`structuredContent.captures` にも含まれます。各画像を `~/.animate-mcp/captures/<ドキュメント名>/` または `dir` に保存します。未保存ドキュメントにも対応します。現在のフレームは復元しますが、変更すると選択が解除される場合があります。長辺が2048pxを超えるステージは縮小せずエラーにします。 |

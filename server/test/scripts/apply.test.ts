@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
-import { collectChanges, prepareExport, recordApplied } from "../../src/export-workspace/export-workspace.js";
+import { collectChanges, prepareExport, recordApplied } from "../../src/tools/scripts/workspace/export-workspace.js";
 import { layersLog, SCENE_FILE, scriptsLog, symbolLayersLog, text, withServer } from "../helpers/fake-animate.js";
 
 test("apply_scripts writes edits, deletes on empty file, skips unchanged", { timeout: 30_000 }, async () => {

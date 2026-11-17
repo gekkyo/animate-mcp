@@ -1,3 +1,4 @@
+// @requires library/helpers
   /** Lists unused library items and identifies linkage-bearing entries.
    * @param ctx Description.
    * @returns Item names, types, and optional linkage flags.

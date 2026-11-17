@@ -1,7 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const INSPECT_TIMELINE_INPUT = {
     timeline: z
@@ -15,6 +14,50 @@ const INSPECT_TIMELINE_INPUT = {
     geometry: z.boolean().default(false).describe("Include element bounds and symbol playback metadata"),
     document: z.string().optional(),
 };
+const INSPECT_TIMELINE_RESULT = z
+    .object({
+        timeline: z.union([z.number(), z.string()]),
+        frame: z.number(),
+        warning: z.string().optional(),
+        layers: z.array(
+            z
+                .object({
+                    name: z.string(),
+                    index: z.number(),
+                    type: z.string(),
+                    parent: z.string().nullable(),
+                    locked: z.boolean(),
+                    visible: z.boolean(),
+                    frameCount: z.number(),
+                    spans: z.array(
+                        z
+                            .object({
+                                start: z.number(),
+                                end: z.number(),
+                                keyframe: z.boolean(),
+                                tweenType: z.string(),
+                                ease: z.number().nullable().optional(),
+                                blend: z.string().nullable().optional(),
+                                label: z.string().optional(),
+                            })
+                            .passthrough(),
+                    ),
+                    elements: z.array(z.record(z.string(), z.unknown())),
+                    motionKeyframes: z
+                        .array(
+                            z
+                                .object({
+                                    frame: z.number(),
+                                    values: z.record(z.string(), z.string()),
+                                })
+                                .passthrough(),
+                        )
+                        .optional(),
+                })
+                .passthrough(),
+        ),
+    })
+    .passthrough();
 
 export const inspectTimelineTool: ToolDefinition<typeof INSPECT_TIMELINE_INPUT> = {
     name: "inspect_timeline",
@@ -38,10 +81,8 @@ export const inspectTimelineTool: ToolDefinition<typeof INSPECT_TIMELINE_INPUT> 
         { timeline, layers, frame, geometry, document }: Parameters<ToolCallback<typeof INSPECT_TIMELINE_INPUT>>[0],
         deps: ToolDeps,
     ) => {
-        const { runner, bundle } = deps;
-
-        const code = jsflRun(
-            "inspect-timeline",
+        const result = await deps.jsfl.run(
+            "timeline/inspect-timeline",
             {
                 __docName: document ?? "",
                 __timelineRef: timeline,
@@ -49,33 +90,8 @@ export const inspectTimelineTool: ToolDefinition<typeof INSPECT_TIMELINE_INPUT> 
                 __frame: frame,
                 __geometry: geometry,
             },
-            bundle,
+            INSPECT_TIMELINE_RESULT,
         );
-        const result = JSON.parse(String(await runner.execute(code))) as {
-            timeline: number | string;
-            frame: number;
-            warning?: string;
-            layers: {
-                name: string;
-                index: number;
-                type: string;
-                parent: string | null;
-                locked: boolean;
-                visible: boolean;
-                frameCount: number;
-                spans: {
-                    start: number;
-                    end: number;
-                    keyframe: boolean;
-                    tweenType: string;
-                    ease?: number;
-                    blend?: string;
-                    label?: string;
-                }[];
-                elements: Record<string, unknown>[];
-                motionKeyframes?: { frame: number; values: Record<string, string> }[];
-            }[];
-        };
         return { data: result };
     },
 };

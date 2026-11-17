@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
 import { z } from "zod";
+import { createJsflRunner } from "../../src/tools/core/shared.js";
 import { registerEditElements } from "../../src/tools/timeline/edit-elements.js";
 import { layersLog, stateLog, text, withServer } from "../helpers/fake-animate.js";
 
@@ -45,33 +44,19 @@ Object.defineProperty(__doc, "selection", { get: function () { return __element.
 var fl = { documents: [__doc], trace: function () {} };`,
         context,
     );
-    let handler: ((input: never) => Promise<unknown>) | undefined;
+    let handler: ((input: unknown) => Promise<unknown>) | undefined;
     let inputSchema: z.ZodRawShape = {};
-    const bundlePaths: Record<string, string> = {
-        "select-document": "server/jsfl/shared/select-document.jsfl",
-        "edit-state": "server/jsfl/shared/edit-state.jsfl",
-        "export-common": "server/jsfl/shared/export-common.jsfl",
-        "timeline-helpers": "server/jsfl/timeline/helpers.jsfl",
-        "element-read": "server/jsfl/shared/element-read.jsfl",
-        "edit-elements": "server/jsfl/timeline/edit-elements.jsfl",
-    };
-    /**
-     * Loads requested JSFL source files for the fixture.
-     * @param names Requested bundle names.
-     * @returns Concatenated JSFL source.
-     */
-    const bundle = (...names: string[]) =>
-        names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
+    const runner = { execute: async (code: string) => runInContext(code, context) };
     registerEditElements(
         {
             registerTool: (_name: string, config: { inputSchema: unknown }, callback: (input: unknown) => unknown) => {
                 inputSchema = config.inputSchema as z.ZodRawShape;
-                handler = callback as (input: never) => Promise<unknown>;
+                handler = callback as unknown as (input: unknown) => Promise<unknown>;
             },
-        } as never,
+        } as unknown as Parameters<typeof registerEditElements>[0],
         {
-            runner: { execute: async (code) => runInContext(code, context) },
-            bundle,
+            runner,
+            jsfl: createJsflRunner(runner),
         },
     );
     const parsed = z.object(inputSchema).safeParse(input);
@@ -79,7 +64,7 @@ var fl = { documents: [__doc], trace: function () {} };`,
         // Preserve the normal tool-error shape for schema failures.
         return { isError: true, content: [{ type: "text", text: parsed.error.message }], context };
     }
-    return { ...((await handler?.(parsed.data as never)) as Record<string, unknown>), context };
+    return { ...((await handler?.(parsed.data)) as Record<string, unknown>), context };
 };
 
 test("edit_elements updates instances and returns the values read back from Animate", { timeout: 30_000 }, async () => {
@@ -768,3 +753,22 @@ test("edit_elements rejects swapSymbol in add.set before earlier writes", { time
         );
     });
 });
+
+test("edit_elements tools/list reuses the repeated element-set schema", { timeout: 30_000 }, () =>
+    withServer({}, async (client) => {
+        const { tools } = await client.listTools();
+        const tool = tools.find(({ name }) => name === "edit_elements");
+        assert.ok(tool);
+        const schema = tool.inputSchema as {
+            definitions?: Record<string, unknown>;
+            properties?: Record<string, unknown>;
+        };
+        assert.ok(schema.definitions?.EditElementSet);
+        const references = JSON.stringify(schema.properties).match(/#\/definitions\/[^"]+/g) ?? [];
+        assert.ok(references.length > 0);
+        for (const reference of references) {
+            const definition = reference.split("/").at(-1);
+            assert.ok(definition && schema.definitions?.[definition], `Unresolved schema reference: ${reference}`);
+        }
+    }),
+);

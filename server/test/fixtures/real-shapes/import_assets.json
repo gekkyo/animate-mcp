@@ -1,0 +1,11 @@
+{
+    "shape": {
+        "document": "string",
+        "items": ["string"]
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "paths": ["${TMP}/recorded-path.png", "${TMP}/recorded-path.wav"],
+        "document": "import_document_properties_YcUl7A.fla"
+    }
+}

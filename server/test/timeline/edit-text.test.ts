@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
 import { z } from "zod";
+import { createJsflRunner } from "../../src/tools/core/shared.js";
 import { registerEditText } from "../../src/tools/timeline/edit-text.js";
 
 /**
@@ -75,32 +74,19 @@ const callEditText = async (
     context: ReturnType<typeof createContext>;
 }> => {
     const context = fakeDocument(options);
-    let handler: ((input: never) => Promise<unknown>) | undefined;
+    let handler: ((input: unknown) => Promise<unknown>) | undefined;
     let inputSchema: z.ZodRawShape = {};
-    const bundlePaths: Record<string, string> = {
-        "select-document": "server/jsfl/shared/select-document.jsfl",
-        "edit-state": "server/jsfl/shared/edit-state.jsfl",
-        "export-common": "server/jsfl/shared/export-common.jsfl",
-        "element-read": "server/jsfl/shared/element-read.jsfl",
-        "edit-text": "server/jsfl/timeline/edit-text.jsfl",
-    };
-    /**
-     * Loads requested JSFL source files for the fixture.
-     * @param names Requested bundle names.
-     * @returns Concatenated JSFL source.
-     */
-    const bundle = (...names: string[]) =>
-        names.map((name) => readFileSync(resolve(bundlePaths[name]), "utf8")).join("\n");
+    const runner = { execute: async (code: string) => runInContext(code, context) };
     registerEditText(
         {
             registerTool: (_name: string, config: { inputSchema: unknown }, callback: (input: unknown) => unknown) => {
                 inputSchema = config.inputSchema as z.ZodRawShape;
-                handler = callback as (input: never) => Promise<unknown>;
+                handler = callback as unknown as (input: unknown) => Promise<unknown>;
             },
-        } as never,
+        } as unknown as Parameters<typeof registerEditText>[0],
         {
-            runner: { execute: async (code) => runInContext(code, context) },
-            bundle,
+            runner,
+            jsfl: createJsflRunner(runner),
         },
     );
     const parsed = z.object(inputSchema).safeParse(input);
@@ -108,7 +94,7 @@ const callEditText = async (
         // Return schema failures in the same shape as an MCP tool error.
         return { isError: true, content: [{ type: "text", text: parsed.error.message }], context };
     }
-    return { ...((await handler?.(parsed.data as never)) as Record<string, unknown>), context };
+    return { ...((await handler?.(parsed.data)) as Record<string, unknown>), context };
 };
 
 test("edit_text adds styled text to a locked layer and restores frame and selection", async () => {

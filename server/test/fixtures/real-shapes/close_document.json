@@ -1,0 +1,11 @@
+{
+    "shape": {
+        "name": "string",
+        "path": "string"
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "document": "${TMP}/recorded-path.fla",
+        "discardUnsavedChanges": true
+    }
+}

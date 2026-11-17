@@ -1,3 +1,4 @@
+// @requires shared/edit-state
 // `var __timelineRef` (scene index or library item path) and `var __ops` are injected before this file.
 /** Defines shared layer and frame helpers for the timeline bundle.
  */

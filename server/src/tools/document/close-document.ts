@@ -1,7 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const CLOSE_DOCUMENT_INPUT = {
     document: z.string().min(1).describe("Exact open document name or saved path"),
@@ -10,11 +9,12 @@ const CLOSE_DOCUMENT_INPUT = {
         .optional()
         .describe("Must be true to discard unsaved changes; otherwise save first"),
 };
+const CLOSE_DOCUMENT_RESULT = z.object({ name: z.string(), path: z.string().nullable() }).strict();
 
 export const closeDocumentTool: ToolDefinition<typeof CLOSE_DOCUMENT_INPUT> = {
     name: "close_document",
     description:
-        "Close exactly one open document by its exact name or saved path. This never defaults to the active document or saves; all unsaved changes are discarded without a prompt, so require explicit user consent and set discardUnsavedChanges to true only when that loss is intended. Otherwise call save_document first.",
+        "Close exactly one open document by its exact name or saved path. This never defaults to the active document or saves; it selects the Arrow tool in a separate Run before closing and leaves it selected. All unsaved changes are discarded without a prompt, so require explicit user consent and set discardUnsavedChanges to true only when that loss is intended. Otherwise call save_document first.",
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     inputSchema: CLOSE_DOCUMENT_INPUT,
     guidance: {},
@@ -27,23 +27,25 @@ export const closeDocumentTool: ToolDefinition<typeof CLOSE_DOCUMENT_INPUT> = {
      */
     run: async (
         { document, discardUnsavedChanges }: Parameters<ToolCallback<typeof CLOSE_DOCUMENT_INPUT>>[0],
-        deps: ToolDeps,
+        { jsfl }: ToolDeps,
     ) => {
-        const { runner, bundle } = deps;
-
         if (discardUnsavedChanges !== true) {
             throw new Error(
                 "Set discardUnsavedChanges: true only when you intend to discard changes; otherwise call save_document first.",
             );
         }
 
-        const code = jsflRun("close-document", { __closeDocumentTarget: document }, bundle);
-        const value = String(await runner.execute(code));
-        const separator = value.indexOf("\n");
-        if (separator < 1) {
-            throw new Error("Animate returned invalid closed-document details");
-        }
-        const result = { name: value.slice(0, separator), path: value.slice(separator + 1) || null };
+        // unverified: A separate Arrow-tool Run avoided a crash once in isolation; the integrated close path has not been real-tested.
+        await jsfl.run(
+            "document/prepare-close",
+            { __closeDocumentTarget: document, __closeDocumentRequireUnsaved: false },
+            z.literal(true),
+        );
+        const result = await jsfl.run(
+            "document/close-document",
+            { __closeDocumentTarget: document },
+            CLOSE_DOCUMENT_RESULT,
+        );
         return { data: result };
     },
 };

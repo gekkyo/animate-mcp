@@ -1,0 +1,9 @@
+{
+    "shape": {
+        "result": "boolean|string|number"
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "code": "\"real-shape-probe\";"
+    }
+}

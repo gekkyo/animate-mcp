@@ -4,12 +4,12 @@ import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createJsflRunner } from "../../src/tools/core/shared.js";
 import { registerOpenDocument } from "../../src/tools/document/open-document.js";
 
 type FakeDocument = { name: string; pathURI?: string; type: string; asVersion?: string };
 
 const targetJSFL = readFileSync(new URL("../../jsfl/document/document-target.jsfl", import.meta.url), "utf8");
-const openJSFL = readFileSync(new URL("../../jsfl/document/open-document.jsfl", import.meta.url), "utf8");
 
 /**
  * Registers the open-document tool against a minimal in-memory Animate API.
@@ -64,20 +64,20 @@ function setup(initial: FakeDocument[] = [], files: Record<string, "valid" | "in
             handler = callback;
         },
     } as unknown as McpServer;
+    const runner = {
+        execute: async (code: string) => runInNewContext(code, globals),
+    };
     registerOpenDocument(server, {
         // Execute the actual JSFL in a VM while keeping all Animate APIs in this fixture.
-        runner: {
-            execute: async (code: string) => runInNewContext(code, globals),
-        },
-        bundle: (...names: string[]) =>
-            names.map((name) => (name === "document-target" ? targetJSFL : openJSFL)).join("\n"),
+        runner,
+        jsfl: createJsflRunner(runner),
     });
     return {
         call: (input: Record<string, unknown>) => {
             if (!handler) {
                 throw new Error("open_document handler was not registered");
             }
-            return handler(input as never);
+            return (handler as unknown as (input: Record<string, unknown>) => Promise<unknown>)(input);
         },
         active: () => activeDocument,
         openCalls: () => openCalls,

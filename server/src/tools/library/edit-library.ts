@@ -1,7 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const LIBRARY_PATH = z.string().regex(/^[^/]+(?:\/[^/]+)*$/);
 const EDIT_LIBRARY_OP = z.discriminatedUnion("op", [
@@ -62,6 +61,15 @@ const EDIT_LIBRARY_INPUT = {
     ops: z.array(EDIT_LIBRARY_OP).min(1),
     document: z.string().optional(),
 };
+const EDIT_LIBRARY_RESULT = z
+    .object({
+        applied: z.array(EDIT_LIBRARY_OP),
+        results: z.array(z.object({ op: EDIT_LIBRARY_OP, result: z.unknown() }).strict()),
+        failed: z.object({ op: EDIT_LIBRARY_OP, error: z.string() }).strict().nullable(),
+        skipped: z.array(EDIT_LIBRARY_OP),
+        warnings: z.array(z.string()),
+    })
+    .strict();
 
 export const editLibraryTool: ToolDefinition<typeof EDIT_LIBRARY_INPUT> = {
     name: "edit_library",
@@ -80,16 +88,11 @@ export const editLibraryTool: ToolDefinition<typeof EDIT_LIBRARY_INPUT> = {
      * @returns Operation results, failures, skipped operations, and warnings.
      */
     run: async ({ ops, document }: Parameters<ToolCallback<typeof EDIT_LIBRARY_INPUT>>[0], deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
-        const code = jsflRun("library-index", { __docName: document ?? "", __ops: ops }, bundle);
-        const result = JSON.parse(String(await runner.execute(code))) as {
-            applied: typeof ops;
-            results: { op: (typeof ops)[number]; result: unknown }[];
-            failed: { op: (typeof ops)[number]; error: string } | null;
-            skipped: typeof ops;
-            warnings: string[];
-        };
+        const result = await deps.jsfl.run(
+            "library/index",
+            { __docName: document ?? "", __ops: ops },
+            EDIT_LIBRARY_RESULT,
+        );
         return {
             data: result,
             text: `If library structure changed, run export_scripts again before apply_scripts.\n${JSON.stringify(result)}`,

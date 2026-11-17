@@ -1,16 +1,13 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { createJsflRunner } from "../../src/tools/core/shared.js";
 import { registerSaveDocument } from "../../src/tools/document/save-document.js";
 
 type FakeDocument = { name: string; pathURI?: string };
-
-const targetJSFL = readFileSync(new URL("../../jsfl/document/document-target.jsfl", import.meta.url), "utf8");
-const saveJSFL = readFileSync(new URL("../../jsfl/document/save-document.jsfl", import.meta.url), "utf8");
 
 /**
  * Registers save_document against fake documents and file/save behavior.
@@ -19,7 +16,7 @@ const saveJSFL = readFileSync(new URL("../../jsfl/document/save-document.jsfl", 
  * @param options Fake save result and reported path overrides
  * @param options.saveResult Whether the fake save operation succeeds
  * @param options.reportedPath Path reported by the fake save operation
- * @returns Tool-call helpers and recorded save/bundle calls
+ * @returns Tool-call helpers and recorded save calls
  */
 function setup(
     initial: FakeDocument[],
@@ -62,15 +59,12 @@ function setup(
             registered = { ...options, handler: handler as (input: unknown) => Promise<unknown> };
         },
     };
-    const bundleNames: string[][] = [];
+    const runner = {
+        execute: async (code: string) => runInNewContext(code, globals),
+    };
     registerSaveDocument(server as unknown as McpServer, {
-        runner: {
-            execute: async (code) => runInNewContext(code, globals),
-        },
-        bundle: (...names) => {
-            bundleNames.push(names);
-            return names.map((name) => (name === "document-target" ? targetJSFL : saveJSFL)).join("\n");
-        },
+        runner,
+        jsfl: createJsflRunner(runner),
     });
     assert.ok(registered);
     const tool = registered;
@@ -80,7 +74,6 @@ function setup(
         activeDocument,
         documents,
         saveCalls,
-        bundleNames,
         schema,
         tool,
     };
@@ -113,10 +106,6 @@ test("save_document requires an explicit unique document and refuses unconfirmed
         structuredContent: { path: string };
     };
     assert.deepEqual(result.structuredContent, { path: uri });
-    assert.deepEqual(app.bundleNames, [
-        ["document-target", "save-document"],
-        ["document-target", "save-document"],
-    ]);
     assert.equal(app.saveCalls.length, 1);
     assert.equal(app.activeDocument, first);
     assert.equal(first.pathURI, uri);

@@ -1,7 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const TEXT_STYLE = z
     .object({
@@ -82,6 +81,13 @@ const EDIT_TEXT_INPUT = {
     document: z.string().optional(),
     ops: z.array(EDIT_TEXT_OP).min(1),
 };
+const EDIT_TEXT_RESULT = z
+    .object({
+        applied: z.number(),
+        elements: z.array(z.record(z.string(), z.unknown())),
+        warning: z.string().optional(),
+    })
+    .passthrough();
 
 export const editTextTool: ToolDefinition<typeof EDIT_TEXT_INPUT> = {
     name: "edit_text",
@@ -101,14 +107,11 @@ export const editTextTool: ToolDefinition<typeof EDIT_TEXT_INPUT> = {
      * @returns The result of the applied text operations.
      */
     run: async ({ timeline, document, ops }: Parameters<ToolCallback<typeof EDIT_TEXT_INPUT>>[0], deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
-        const code = jsflRun("edit-text", { __docName: document ?? "", __timelineRef: timeline, __ops: ops }, bundle);
-        const result = JSON.parse(String(await runner.execute(code))) as {
-            applied: number;
-            elements: Record<string, unknown>[];
-            warning?: string;
-        };
+        const result = await deps.jsfl.run(
+            "timeline/edit-text",
+            { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
+            EDIT_TEXT_RESULT,
+        );
         return { data: result };
     },
 };

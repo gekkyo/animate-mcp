@@ -1,0 +1,10 @@
+{
+    "shape": {
+        "name": "string",
+        "path": "string|null"
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "path": "${TMP}/recorded-path.fla"
+    }
+}

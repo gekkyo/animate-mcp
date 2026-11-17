@@ -1,0 +1,53 @@
+{
+    "shape": {
+        "applied": "number",
+        "elements": [
+            {
+                "type": "string",
+                "name": "string",
+                "text": "string",
+                "style": {
+                    "face": "string",
+                    "size": "number",
+                    "fillColor": "string",
+                    "bold": "boolean",
+                    "italic": "boolean",
+                    "alignment": "string",
+                    "textType": "string",
+                    "lineType": "string"
+                },
+                "layer": "string",
+                "frame": "number",
+                "element": "number"
+            }
+        ]
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "document": "名称未設定 - 17",
+        "timeline": 0,
+        "ops": [
+            {
+                "op": "add",
+                "layer": "TextSmokeAS3",
+                "frame": 1,
+                "rectangle": {
+                    "left": 30,
+                    "top": 40,
+                    "right": 250,
+                    "bottom": 100
+                },
+                "text": "AS3 dynamic text",
+                "style": {
+                    "face": "Arial",
+                    "size": 24,
+                    "fillColor": "#123456",
+                    "bold": true,
+                    "alignment": "center",
+                    "textType": "dynamic",
+                    "lineType": "single line"
+                }
+            }
+        ]
+    }
+}

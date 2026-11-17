@@ -1,0 +1,22 @@
+{
+    "shape": {
+        "name": "string",
+        "type": "string",
+        "registrationPoint": "string"
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "timeline": 0,
+        "document": "animate-mcp-canvas-THrsjZ.fla",
+        "frame": 1,
+        "elements": [
+            {
+                "layer": 1,
+                "element": 0
+            }
+        ],
+        "name": "CanvasSmokeSymbol",
+        "type": "movie clip",
+        "registrationPoint": "center"
+    }
+}

@@ -1,0 +1,13 @@
+{
+    "shape": {
+        "outputPanel": "string",
+        "compilerErrorsPanel": "string",
+        "compilerDiagnostics": {
+            "status": "string",
+            "errors": ["empty"],
+            "warnings": ["empty"]
+        },
+        "note": "string"
+    },
+    "optionalKeys": []
+}

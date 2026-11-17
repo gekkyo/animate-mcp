@@ -1,0 +1,54 @@
+{
+    "shape": {
+        "applied": [
+            {
+                "op": "string",
+                "layer": "string",
+                "instance": "string",
+                "kind": "string",
+                "keyframes": [
+                    {
+                        "frame": "number",
+                        "x": "number",
+                        "y": "number"
+                    }
+                ]
+            }
+        ],
+        "failed": "null",
+        "skipped": ["empty"],
+        "warnings": ["empty"],
+        "layers": [
+            {
+                "name": "string",
+                "type": "string",
+                "locked": "boolean"
+            }
+        ]
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "timeline": 0,
+        "document": "animate-mcp-canvas-THrsjZ.fla",
+        "ops": [
+            {
+                "op": "createTween",
+                "layer": "CanvasSmokeTween",
+                "instance": "CanvasSmokeInstance",
+                "kind": "classic",
+                "keyframes": [
+                    {
+                        "frame": 1,
+                        "x": 72,
+                        "y": 88
+                    },
+                    {
+                        "frame": 5,
+                        "x": 162,
+                        "y": 88
+                    }
+                ]
+            }
+        ]
+    }
+}

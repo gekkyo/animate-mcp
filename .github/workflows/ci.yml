@@ -18,4 +18,5 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm run smoke:bin
+      - run: npm run test:prompt-e2e
       - run: npm test

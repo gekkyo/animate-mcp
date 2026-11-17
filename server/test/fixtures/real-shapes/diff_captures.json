@@ -1,0 +1,23 @@
+{
+    "shape": {
+        "before": "string",
+        "after": "string",
+        "path": "string",
+        "width": "number",
+        "height": "number",
+        "changedPixels": "number",
+        "changedPercentage": "number",
+        "boundingBox": {
+            "x": "number",
+            "y": "number",
+            "width": "number",
+            "height": "number"
+        }
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "before": "${TMP}/.animate-mcp/captures/animate-mcp-verification-tools-V6aMZk/1-20261116-155743-668.png",
+        "after": "${TMP}/.animate-mcp/captures/animate-mcp-verification-tools-V6aMZk/1-20261116-155744-238.png",
+        "tolerance": 8
+    }
+}

@@ -1,6 +1,7 @@
+// @requires document/document-target, shared/export-common
 // `__saveDocumentTarget`, `__saveDocumentPath`, and `__saveDocumentConfirm` are injected before this file.
 /** Saves the targeted document to its current or requested path and verifies the saved file.
- * @returns The saved document path URI.
+ * @returns The serialized saved document path URI.
  */
 (function () {
   var document = resolveDocumentTarget(__saveDocumentTarget);
@@ -36,5 +37,5 @@
   var normalizedSavedPath = normalizeDocumentTargetPath(savedPath);
   if (normalizedSavedPath !== targetURI) throw new Error("Animate's reported path does not match the requested save destination");
   if (!FLfile.exists(savedPath)) throw new Error("Animate reported a saved path, but the file does not exist");
-  return savedPath;
+  return serialize(savedPath);
 })();

@@ -1,0 +1,35 @@
+{
+    "shape": {
+        "applied": [
+            {
+                "op": "string",
+                "name": "string"
+            }
+        ],
+        "failed": "null",
+        "skipped": ["empty"],
+        "warnings": ["empty"],
+        "layers": [
+            {
+                "name": "string",
+                "type": "string",
+                "locked": "boolean"
+            }
+        ]
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "timeline": 0,
+        "document": "animate-mcp-canvas-THrsjZ.fla",
+        "ops": [
+            {
+                "op": "addLayer",
+                "name": "CanvasSmokeTween"
+            },
+            {
+                "op": "addLayer",
+                "name": "CanvasSmokeActions"
+            }
+        ]
+    }
+}

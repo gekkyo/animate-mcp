@@ -34,6 +34,21 @@ export default [
     rules: jsdocRules,
   },
   {
+    files: ["server/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        Buffer: "readonly",
+        clearTimeout: "readonly",
+        console: "readonly",
+        process: "readonly",
+        setInterval: "readonly",
+        setTimeout: "readonly",
+        URL: "readonly",
+      },
+    },
+    rules: { "no-undef": "error" },
+  },
+  {
     files: ["server/jsfl/**/*.jsfl"],
     languageOptions: {
       ecmaVersion: 5,
@@ -49,5 +64,14 @@ export default [
   {
     languageOptions: { parser: tsParser },
     files: ["server/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "TSAsExpression[typeAnnotation.type='TSNeverKeyword']",
+          message: "Do not use `as never` to bypass type checking; use a properly typed adapter.",
+        },
+      ],
+    },
   },
 ];

@@ -1,6 +1,6 @@
 {
   "name": "animate-mcp",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "MCP server for Adobe Animate: edit scripts, timelines and library, then publish and verify.",
   "mcpName": "io.github.gekkyo/animate-mcp",
   "license": "MIT",
@@ -35,17 +35,22 @@
     "build": "tsc --project server/tsconfig.json",
     "test": "tsx --test \"server/test/**/*.test.ts\"",
     "test:coverage": "tsx --test --experimental-test-coverage \"server/test/**/*.test.ts\"",
-    "smoke:bin": "node server/scripts/smoke-bin.mjs",
+    "test:verification": "node --test \"server/verification/test/*.test.mjs\"",
     "start": "node server/dist/index.js",
+    "call": "node server/scripts/call-tool.mjs",
+    "smoke": "node server/verification/smoke/smoke-all.mjs",
+    "smoke:bin": "node server/verification/smoke/smoke-bin.mjs",
+    "verify:prompt": "node server/verification/verify-batch.mjs prompt",
+    "verify:all": "node server/verification/verify-batch.mjs all",
+    "test:prompt-e2e": "npm run build && node --test \"server/verification/prompt-e2e/test/*.test.mjs\"",
     "lint": "biome check && eslint \"server/**/*.ts\" \"server/**/*.mjs\" \"server/jsfl/**/*.jsfl\"",
     "format": "biome check --write"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@types/node": "^25.0.0",
     "playwright-core": "^1.65.1",
     "pngjs": "^7.0.0",
-    "typescript": "^5.9.3",
+    "saxes": "^6.0.0",
     "zod": "^4.1.12"
   },
   "overrides": {
@@ -55,10 +60,12 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
+    "@types/node": "^25.0.0",
     "@types/pngjs": "^6.0.5",
     "@typescript-eslint/parser": "^8.72.2",
     "eslint": "^10.15.0",
     "eslint-plugin-jsdoc": "^65.4.7",
-    "tsx": "^4.20.6"
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   }
 }

@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/export-common
 // `var __docName` and `var __properties` are injected before this file.
 /** Updates supported document properties and returns their read-back values.
  * @returns The serialized document name and updated properties.

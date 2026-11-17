@@ -1,7 +1,6 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const EDIT_TIMELINE_OP = z.discriminatedUnion("op", [
     z.object({
@@ -102,6 +101,30 @@ const EDIT_TIMELINE_INPUT = {
     ops: z.array(EDIT_TIMELINE_OP).min(1),
     document: z.string().optional(),
 };
+const EDIT_TIMELINE_RESULT = z
+    .object({
+        applied: z.array(z.record(z.string(), z.unknown())),
+        failed: z
+            .object({
+                op: z.record(z.string(), z.unknown()),
+                error: z.string(),
+            })
+            .passthrough()
+            .nullable(),
+        skipped: z.array(z.record(z.string(), z.unknown())),
+        warnings: z.array(z.string()),
+        layers: z.array(
+            z
+                .object({
+                    name: z.string(),
+                    type: z.string(),
+                    parent: z.string().optional(),
+                    locked: z.boolean(),
+                })
+                .passthrough(),
+        ),
+    })
+    .passthrough();
 
 export const editTimelineTool: ToolDefinition<typeof EDIT_TIMELINE_INPUT> = {
     name: "edit_timeline",
@@ -124,20 +147,11 @@ export const editTimelineTool: ToolDefinition<typeof EDIT_TIMELINE_INPUT> = {
         { timeline, ops, document }: Parameters<ToolCallback<typeof EDIT_TIMELINE_INPUT>>[0],
         deps: ToolDeps,
     ) => {
-        const { runner, bundle } = deps;
-
-        const code = jsflRun(
-            "timeline-index",
+        const result = await deps.jsfl.run(
+            "timeline/index",
             { __docName: document ?? "", __timelineRef: timeline, __ops: ops },
-            bundle,
+            EDIT_TIMELINE_RESULT,
         );
-        const result = JSON.parse(String(await runner.execute(code))) as {
-            applied: ((typeof ops)[number] & { createdLayers?: string[] })[];
-            failed: { op: (typeof ops)[number]; error: string } | null;
-            skipped: typeof ops;
-            warnings: string[];
-            layers: { name: string; type: string; parent?: string; locked: boolean }[];
-        };
         return { data: result, text: `Export again before apply_scripts.\n${JSON.stringify(result)}` };
     },
 };

@@ -1,28 +1,19 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import { z } from "zod";
+import { createJsflRunner, type ToolDeps } from "../../src/tools/core/shared.js";
 import { registerConvertToSymbol } from "../../src/tools/timeline/convert-to-symbol.js";
-
-const jsflParts = {
-    "select-document": readFileSync(new URL("../../jsfl/shared/select-document.jsfl", import.meta.url), "utf8"),
-    "edit-state": readFileSync(new URL("../../jsfl/shared/edit-state.jsfl", import.meta.url), "utf8"),
-    "export-common": readFileSync(new URL("../../jsfl/shared/export-common.jsfl", import.meta.url), "utf8"),
-    "convert-to-symbol": readFileSync(new URL("../../jsfl/timeline/convert-to-symbol.jsfl", import.meta.url), "utf8"),
-};
+import { createFakeJsfl } from "../helpers/fake-jsfl.js";
 
 /**
- * Register the tool against a minimal server and capture its bundle requests.
- * @param runner Executes generated JSFL and returns its result.
+ * Register the tool against a minimal server.
+ * @param runner Runtime dependency for the default JSFL seam.
  * @param runner.execute Generated JSFL to execute.
- * @param bundle Supplies the JSFL source bundle.
- * @returns The registered tool and requested bundle names.
+ * @param jsfl Optional JSFL seam override.
+ * @returns The registered tool.
  */
-function register(
-    runner: { execute: (code: string) => Promise<unknown> },
-    bundle: (...names: string[]) => string = () => "/* tool bundle */",
-) {
+function register(runner: ToolDeps["runner"], jsfl?: ToolDeps["jsfl"]) {
     let registered:
         | {
               name: string;
@@ -41,16 +32,12 @@ function register(
             registered = { name, ...options, handler: handler as (input: unknown) => Promise<unknown> };
         },
     };
-    const bundleNames: string[][] = [];
-    registerConvertToSymbol(server as never, {
+    registerConvertToSymbol(server as unknown as Parameters<typeof registerConvertToSymbol>[0], {
         runner,
-        bundle: (...names) => {
-            bundleNames.push(names);
-            return bundle(...names);
-        },
+        jsfl: jsfl ?? createJsflRunner(runner),
     });
     assert.ok(registered);
-    return { tool: registered, bundleNames };
+    return { tool: registered };
 }
 
 /**
@@ -155,12 +142,7 @@ function setupAnimate(tweenInterior = false) {
             trace() {},
         },
     };
-    const app = register(
-        {
-            execute: async (code) => runInNewContext(code, globals),
-        },
-        (...names) => names.map((name) => jsflParts[name as keyof typeof jsflParts]).join("\n"),
-    );
+    const app = register({ execute: async (code) => runInNewContext(code, globals) });
     return {
         ...app,
         document,
@@ -173,13 +155,10 @@ function setupAnimate(tweenInterior = false) {
 }
 
 test("convert_to_symbol builds a targeted JSFL request and returns the handler result", async () => {
-    let code = "";
-    const { tool, bundleNames } = register({
-        execute: async (value) => {
-            code = value;
-            return JSON.stringify({ name: "Hero", type: "movie clip", registrationPoint: "center" });
-        },
+    const fake = createFakeJsfl({
+        "timeline/convert-to-symbol": { name: "Hero", type: "movie clip", registrationPoint: "center" },
     });
+    const { tool } = register({ execute: async () => "" }, fake.jsfl);
     const input = {
         timeline: "characters/Hero",
         document: "scene.fla",
@@ -196,11 +175,25 @@ test("convert_to_symbol builds a targeted JSFL request and returns the handler r
         structuredContent: { name: string; type: string; registrationPoint: string };
     };
 
-    assert.deepEqual(bundleNames, [["select-document", "edit-state", "export-common", "convert-to-symbol"]]);
-    assert.match(code, /var __docName = "scene\.fla"/);
-    assert.match(code, /var __timelineRef = "characters\/Hero"/);
-    assert.match(code, /var __request = /);
-    assert.match(code, /"registrationPoint":"center"/);
+    assert.deepEqual(fake.calls, [
+        {
+            entry: "timeline/convert-to-symbol",
+            vars: {
+                __docName: "scene.fla",
+                __timelineRef: "characters/Hero",
+                __request: {
+                    frame: 4,
+                    elements: [
+                        { layer: 1, element: 0 },
+                        { layer: "Foreground", element: "hand" },
+                    ],
+                    name: "Hero",
+                    type: "movie clip",
+                    registrationPoint: "center",
+                },
+            },
+        },
+    ]);
     assert.deepEqual(result.structuredContent, {
         name: "Hero",
         type: "movie clip",

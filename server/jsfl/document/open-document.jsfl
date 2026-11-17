@@ -1,5 +1,6 @@
+// @requires document/document-target, shared/export-common
 /** Opens or creates a document, activates it, and returns its name and path.
- * @returns The document name and path separated by a newline.
+ * @returns The serialized document name and path.
  */
 (function () {
   var path = __openDocumentPath, type = __openDocumentType, documents = fl.documents || [], i, document;
@@ -14,7 +15,7 @@
     if (matches.length === 1) {
       // Animate applies setActiveWindow only after this Run returns.
       fl.setActiveWindow(matches[0]);
-      return matches[0].name + "\n" + (matches[0].pathURI || "");
+      return serialize({ name: matches[0].name, path: matches[0].pathURI || null });
     }
     if (!FLfile.exists(pathURI)) throw new Error("Document file does not exist: " + path);
     fl.openDocument(pathURI);
@@ -27,7 +28,7 @@
     if (matches.length !== 1) throw new Error("Animate could not open a valid FLA at path: " + path);
     // Animate applies setActiveWindow only after this Run returns.
     fl.setActiveWindow(matches[0]);
-    return matches[0].name + "\n" + (matches[0].pathURI || "");
+    return serialize({ name: matches[0].name, path: matches[0].pathURI || null });
   }
 
   var previous = [];
@@ -47,5 +48,5 @@
   }
   // Animate applies setActiveWindow only after this Run returns.
   fl.setActiveWindow(document);
-  return document.name + "\n" + (document.pathURI || "");
+  return serialize({ name: document.name, path: document.pathURI || null });
 })()

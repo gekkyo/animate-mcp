@@ -25,6 +25,46 @@ const installedMacApp = () => {
     }
 };
 
+/** Returns the pgrep -f pattern for the Animate process (overridable for tests).
+ * @returns pgrep pattern
+ */
+const macProcessPattern = () =>
+    process.env.ANIMATE_MCP_PROCESS_PATTERN ?? "Adobe Animate [0-9]{4}\\.app/Contents/MacOS/Adobe Animate";
+
+/**
+ * Returns the .app bundle of the running Animate, so a Run never starts a second installed version.
+ * @returns Absolute .app path, or undefined when none is found or pgrep fails
+ */
+const runningMacApp = () =>
+    new Promise<string | undefined>(
+        /** Resolves with the first running Animate bundle path.
+         * @param resolve Resolves with the bundle path or undefined
+         * @returns Nothing
+         */
+        (resolve) => {
+            let output = "";
+            const child = spawn("pgrep", ["-lf", macProcessPattern()], { stdio: ["ignore", "pipe", "ignore"] });
+            child.stdout.on(
+                "data",
+                /** Appends a pgrep output chunk.
+                 * @param chunk Output bytes to append
+                 * @returns Nothing
+                 */
+                (chunk) => {
+                    output += chunk;
+                },
+            );
+            child.once("error", () => resolve(undefined));
+            child.once(
+                "close",
+                /** Extracts the bundle path from "pid /path/X.app/Contents/MacOS/...".
+                 * @returns Nothing
+                 */
+                () => resolve(/(\/[^\n]*?\.app)\/Contents\/MacOS\//.exec(output)?.[1]),
+            );
+        },
+    );
+
 /**
  * Creates a Launcher that opens a Run file in Animate. Success means exit code 0.
  * @returns Launcher that opens runFile (absolute path of the Run file); the returned Promise<void> resolves when the launch command exits normally and rejects on failure or abnormal exit
@@ -40,22 +80,25 @@ export function launcher(): Launcher {
     } else if (IS_WINDOWS) {
         [command, args] = ["cmd", ["/c", "start", ""]];
     } else {
-        [command, args] = ["open", ["-a", installedMacApp()]];
+        [command, args] = ["open", []];
     }
+    const isMac = !custom && !IS_WINDOWS;
     return (
         /** Opens the Run file with the selected launch command.
          * @param runFile Absolute path of the Run file
          * @returns Resolves when the launch command exits normally; rejects on launch failure or abnormal exit
          */
-        (runFile) =>
-            new Promise(
+        async (runFile) => {
+            // Target the running Animate; the newest installed one is only a fallback.
+            const launchArgs = isMac ? ["-a", (await runningMacApp()) ?? installedMacApp()] : args;
+            return new Promise<void>(
                 /** Settles according to the launch command's exit status.
                  * @param resolve Resolves after a successful launch
                  * @param reject Rejects when spawning fails or the command exits abnormally
                  * @returns Nothing
                  */
                 (resolve, reject) => {
-                    const child = spawn(command, [...args, runFile], { stdio: "ignore" });
+                    const child = spawn(command, [...launchArgs, runFile], { stdio: "ignore" });
                     child.once("error", reject);
                     child.once(
                         "exit",
@@ -66,7 +109,8 @@ export function launcher(): Launcher {
                         (code) => (code === 0 ? resolve() : reject(new Error(`Launcher exited with code ${code}`))),
                     );
                 },
-            )
+            );
+        }
     );
 }
 
@@ -112,8 +156,7 @@ function isAnimateRunning(): Promise<boolean> {
             },
         );
     }
-    const pattern =
-        process.env.ANIMATE_MCP_PROCESS_PATTERN ?? "Adobe Animate [0-9]{4}\\.app/Contents/MacOS/Adobe Animate";
+    const pattern = macProcessPattern();
     return new Promise(
         /** Resolves whether pgrep found a matching process.
          * @param resolve Resolves with the process-presence result

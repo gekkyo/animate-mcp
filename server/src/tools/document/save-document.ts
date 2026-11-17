@@ -1,13 +1,13 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const SAVE_DOCUMENT_INPUT = {
     document: z.string().min(1).describe("Exact open document name or path"),
     path: z.string().min(1).optional().describe("Optional save-as destination path or file URI"),
     confirm: z.literal(true).optional().describe("Required to overwrite; only pass after asking the user"),
 };
+const SAVE_DOCUMENT_RESULT = z.string();
 
 export const saveDocumentTool: ToolDefinition<typeof SAVE_DOCUMENT_INPUT> = {
     name: "save_document",
@@ -26,21 +26,18 @@ export const saveDocumentTool: ToolDefinition<typeof SAVE_DOCUMENT_INPUT> = {
      */
     run: async (
         { document, path, confirm }: Parameters<ToolCallback<typeof SAVE_DOCUMENT_INPUT>>[0],
-        deps: ToolDeps,
+        { jsfl }: ToolDeps,
     ) => {
-        const { runner, bundle } = deps;
-
-        const code = jsflRun(
-            "save-document",
+        const savedPath = await jsfl.run(
+            "document/save-document",
             {
                 __saveDocumentTarget: document,
                 __saveDocumentPath: path ?? "",
                 __saveDocumentConfirm: confirm === true,
             },
-            bundle,
+            SAVE_DOCUMENT_RESULT,
         );
-        const savedPath = await runner.execute(code);
-        if (typeof savedPath !== "string" || !savedPath) {
+        if (!savedPath) {
             throw new Error("Animate returned an invalid saved path");
         }
         const result = { path: savedPath };

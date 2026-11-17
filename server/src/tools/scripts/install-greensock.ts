@@ -8,10 +8,17 @@ import {
     installGreensock,
     isGreensockInstalled,
 } from "../../greensock/greensock.js";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const INSTALL_GREENSOCK_INPUT = { confirm: z.boolean().optional(), document: z.string().optional() };
+const GREENSOCK_DOCUMENT_INFO_RESULT = z
+    .object({
+        folder: z.string().nullable(),
+        kind: z.enum(["as3", "as2", "canvas", "other"]),
+        name: z.string(),
+        asVersion: z.string().nullable(),
+    })
+    .strict();
 
 export const installGreensockTool: ToolDefinition<typeof INSTALL_GREENSOCK_INPUT> = {
     name: "install_greensock",
@@ -24,22 +31,15 @@ export const installGreensockTool: ToolDefinition<typeof INSTALL_GREENSOCK_INPUT
     },
     /** Installs GreenSock-AS3 beside the selected saved AS3 document after confirmation.
      * @param args Validated confirmation and document options
-     * @param deps Runtime runner and JSFL bundler
+     * @param deps Runtime dependencies
      * @returns Installation status and path
      */
     run: async ({ confirm, document }: Parameters<ToolCallback<typeof INSTALL_GREENSOCK_INPUT>>[0], deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
-        const code = `${jsflRun(
-            ["select-document", "export-common", "document-runtime-info"],
+        const info = await deps.jsfl.run(
+            "scripts/install-greensock-info",
             { __docName: document ?? "" },
-            bundle,
-        )}\nserialize(documentRuntimeInfo(selectDocument()))`;
-        const info = JSON.parse(String(await runner.execute(code))) as {
-            folder: string | null;
-            kind: "as3" | "as2" | "canvas" | "other";
-            name: string;
-        };
+            GREENSOCK_DOCUMENT_INFO_RESULT,
+        );
         if (!info.folder) {
             throw new Error("Save the document first");
         }

@@ -1,0 +1,59 @@
+{
+    "shape": {
+        "applied": "number",
+        "elements": [
+            {
+                "type": "string",
+                "name": "string",
+                "libraryItem": "string",
+                "matrix": {
+                    "a": "number",
+                    "b": "number",
+                    "c": "number",
+                    "d": "number",
+                    "tx": "number",
+                    "ty": "number"
+                },
+                "x": "number",
+                "y": "number",
+                "transformationPoint": {
+                    "x": "number",
+                    "y": "number"
+                },
+                "scaleX": "number",
+                "scaleY": "number",
+                "rotation": "number",
+                "skewX": "number",
+                "skewY": "number",
+                "colorEffect": {
+                    "mode": "string",
+                    "alphaPercent": "number",
+                    "alphaAmount": "number"
+                },
+                "filters": ["empty"],
+                "blendMode": "string",
+                "visible": "boolean",
+                "layer": "string",
+                "frame": "number",
+                "element": "number"
+            }
+        ]
+    },
+    "optionalKeys": [],
+    "arguments": {
+        "timeline": 0,
+        "document": "animate-mcp-canvas-THrsjZ.fla",
+        "ops": [
+            {
+                "layer": "CanvasSmokeTween",
+                "frame": 1,
+                "element": 0,
+                "set": {
+                    "name": "CanvasSmokeInstance",
+                    "x": 72,
+                    "y": 88
+                }
+            }
+        ]
+    }
+}

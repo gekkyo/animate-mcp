@@ -3,13 +3,13 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import type { ExportManifest } from "../../src/export-workspace/export-workspace.js";
+import type { ExportManifest } from "../../src/tools/scripts/workspace/export-workspace.js";
 import {
     collectChanges,
     prepareExport,
     recordApplied,
     writeManifest,
-} from "../../src/export-workspace/export-workspace.js";
+} from "../../src/tools/scripts/workspace/export-workspace.js";
 
 test("Export workspace collects edits and new scripts from its manifest", async () => {
     const dir = await mkdtemp(join(tmpdir(), "export-workspace-"));

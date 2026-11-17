@@ -1,11 +1,12 @@
 import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { basename, extname, isAbsolute, relative, resolve } from "node:path";
+import { basename, extname, isAbsolute, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Browser } from "playwright-core";
 import { z } from "zod";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { isInside } from "../core/paths.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 import { runPublish } from "./publish.js";
 
 const INPUT = {
@@ -42,20 +43,6 @@ const MIME: Record<string, string> = {
     ".woff": "font/woff",
     ".woff2": "font/woff2",
 };
-
-/**
- * Checks whether a resolved path is the root or one of its descendants.
- * @param root Canonical directory boundary.
- * @param path Path to check.
- * @returns Whether the path stays within the root.
- */
-function isInside(root: string, path: string): boolean {
-    const rel = relative(root, path);
-    return (
-        rel === "" ||
-        (!rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) && rel !== ".." && !isAbsolute(rel))
-    );
-}
 
 /**
  * Serves allowlisted files from a directory over an ephemeral loopback-only HTTP server.
@@ -125,7 +112,7 @@ export const verifyCanvasOutputTool: ToolDefinition<typeof INPUT> = {
      * @param publish Whether to publish before browser inspection.
      * @param htmlPath Optional absolute path to the published HTML file.
      * @param observeMs Additional time to observe browser events after page load.
-     * @param deps Tool dependencies for Animate execution and JSFL bundles.
+     * @param deps Tool dependencies for Animate execution.
      * @returns Build details, browser diagnostics, and a screenshot.
      */
     run: async (
@@ -135,11 +122,7 @@ export const verifyCanvasOutputTool: ToolDefinition<typeof INPUT> = {
         if (htmlPath && !isAbsolute(htmlPath)) {
             throw new Error("htmlPath must be an absolute path");
         }
-        const prelude = `var __docName = ${JSON.stringify(document ?? "")};\n${deps.bundle("select-document")}`;
-        const info = await deps.runner.execute(
-            `${prelude}\n(function () { var document = selectDocument(); if (!document.pathURI) throw new Error("Document is not saved; save first"); if (document.type !== "htmlcanvas") throw new Error("verify_canvas_output supports HTML5 Canvas documents only"); fl.setActiveWindow(document); return FLfile.uriToPlatformPath(document.pathURI); })()`,
-        );
-        const flaPath = String(info);
+        const flaPath = await deps.jsfl.run("output/verify-canvas-output", { __docName: document ?? "" }, z.string());
         let buildResult: Record<string, unknown> | null = null;
         if (publish) {
             buildResult = await runPublish(document, deps);

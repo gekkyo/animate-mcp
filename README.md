@@ -26,27 +26,19 @@ English | [日本語](README.ja.md)
 
 `animate-mcp` is an MCP server that lets AI agents such as Claude Code and Codex operate Adobe Animate directly.
 
-Just give the AI instructions in plain language to write and edit frame scripts, work with animations, and automate repetitive tasks.
+Just give the AI instructions in plain language to edit frame scripts, work with animations, and automate repetitive tasks.
 
 It reads the structure and scripts of scenes and library symbols so it can edit with an understanding of what is already there, and it supports a wide range of operations, including layers, frames, tweens, instance properties, and library assets. It can also publish a document and capture a frame as a PNG image.
 
 ## Highlights
 
-- AI agents can read frame scripts and structure from scenes and library symbols through files, then apply edited scripts back to Animate.
-- Inspect layers, keyframes, instances, and tweens.
-- Add and edit whole text fields, including font, size, color, alignment, and text type.
-- Edit instance transforms, color effects, filters, names, blend modes, and visibility on keyframes.
-- Edit layer and frame structure and labels.
-- Create motion and classic tweens with preset or custom Bézier easing, and shape tweens between raw shapes.
-- Organize library folders and items and find unused items.
-- Import images and audio, find direct Library usages, create or duplicate symbols, and change stage properties.
-- Publish AS3 and HTML5 Canvas documents and get AS3 compile errors and warnings back.
-- Read Animate's diagnostic panels and run an AS3 Test Movie to capture compile diagnostics and early Output panel text.
-- Capture a frame or range as PNG images.
-- Check for unused Library items and empty keyframes.
-- Verify Canvas HTML in Chrome and compare captured PNGs.
-- Install GreenSock-AS3 with a prompt (saved AS3 documents only; review the license first).
-- Work with ActionScript 3 and HTML5 Canvas, and run arbitrary JSFL.
+- Read and edit scene and library-symbol structure and frame scripts.
+- Inspect and edit layers, keyframes, instances, text, and tweens.
+- Organize the library, import assets, create and place symbols, and change stage settings.
+- Check for unused library items and empty keyframes.
+- Publish AS3 and HTML5 Canvas documents; capture AS3 compile diagnostics and early output from Test Movie.
+- Verify Canvas output in Chrome; capture frames as PNG images and compare them.
+- Install GreenSock-AS3 (saved AS3 documents only; license review required) and run arbitrary JSFL.
 
 ## Requirements
 
@@ -56,6 +48,9 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 - Verified with Animate 2027 on macOS and with Animate on Windows.
 
 ## Install
+
+First, install [Node.js](https://nodejs.org/).
+Then configure your client using the examples below.
 
 ### Claude Code
 
@@ -75,8 +70,14 @@ It reads the structure and scripts of scenes and library symbols so it can edit 
 ## Usage
 
 1. Start Animate and open the target .fla.
+
+
 2. Ask your agent to do the work.
-3. When editing scripts, the workflow is:
+   The first time JSFL runs, Animate shows this dialog. Select **Run as command**, check **Don't Show Again**, then click **OK**.<br><br>
+   ![Open JSFL File dialog with Don't Show Again checked](assets/jsfl-first-run-dialog.png)
+
+
+3. Script-editing operations work in this order:
     1. `export_scripts` writes the structure and every frame script to `~/.animate-mcp/exports/<document name>/`.
     2. The agent edits the files.
     3. `apply_scripts` writes them back into Animate.
@@ -184,18 +185,29 @@ Install GreenSock-AS3 into the saved AS3 document (I have reviewed the license)
 ## Usage tips
 
 - If multiple documents are open, specify the target document.
-- Changes made in Animate after Export are detected as conflicts during Apply. Apply is refused if the library has changed.
-- Re-exporting is refused when unapplied edits exist. Use `force: true` only if you are willing to discard them.
-- After changing the timeline, tweens, or library, re-export before editing or applying scripts.
-- Deleting a layer, frames, or a library item requires `confirm: true`. Library items in use cannot be deleted.
-- Save with `save_document` after confirming any overwrite, or save in Animate. Use `edit_library`'s `getLinkage` and `setLinkage` operations to inspect or edit AS3 linkage; renaming or moving an item still does not automatically update linkage names or string references in code.
-- `edit_elements` rejects tween interiors and validates all operations before writing; it does not save the `.fla`.
+- Script editing runs Export → edit → Apply. Re-export after changing Animate following an Export, or after changing the timeline or library.
+- Edited `.fla` files are not saved automatically. Use `save_document` or save in Animate.
 
 ## Tools
 
-Full inputs and caveats are in [TOOLS.md](TOOLS.md).
+### Public MCP tools
 
-| Area | Tool | What it does |
+The server exposes these four MCP tools by default:
+
+| MCP tool | Purpose |
+|----------|---------|
+| `search_tools` | Search operation schemas and caveats |
+| `execute_readonly` | Run read-only operations |
+| `execute_write` | Run all other operations (read-only operations are rejected) |
+| `run_jsfl` | Run JSFL directly (can be denied separately) |
+
+Permissions apply per `execute_readonly` / `execute_write`; “always allow” covers everything under that entrance. Existing permission rules for individual operation names (such as `mcp__animate__publish`) no longer match. See [TOOLS.md](TOOLS.md) for the operations and details.
+
+### Operations
+
+The operations below are not separate MCP tools; pass them as `name` to `execute_readonly` / `execute_write`.
+
+| Area | Operation | What it does |
 |------|------|--------------|
 | Document | `get_document_info` | Show name, size, frame rate, and AS version |
 |  | `get_status` | Check Animate response and list open documents |
@@ -215,7 +227,9 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 | Library | `edit_library` | Organize items, find usages, edit AS3 linkage |
 |  | `import_assets` | Import images and audio into the Library |
 | Output and verification | `publish` | Publish and return the Build result |
-|  | `preflight_publish` | Check publish readiness without publishing |
+|  | `get_air_descriptor` | Read AIR app settings from an adjacent or explicitly named descriptor |
+|  | `set_air_descriptor` | Edit AIR app settings in an adjacent or explicitly named descriptor |
+|  | `preflight_publish` | Check publish readiness (including AIR descriptor and icons) without publishing |
 |  | `read_output` | Read the Output and Compiler Errors panels |
 |  | `test_movie` | Run an AS3 Test Movie and capture compile diagnostics and early output |
 |  | `verify_canvas_output` | Open Canvas output in Chrome and check for errors |
@@ -223,7 +237,6 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 |  | `diff_captures` | Compare two captured PNGs |
 |  | `visual_regression` | Save and compare named frame baselines |
 | Other | `install_greensock` | Install GreenSock-AS3 (saved AS3 only; license review required) |
-|  | `run_jsfl` | Run arbitrary JSFL |
 
 ## Environment variables
 
@@ -236,26 +249,12 @@ Full inputs and caveats are in [TOOLS.md](TOOLS.md).
 
 ## How it works
 
-```mermaid
-%%{init: {'themeVariables': {'fontSize': '13px'}, 'flowchart': {'nodeSpacing': 30, 'rankSpacing': 30, 'diagramPadding': 8}}}%%
-flowchart TB
-  Agent(["AI agent<br/>Claude Code / Codex"])
-  subgraph Server["animate-mcp (Node.js)"]
-    Tools["MCP tools ×27"]
-    Bundle["JSFL bundle<br/>server/jsfl/*.jsfl"]
-    Runner["Runner<br/>serial + timeout"]
-  end
-  Files["exports/<br/>scripts + structure.md"]
-  Chrome(["Chrome"])
-  Animate(["Adobe Animate<br/>(running)"])
-  Agent -->|"edit files"| Files
-  Agent -->|"MCP stdio"| Tools
-  Tools -->|"export / apply"| Files
-  Tools -->|"verify_canvas_output"| Chrome
-  Tools --> Bundle --> Runner
-  Runner -->|"1. open Run.jsfl"| Animate
-  Animate -.->|"2. write Result.json"| Runner
-```
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.png">
+    <img src="assets/architecture-light.png" alt="Architecture: AI agent, MCP tools, JSFL runner, Adobe Animate and Chrome" width="560">
+  </picture>
+</div>
 
 Each tool builds a JSFL script, writes it to `~/.animate-mcp/runs/`, and opens it in the running Animate. The script writes its result as JSON, which the server reads back. Runs are serialized and time out if Animate does not respond.
 
@@ -265,37 +264,18 @@ Please open an [issue](https://github.com/gekkyo/animate-mcp/issues) with your A
 
 ## Development
 
+From the repository root, install dependencies, build, and run the tests:
+
     npm install && npm run build
     npm test
 
-Client config: `node /path/to/animate-mcp/server/dist/index.js` (stdio).
+To register the built server with an MCP client, set its launch command to `node /path/to/animate-mcp/server/dist/index.js`. Replace `/path/to/animate-mcp` with the actual path to this repository.
 
-### Smoke tests (real Animate)
+To try one operation on the built server without registering it with a client, run this from the repository root (`get_status` example):
 
-Manual checks not covered by the scripts below:
+    npm run -s call -- execute_readonly '{"name":"get_status","arguments":{}}'
 
-1. With a document open, run `run_jsfl` with `fl.trace('hi'); 'ok'`. `hi` appears in the Output panel and the tool returns `"ok"`. Animate comes to the front (known behavior).
-2. Run `get_document_info`. It returns name, size, frame rate and timeline names.
-3. Close all documents and run `get_document_info`. It returns "No document open".
-4. Quit Animate and run `run_jsfl`. It returns "Animate not running".
-
-Scripted checks: run `npm run build`, then start Animate and run the scripts below as `node server/scripts/<script>`.
-
-Most scripts create a disposable FLA, exercise it and close it without touching your documents. `smoke-publish.mjs` is the exception: it publishes the documents you pass by name.
-
-| Script | Checks | Notes |
-| --- | --- | --- |
-| `smoke-publish.mjs <name.fla>...` | `publish` | Uses your open documents |
-| `smoke-capture-frame.mjs` | `capture_frame` | Disposable FLA |
-| `smoke-edit-elements.mjs` | Layer, frame, tween and instance edits | Disposable FLA |
-| `smoke-edit-library.mjs` | Library edits | Disposable AS3 FLA |
-| `smoke-edit-text.mjs` | `edit_text` | Disposable AS3 and HTML5 Canvas FLAs |
-| `smoke-import-document-properties.mjs` | Import and stage settings | Disposable FLA |
-| `smoke-document-ops.mjs` | open, save, close | Disposable saved AS3 FLA |
-| `smoke-canvas.mjs` | HTML5 Canvas features | Disposable saved FLA |
-| `smoke-isolated-publish.mjs` | `publish` and its output | Disposable saved AS3 FLA; Animate must already be running |
-| `smoke-verification-tools.mjs` | `audit_document`, `verify_canvas_output`, `capture_frame`, `diff_captures` | Disposable saved FLA |
-| `smoke-test-movie.mjs` | `test_movie` | Disposable AS3 FLA; **leaves the Test Movie Player open, so close it manually** |
+For release checks with real Animate, see [Smoke tests](SMOKE_TESTS.md).
 
 ## License
 

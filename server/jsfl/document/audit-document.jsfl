@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common
 // Read-only audit; timeline edits are temporary and restored by withTimelineEdit.
 /** Audits scene and symbol timelines and reports review findings as JSON text.
  * @returns The serialized audit report.

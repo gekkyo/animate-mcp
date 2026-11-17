@@ -1,0 +1,4 @@
+<application xmlns="http://ns.adobe.com/air/application/51.3">
+  <id>example.mismatched</id><versionNumber>1.0.0</versionNumber>
+  <icon><image16x16>icon16.png</image32x32></icon>
+</application>

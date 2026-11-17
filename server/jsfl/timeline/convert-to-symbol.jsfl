@@ -1,3 +1,4 @@
+// @requires shared/select-document, shared/edit-state, shared/export-common
 // `var __docName`, `var __timelineRef`, and `var __request` are injected before this file.
 /** Converts selected timeline elements into a Library symbol.
  * @returns The serialized conversion result.

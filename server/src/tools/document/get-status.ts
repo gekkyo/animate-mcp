@@ -1,8 +1,19 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { z } from "zod";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 /** Maximum time allowed for a status probe, including time waiting in the Run queue. */
 const GET_STATUS_TIMEOUT_MS = 5_000;
+const DOCUMENT_STATUS = z
+    .object({ name: z.string(), path: z.string().nullable(), type: z.string().nullable() })
+    .strict();
+const STATUS_RESPONSE = z
+    .object({
+        animate: z.literal("responding"),
+        documents: z.array(DOCUMENT_STATUS),
+        activeDocument: DOCUMENT_STATUS.nullable(),
+    })
+    .strict();
 
 export const getStatusTool: ToolDefinition = {
     name: "get_status",
@@ -10,10 +21,10 @@ export const getStatusTool: ToolDefinition = {
         "Check whether Animate responds and report open documents plus the active document's name, path, and type. No dirty or unsaved state is inferred.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     guidance: {},
-    run: async (_args: never, { runner, bundle }: ToolDeps) => {
+    run: async (_args: never, { jsfl }: ToolDeps) => {
         try {
-            const result = await runner.execute(bundle("get-status"), GET_STATUS_TIMEOUT_MS);
-            return { data: JSON.parse(String(result)) as Record<string, unknown> };
+            const result = await jsfl.run("document/get-status", {}, STATUS_RESPONSE, GET_STATUS_TIMEOUT_MS);
+            return { data: result };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             if (/timed out|Animate not running/i.test(message)) {

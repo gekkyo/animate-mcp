@@ -3,6 +3,7 @@ server/dist/
 .idea/
 .DS_Store
 *.log
+smoke-report.json
 .scratch/
 docs/*
 !docs/animate-quirks.md
@@ -11,3 +12,7 @@ GLOSSARY.md
 reports/
 research_notes/
 *.ai
+air-sample/*.p12
+air-sample/*.mobileprovision
+air-sample/RECOVER_*
+air-sample/リカバリ_*

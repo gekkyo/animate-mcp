@@ -1,7 +1,20 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 import { isGreensockInstalled } from "../../greensock/greensock.js";
-import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
+
+const DOCUMENT_INFO_SCHEMA = z
+    .object({
+        name: z.string(),
+        width: z.number(),
+        height: z.number(),
+        frameRate: z.number(),
+        backgroundColor: z.string(),
+        timelines: z.array(z.string()),
+        asVersion: z.enum(["AS3", "AS2"]).nullable(),
+        folder: z.string().nullable(),
+    })
+    .strict();
 
 export const getDocumentInfoTool: ToolDefinition = {
     name: "get_document_info",
@@ -18,20 +31,7 @@ export const getDocumentInfoTool: ToolDefinition = {
      * @returns Document metadata and GreenSock installation status.
      */
     run: async (_args: never, deps: ToolDeps) => {
-        const { runner, bundle } = deps;
-
-        const { folder, ...info } = JSON.parse(
-            String(await runner.execute(jsflRun("get-document-info", {}, bundle))),
-        ) as {
-            name: string;
-            width: number;
-            height: number;
-            frameRate: number;
-            backgroundColor: string;
-            timelines: string[];
-            asVersion: "AS3" | "AS2" | null;
-            folder: string | null;
-        };
+        const { folder, ...info } = await deps.jsfl.run("document/get-document-info", {}, DOCUMENT_INFO_SCHEMA);
         const result = { ...info, greensock: info.asVersion === "AS3" && isGreensockInstalled(folder) };
         return { data: result };
     },

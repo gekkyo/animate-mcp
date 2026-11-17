@@ -1,0 +1,1 @@
+<application xmlns="http://ns.adobe.com/air/application/51.3"><id>example.escape</id><versionNumber>1</versionNumber><filename>Example Escape</filename><icon><image16x16>../icon16.png</image16x16></icon><initialWindow><content>example.swf</content></initialWindow></application>

@@ -1,3 +1,4 @@
+// @requires shared/export-common
 // Concatenated and evaluated after export-common. The last expression returns JSON text via serialize.
 /** Returns the open documents and active document as JSON text. */
 (function () {

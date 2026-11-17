@@ -1,25 +1,23 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
 import { z } from "zod";
+import { createJsflRunner } from "../../src/tools/core/shared.js";
 import { registerCloseDocument } from "../../src/tools/document/close-document.js";
 
 type FakeDocument = {
     name: string;
     pathURI?: string;
+    selectNone: () => void;
     close: (prompt: boolean) => void;
 };
 
-const targetJSFL = readFileSync(new URL("../../jsfl/document/document-target.jsfl", import.meta.url), "utf8");
-const closeJSFL = readFileSync(new URL("../../jsfl/document/close-document.jsfl", import.meta.url), "utf8");
-
 /**
- * Captures the close-document tool and records the JSFL bundle requested.
+ * Captures the close-document tool and executes its JSFL against fake Animate globals.
  * @param runner Executes bundled JSFL against the test's fake Animate globals
  * @param runner.execute Runs the supplied JSFL code in the fake application
- * @returns Registered tool and bundle-call history
+ * @returns Registered tool
  */
 function register(runner: { execute: (code: string) => Promise<unknown> }) {
     let registered:
@@ -40,16 +38,13 @@ function register(runner: { execute: (code: string) => Promise<unknown> }) {
             registered = { name, ...options, handler: handler as (input: unknown) => Promise<unknown> };
         },
     };
-    const bundleNames: string[][] = [];
-    registerCloseDocument(server as never, {
+    const jsfl = createJsflRunner(runner);
+    registerCloseDocument(server as unknown as Parameters<typeof registerCloseDocument>[0], {
         runner,
-        bundle: (...names) => {
-            bundleNames.push(names);
-            return names.map((name) => (name === "document-target" ? targetJSFL : closeJSFL)).join("\n");
-        },
+        jsfl,
     });
     assert.ok(registered);
-    return { tool: registered, bundleNames };
+    return { tool: registered };
 }
 
 test("close_document requires explicit discard consent and does not run without it", async () => {
@@ -75,17 +70,24 @@ test("close_document requires explicit discard consent and does not run without 
 test("close_document closes only the exact target without prompting or saving", async () => {
     const uri = pathToFileURL("/projects/scene.fla").href;
     const calls: { name: string; prompt: boolean }[] = [];
+    const order: string[] = [];
+    const executions: string[] = [];
     const documents: FakeDocument[] = [];
     const first: FakeDocument = {
         name: "scene.fla",
         pathURI: uri,
+        selectNone() {
+            order.push("selectNone");
+        },
         close(prompt) {
+            order.push("close");
             calls.push({ name: this.name, prompt });
             documents.splice(documents.indexOf(this), 1);
         },
     };
     const other: FakeDocument = {
         name: "other.fla",
+        selectNone() {},
         close(prompt) {
             calls.push({ name: this.name, prompt });
             documents.splice(documents.indexOf(this), 1);
@@ -100,15 +102,18 @@ test("close_document closes only the exact target without prompting or saving", 
         },
         fl: {
             documents,
+            selectTool(name: string) {
+                order.push(`selectTool:${name}`);
+                return true;
+            },
             closeAllPlayerDocuments() {
                 throw new Error("must not close Test Movie Players");
             },
         },
     };
-    let code = "";
-    const { tool, bundleNames } = register({
+    const { tool } = register({
         execute: async (value) => {
-            code = value;
+            executions.push(value);
             return runInNewContext(value, globals);
         },
     });
@@ -117,22 +122,84 @@ test("close_document closes only the exact target without prompting or saving", 
         structuredContent: { name: string; path: string | null };
     };
 
-    assert.deepEqual(bundleNames, [["document-target", "close-document"]]);
-    assert.ok(code.includes(`var __closeDocumentTarget = ${JSON.stringify(uri)};`));
+    assert.equal(executions.length, 2);
+    assert.ok(executions[0].includes(`var __closeDocumentTarget = ${JSON.stringify(uri)};`));
+    assert.ok(executions[0].includes('fl.selectTool("arrow")'));
+    assert.ok(executions[1].includes(`var __closeDocumentTarget = ${JSON.stringify(uri)};`));
     assert.equal("isError" in result, false);
     assert.deepEqual(result.structuredContent, { name: "scene.fla", path: uri });
+    assert.deepEqual(order, ["selectTool:arrow", "selectNone", "close"]);
     assert.deepEqual(calls, [{ name: "scene.fla", prompt: false }]);
     assert.deepEqual(documents, [other]);
 });
 
+test("close_document never closes when the separate Arrow-tool Run fails", async () => {
+    for (const selectTool of [
+        () => false,
+        () => {
+            throw new Error("selection failed");
+        },
+    ]) {
+        const uri = pathToFileURL("/projects/scene.fla").href;
+        const order: string[] = [];
+        const target: FakeDocument = {
+            name: "scene.fla",
+            pathURI: uri,
+            selectNone() {
+                order.push("selectNone");
+            },
+            close() {
+                order.push("close");
+            },
+        };
+        const globals = {
+            FLfile: {
+                platformPathToURI: (path: string) => pathToFileURL(path).href,
+                uriToPlatformPath: (path: string) => fileURLToPath(path),
+            },
+            fl: {
+                documents: [target],
+                selectTool(name: string) {
+                    order.push(`selectTool:${name}`);
+                    return selectTool();
+                },
+            },
+        };
+        let executions = 0;
+        const { tool } = register({
+            execute: async (code) => {
+                executions++;
+                return runInNewContext(code, globals);
+            },
+        });
+
+        const result = (await tool.handler({ document: uri, discardUnsavedChanges: true })) as {
+            isError: boolean;
+            content: { text: string }[];
+        };
+
+        assert.equal(result.isError, true);
+        assert.equal(executions, 1);
+        assert.deepEqual(order, ["selectTool:arrow"]);
+        assert.deepEqual(globals.fl.documents, [target]);
+    }
+});
+
 test("close_document refuses missing and ambiguous document targets", async () => {
     const documents: FakeDocument[] = [];
+    let selectToolCalls = 0;
     const globals = {
         FLfile: {
             platformPathToURI: (path: string) => pathToFileURL(path).href,
             uriToPlatformPath: (uri: string) => fileURLToPath(uri),
         },
-        fl: { documents },
+        fl: {
+            documents,
+            selectTool() {
+                selectToolCalls++;
+                return true;
+            },
+        },
     };
     const { tool } = register({
         execute: async (code) => runInNewContext(code, globals),
@@ -142,6 +209,7 @@ test("close_document refuses missing and ambiguous document targets", async () =
     const missing = (await tool.handler(input)) as { isError: boolean; content: { text: string }[] };
     assert.equal(missing.isError, true);
     assert.match(missing.content[0].text, /matched 0 open documents/);
+    assert.equal(selectToolCalls, 0);
     /**
      * Creates a fake document for the ambiguous-target case.
      * @param name Document name shared by the duplicate fixtures
@@ -149,10 +217,12 @@ test("close_document refuses missing and ambiguous document targets", async () =
      */
     const duplicate = (name: string): FakeDocument => ({
         name,
+        selectNone: () => assert.fail("must not change selection"),
         close: () => assert.fail("must not close"),
     });
     documents.push(duplicate("scene.fla"), duplicate("scene.fla"));
     const ambiguous = (await tool.handler(input)) as { isError: boolean; content: { text: string }[] };
     assert.equal(ambiguous.isError, true);
     assert.match(ambiguous.content[0].text, /matched 2 open documents/);
+    assert.equal(selectToolCalls, 0);
 });
