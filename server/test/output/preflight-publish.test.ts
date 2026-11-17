@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { runPreflightPublish } from "../../src/tools/output/preflight-publish.js";
-import type { ToolDeps } from "../../src/tools/shared.js";
+import type { ToolDeps } from "../../src/tools/core/shared.js";
 
 const fixture = JSON.parse(await readFile("server/test/fixtures/preflight-publish/active-canvas.json", "utf8")) as {
     document: { name: string; pathURI: string; type: string; profile: string };

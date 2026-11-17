@@ -20,9 +20,9 @@ The scripts cannot verify these:
 ## Optional checks
 
 - **Run a subset:** Specify targets, for example `npm run smoke -- document-ops capture-frame`.
-- **Check the Entrance path:** For a disposable AS3 document, save `[{"tool":"get_status"}]` as `steps.json` and run `node server/verification/smoke/smoke-run.mjs --entrances steps.json`. This checks dispatch in Animate, not a client's approval dialog.
+- **Check the Entrance path:** For a disposable AS3 document, save `[{"tool":"get_status"}]` as `steps.json` and run `node server/verification/smoke/scenarios/smoke-run.mjs --entrances steps.json`. This checks dispatch in Animate, not a client's approval dialog.
 - **Record runs:** Set `SMOKE_RECORD_DIR=/path/to/dir` to write JSONL with full tool input values, including text and JSFL. Use only nonconfidential disposable test data. Files stay local and are not uploaded automatically.
-- **Refresh shape fixtures:** Run `node server/verification/smoke/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>`. It updates result shapes but keeps each fixture's reviewed sample arguments. The `run_jsfl` fixture is excluded from automatic updates to keep its reviewed shape and runnable safe sample paired; tools without a reviewed fixture fail clearly.
+- **Refresh shape fixtures:** Run `node server/verification/smoke/lib/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>`. It updates result shapes but keeps each fixture's reviewed sample arguments. The `run_jsfl` fixture is excluded from automatic updates to keep its reviewed shape and runnable safe sample paired; tools without a reviewed fixture fail clearly.
 
 ## Individual scripts
 

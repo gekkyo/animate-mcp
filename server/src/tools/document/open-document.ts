@@ -1,7 +1,7 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const OPEN_DOCUMENT_INPUT = {
     path: z.string().min(1).optional().describe("Path or file URI of an existing .fla file to open"),

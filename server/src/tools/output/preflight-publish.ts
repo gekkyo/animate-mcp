@@ -3,8 +3,8 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { isInside } from "../paths.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { isInside } from "../core/paths.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 import {
     type AirDescriptorElement,
     airDescriptorPathForFla,

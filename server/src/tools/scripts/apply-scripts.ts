@@ -8,7 +8,7 @@ import {
     type ToolDefinition,
     type ToolDeps,
     type ToolExtra,
-} from "../shared.js";
+} from "../core/shared.js";
 import type { AppliedNewScript, ApplyPayload, ApplyResult, TimelineFingerprint } from "./workspace/apply-contract.js";
 import { collectChanges, recordApplied } from "./workspace/export-workspace.js";
 

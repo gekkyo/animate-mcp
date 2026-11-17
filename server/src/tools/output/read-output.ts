@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 import { type Diagnostic, parseCompilerOutput } from "./publish.js";
 
 export const readOutputTool: ToolDefinition = {

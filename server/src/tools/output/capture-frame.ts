@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { capturesDir } from "../paths.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { capturesDir } from "../core/paths.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 type CaptureResult = { path: string; frame: number; timeline: string; width: number; height: number };
 type CaptureResponse = CaptureResult | { captures: CaptureResult[] };

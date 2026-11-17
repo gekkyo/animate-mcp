@@ -1,6 +1,6 @@
 import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { isInside } from "../../paths.js";
+import { isInside } from "../../core/paths.js";
 
 /** Manifest entry for Apply: frame position (0-based) and the script at Export. A library symbol uses item instead of scene. */
 export type ManifestFile = { scene: number; layer: number; start: number; script: string; item?: string };

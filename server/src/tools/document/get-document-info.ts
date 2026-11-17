@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isGreensockInstalled } from "../../greensock/greensock.js";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 export const getDocumentInfoTool: ToolDefinition = {
     name: "get_document_info",

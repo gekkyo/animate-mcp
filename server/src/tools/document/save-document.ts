@@ -1,7 +1,7 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const SAVE_DOCUMENT_INPUT = {
     document: z.string().min(1).describe("Exact open document name or path"),

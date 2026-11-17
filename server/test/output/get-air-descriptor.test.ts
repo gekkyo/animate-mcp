@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { runGetAirDescriptor } from "../../src/tools/output/get-air-descriptor.js";
-import type { ToolDeps } from "../../src/tools/shared.js";
+import type { ToolDeps } from "../../src/tools/core/shared.js";
 
 const deps: ToolDeps = {
     bundle: (...names) => names.join(" "),

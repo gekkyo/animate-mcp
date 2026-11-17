@@ -9,7 +9,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PNG } from "pngjs";
 import { registerVisualRegression, visualRegressionTool } from "../../src/tools/output/visual-regression.js";
-import type { ToolExtra } from "../../src/tools/shared.js";
+import type { ToolExtra } from "../../src/tools/core/shared.js";
 
 /**
  * Encodes a single opaque pixel for baseline comparison tests.

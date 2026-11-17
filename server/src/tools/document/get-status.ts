@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 /** Maximum time allowed for a status probe, including time waiting in the Run queue. */
 const GET_STATUS_TIMEOUT_MS = 5_000;

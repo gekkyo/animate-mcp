@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { testMovieTool } from "../../src/tools/output/test-movie.js";
-import { invokeToolDefinition, type ToolDeps, type ToolExtra } from "../../src/tools/shared.js";
+import { invokeToolDefinition, type ToolDeps, type ToolExtra } from "../../src/tools/core/shared.js";
 import { text, withServer } from "../helpers/fake-animate.js";
 
 /** Encodes the Output and Compiler Errors panel fields used by read-output.jsfl.

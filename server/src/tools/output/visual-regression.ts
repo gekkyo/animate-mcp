@@ -4,9 +4,9 @@ import { basename, join, relative, sep } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PNG } from "pngjs";
 import { z } from "zod";
-import { baselinesDir, capturesDir, isInside } from "../paths.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
-import { comparePixels, decodePng } from "./image-diff.js";
+import { baselinesDir, capturesDir, isInside } from "../core/paths.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
+import { comparePixels, decodePng } from "./lib/image-diff.js";
 
 const RANGE = z
     .object({

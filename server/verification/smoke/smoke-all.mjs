@@ -4,7 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const EXCLUDED = new Set(["smoke-lib.mjs", "smoke-all.mjs", "smoke-run.mjs"]);
+const SCENARIO_DIR = path.join(SCRIPT_DIR, "scenarios");
+const EXCLUDED = new Set(["smoke-run.mjs"]);
 const SCRIPT_TIMEOUT_MS = 10 * 60 * 1000;
 const STDERR_TAIL_LIMIT = 4096;
 
@@ -63,7 +64,7 @@ function runScript(script) {
  * @returns {{scripts: string[], error?: string}} Selected scripts or an error.
  */
 function selectScripts(requested) {
-    const available = readdirSync(SCRIPT_DIR)
+    const available = readdirSync(SCENARIO_DIR)
         .filter((file) => file.startsWith("smoke-") && file.endsWith(".mjs") && !EXCLUDED.has(file))
         .sort();
     const byName = new Map(available.map((file) => [file.slice("smoke-".length, -".mjs".length), file]));
@@ -97,7 +98,7 @@ if (selection.error) {
 
 const results = [];
 for (const file of selection.scripts) {
-    const script = path.join(SCRIPT_DIR, file);
+    const script = path.join(SCENARIO_DIR, file);
     const start = Date.now();
     const { exitCode, stderrTail } = await runScript(script);
     const seconds = Math.round(((Date.now() - start) / 1000) * 100) / 100;

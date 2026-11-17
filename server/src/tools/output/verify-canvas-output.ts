@@ -5,8 +5,8 @@ import { basename, extname, isAbsolute, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Browser } from "playwright-core";
 import { z } from "zod";
-import { isInside } from "../paths.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { isInside } from "../core/paths.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 import { runPublish } from "./publish.js";
 
 const INPUT = {

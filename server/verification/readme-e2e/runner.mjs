@@ -11,15 +11,15 @@ import { registerGetDocumentInfo } from "../../dist/tools/document/get-document-
 import { registerGetStatus } from "../../dist/tools/document/get-status.js";
 import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
 import { registerSaveDocument } from "../../dist/tools/document/save-document.js";
-import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
+import { registerRunJsfl } from "../../dist/tools/core/run-jsfl.js";
 import { registerEditTween } from "../../dist/tools/timeline/edit-tween.js";
 import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timeline.js";
-import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "../smoke/smoke-lib.mjs";
-import { runClaude } from "./claude.mjs";
-import { runCodex } from "./codex.mjs";
-import { checkRestrictedMcpHandshake, runCodexPreflight } from "./codex-preflight.mjs";
-import { writeReadmeDiagnostic } from "./diagnostics.mjs";
-import { serveRestricted } from "./mcp-server.mjs";
+import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "../smoke/lib/smoke-lib.mjs";
+import { runClaude } from "./lib/claude.mjs";
+import { runCodex } from "./lib/codex.mjs";
+import { checkRestrictedMcpHandshake, runCodexPreflight } from "./lib/codex-preflight.mjs";
+import { writeReadmeDiagnostic } from "./lib/diagnostics.mjs";
+import { serveRestricted } from "./lib/mcp-server.mjs";
 import {
     assertCaptureDocumentUnchanged,
     assertCaptureEvidence,
@@ -28,7 +28,7 @@ import {
     assertSuccessfulCapture,
     closeTestMoviePlayer,
     readCaptureFixture,
-} from "./output.mjs";
+} from "./scenarios/output.mjs";
 import {
     prepareScenario,
     scenarioIsReadOnly,
@@ -37,8 +37,8 @@ import {
     scenarioRequiresChrome,
     verifyScenario,
     verifyScenarioPersistence,
-} from "./scenario-lifecycle.mjs";
-import { createAssetsFixture, scenarios, selectedScenario } from "./scenarios.mjs";
+} from "./scenarios/scenario-lifecycle.mjs";
+import { createAssetsFixture, scenarios, selectedScenario } from "./scenarios/scenarios.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 

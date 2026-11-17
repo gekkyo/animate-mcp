@@ -1,7 +1,7 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 
 const ELEMENT_REFERENCE = z.union([z.number().int().nonnegative(), z.string().min(1)]);
 const REGISTRATION_POINT = z.enum([

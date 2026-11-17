@@ -20,9 +20,9 @@ Mac で Animate を起動し、リポジトリのルートから実行します�
 ## 必要な場合だけ
 
 - **対象を絞る:** `npm run smoke -- document-ops capture-frame` のように指定できます。
-- **Entrance 経由を確認する:** 使い捨ての AS3 ドキュメントで `[{"tool":"get_status"}]` を `steps.json` に保存し、`node server/verification/smoke/smoke-run.mjs --entrances steps.json` を実行します。Animate 上の振り分けは確認できますが、クライアントの承認ダイアログは確認できません。
+- **Entrance 経由を確認する:** 使い捨ての AS3 ドキュメントで `[{"tool":"get_status"}]` を `steps.json` に保存し、`node server/verification/smoke/scenarios/smoke-run.mjs --entrances steps.json` を実行します。Animate 上の振り分けは確認できますが、クライアントの承認ダイアログは確認できません。
 - **実行を記録する:** `SMOKE_RECORD_DIR=/path/to/dir` を設定すると、テキストや JSFL を含むツール入力値全体が JSONL に記録されます。機密情報を含まない使い捨てテストデータだけで使用してください。記録はローカルに保存され、自動アップロードされません。
-- **形状フィクスチャを更新する:** `node server/verification/smoke/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>` を実行します。結果形状だけを更新し、レビュー済みのサンプル引数は保持します。`run_jsfl` は安全な実行可能サンプルと形状の組を維持するため自動更新しません。レビュー済みフィクスチャがないツールはエラーになります。
+- **形状フィクスチャを更新する:** `node server/verification/smoke/lib/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>` を実行します。結果形状だけを更新し、レビュー済みのサンプル引数は保持します。`run_jsfl` は安全な実行可能サンプルと形状の組を維持するため自動更新しません。レビュー済みフィクスチャがないツールはエラーになります。
 
 ## 個別スクリプト一覧
 

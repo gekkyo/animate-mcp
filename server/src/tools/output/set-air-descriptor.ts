@@ -4,8 +4,8 @@ import { basename, dirname, isAbsolute, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SaxesParser } from "saxes";
 import { z } from "zod";
-import { isInside } from "../paths.js";
-import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import { isInside } from "../core/paths.js";
+import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../core/shared.js";
 import { AIR_DESCRIPTOR_FIELDS, missingAirDescriptorDetail, resolveAirDescriptor } from "./get-air-descriptor.js";
 
 const INPUT = z.strictObject({

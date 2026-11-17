@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { SaxesParser } from "saxes";
 import { runSetAirDescriptor } from "../../src/tools/output/set-air-descriptor.js";
-import type { ToolDeps } from "../../src/tools/shared.js";
+import type { ToolDeps } from "../../src/tools/core/shared.js";
 import { text, withServer } from "../helpers/fake-animate.js";
 
 const deps: ToolDeps = {

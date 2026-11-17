@@ -2,14 +2,14 @@ import { join, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
-import { exportsDir } from "../paths.js";
+import { exportsDir } from "../core/paths.js";
 import {
     registerToolDefinition,
     TIMELINES_PER_RUN,
     type ToolDefinition,
     type ToolDeps,
     type ToolExtra,
-} from "../shared.js";
+} from "../core/shared.js";
 import { type ExportData, type ExportScene, safeName, writeExport } from "./workspace/export.js";
 import { prepareExport } from "./workspace/export-workspace.js";
 
