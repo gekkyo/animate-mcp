@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -51,7 +51,10 @@ test("deletes optional fields and rejects invalid values and ambiguous input", a
         await writeFile(path, sample);
         await assert.rejects(runSetAirDescriptor({ descriptorPath: path, id: null }, deps), /cannot be deleted/);
         await assert.rejects(
-            runSetAirDescriptor({ descriptorPath: path, renderMode: "bad" }, deps),
+            runSetAirDescriptor(
+                { descriptorPath: path, renderMode: "bad" } as unknown as Parameters<typeof runSetAirDescriptor>[0],
+                deps,
+            ),
             /renderMode must be/,
         );
         await assert.rejects(
@@ -113,18 +116,20 @@ test("rejects deletion of icon/extensions containing comments or CDATA", async (
     }
 });
 
-test("registered set_air_descriptor rejects unknown fields before writing", async () => {
+test("registered set_air_descriptor rejects unknown and read-only fields before writing", async () => {
     await withServer({}, async (client, tempDir) => {
         const path = join(tempDir, "strict-app.xml");
         const original = await readFile("air-sample/desktop-app.xml", "utf8");
         await writeFile(path, original);
-        const result = await client.callTool({
-            name: "set_air_descriptor",
-            arguments: { descriptorPath: path, id: "should-not-write", unexpected: true },
-        });
-        assert.equal(result.isError, true, text(result));
-        assert.equal(await readFile(path, "utf8"), original);
-        await assert.rejects(readFile(`${path}.bak`));
+        for (const field of ["unexpected", "filename"]) {
+            const result = await client.callTool({
+                name: "set_air_descriptor",
+                arguments: { descriptorPath: path, id: "should-not-write", [field]: "not-writable" },
+            });
+            assert.equal(result.isError, true, text(result));
+            assert.equal(await readFile(path, "utf8"), original);
+            await assert.rejects(readFile(`${path}.bak`));
+        }
     });
 });
 
@@ -141,6 +146,31 @@ test("creates missing platform additions and validates icon locations", async ()
         );
         await assert.rejects(
             runSetAirDescriptor({ descriptorPath: path, icon: { image36x36: "../outside.png" } }, deps),
+            /inside the descriptor folder/,
+        );
+        await assert.rejects(
+            runSetAirDescriptor({ descriptorPath: join(dir, "missing-app.xml"), id: "test" }, deps),
+            /not found at .*missing-app\.xml.*may create it during Publish \(unverified\)/,
+        );
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test("rejects icon paths that escape through a symlink", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
+    try {
+        const descriptorDir = join(dir, "descriptor");
+        const iconDir = join(descriptorDir, "icon");
+        const path = join(descriptorDir, "desktop-app.xml");
+        const outsideIcon = join(dir, "outside.png");
+        await mkdir(iconDir, { recursive: true });
+        await writeFile(path, await readFile("air-sample/desktop-app.xml"));
+        await writeFile(outsideIcon, "outside");
+        await symlink(outsideIcon, join(iconDir, "escape.png"));
+
+        await assert.rejects(
+            runSetAirDescriptor({ descriptorPath: path, icon: { image36x36: "icon/escape.png" } }, deps),
             /inside the descriptor folder/,
         );
     } finally {

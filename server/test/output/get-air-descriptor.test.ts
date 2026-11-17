@@ -24,6 +24,7 @@ test("reads the whitelisted AIR descriptor fields without Animate", async () => 
             await writeFile(path, await readFile(`air-sample/${platform}-app.xml`));
             const result = await runGetAirDescriptor({ descriptorPath: path }, deps);
             assert.equal(result.id, expectedIds[platform as keyof typeof expectedIds]);
+            assert.equal(result.filename, platform);
             assert.equal(result.versionNumber, "1.0");
             assert.equal(result.renderMode, "auto");
             assert.equal(Object.keys(result.icon as object).length, 1);
@@ -50,7 +51,10 @@ test("rejects ambiguous, invalid, missing, and malformed descriptor paths", asyn
     );
     await assert.rejects(runGetAirDescriptor({ descriptorPath: "relative-app.xml" }, deps), /absolute path/);
     await assert.rejects(runGetAirDescriptor({ descriptorPath: "/tmp/not-a-descriptor.xml" }, deps), /absolute path/);
-    await assert.rejects(runGetAirDescriptor({ descriptorPath: "/tmp/missing-app.xml" }, deps), /not present/);
+    await assert.rejects(
+        runGetAirDescriptor({ descriptorPath: "/tmp/missing-app.xml" }, deps),
+        /not found at \/tmp\/missing-app\.xml.*may create it during Publish \(unverified\)/,
+    );
 
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {

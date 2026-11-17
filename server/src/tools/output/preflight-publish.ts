@@ -1,11 +1,16 @@
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { SaxesParser } from "saxes";
 import { z } from "zod";
 import { jsflRun } from "../../runtime/jsfl-bundle.js";
 import { isInside } from "../paths.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
+import {
+    type AirDescriptorElement,
+    airDescriptorPathForFla,
+    missingAirDescriptorDetail,
+    parseAirDescriptorElements,
+} from "./get-air-descriptor.js";
 
 const INPUT = {
     document: z.string().optional().describe("Open document name; defaults to the only open document"),
@@ -36,12 +41,6 @@ type AuditResult = {
         linkage?: boolean;
     }[];
     warnings: string[];
-};
-
-type DescriptorElement = {
-    name: string;
-    text: string;
-    children: DescriptorElement[];
 };
 
 /**
@@ -194,7 +193,7 @@ async function checkAir(flaPath: string, playerTarget: string) {
         if (!flaPath) {
             throw new Error("Document has not been saved.");
         }
-        descriptorPath = join(dirname(flaPath), `${basename(flaPath).replace(/\.fla$/i, "")}-app.xml`);
+        descriptorPath = airDescriptorPathForFla(flaPath);
     } catch (error) {
         const detail = `AIR descriptor cannot be located: ${error instanceof Error ? error.message : String(error)}`;
         return unavailable(unchecked(detail), "AIR descriptor is unavailable.");
@@ -203,47 +202,20 @@ async function checkAir(flaPath: string, playerTarget: string) {
     try {
         xml = await readFile(descriptorPath, "utf8");
     } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-            const detail = "AIR descriptor is not present; Animate generates it during Publish.";
+        const detail = missingAirDescriptorDetail(error, descriptorPath);
+        if (detail) {
             return unavailable(unchecked(detail), "AIR descriptor is unavailable.");
         }
-        const detail = `AIR descriptor could not be read: ${error instanceof Error ? error.message : String(error)}`;
-        return unavailable({ status: "fail", detail }, "AIR descriptor could not be parsed.");
+        const readDetail = `AIR descriptor could not be read: ${error instanceof Error ? error.message : String(error)}`;
+        return unavailable({ status: "fail", detail: readDetail }, "AIR descriptor could not be parsed.");
     }
-    let rootElement: DescriptorElement | undefined;
-    const elementStack: DescriptorElement[] = [];
+    let application: AirDescriptorElement | undefined;
     try {
-        const parser = new SaxesParser({ xmlns: true });
-        parser.on("opentag", (tag) => {
-            const element = { name: tag.local ?? tag.name, text: "", children: [] };
-            if (elementStack.length) {
-                elementStack[elementStack.length - 1].children.push(element);
-            } else {
-                rootElement = element;
-            }
-            elementStack.push(element);
-        });
-        /**
-         * Appends parsed text to each open element's text content.
-         * @param text XML text or CDATA content.
-         * @returns Nothing.
-         */
-        const appendText = (text: string): void => {
-            for (const element of elementStack) {
-                element.text += text;
-            }
-        };
-        parser.on("text", appendText);
-        parser.on("cdata", appendText);
-        parser.on("closetag", () => {
-            elementStack.pop();
-        });
-        parser.write(xml).close();
+        application = parseAirDescriptorElements(xml);
     } catch (error) {
         const detail = `AIR descriptor is not valid XML: ${error instanceof Error ? error.message : String(error)}`;
         return unavailable({ status: "fail", detail }, "AIR descriptor could not be parsed.");
     }
-    const application = rootElement;
     if (application?.name !== "application") {
         const detail = "AIR descriptor root element must be application.";
         return unavailable({ status: "fail", detail }, "AIR descriptor could not be parsed.");

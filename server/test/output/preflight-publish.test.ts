@@ -350,6 +350,11 @@ test("preflight checks AIR descriptors, icons, and target-specific assets", asyn
         }
         if (name === "missing-descriptor") {
             assert.equal(result.checks.air.descriptor.status, "unchecked");
+            assert.match(
+                result.checks.air.descriptor.detail,
+                /AIR descriptor not found at .*missing-descriptor-app\.xml/,
+            );
+            assert.match(result.checks.air.descriptor.detail, /may create it during Publish \(unverified\)/);
             assert.equal(result.checks.air.identity.status, "unchecked");
             assert.equal(result.checks.air.signing.status, "unchecked");
         }

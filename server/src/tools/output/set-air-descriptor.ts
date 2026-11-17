@@ -1,21 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { copyFile, readFile, rename, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { copyFile, lstat, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SaxesParser } from "saxes";
 import { z } from "zod";
+import { isInside } from "../paths.js";
 import { registerToolDefinition, type ToolDefinition, type ToolDeps } from "../shared.js";
-import { resolveAirDescriptor } from "./get-air-descriptor.js";
+import { AIR_DESCRIPTOR_FIELDS, missingAirDescriptorDetail, resolveAirDescriptor } from "./get-air-descriptor.js";
 
-const FIELDS = [
-    "id",
-    "versionNumber",
-    "versionLabel",
-    "renderMode",
-    "aspectRatio",
-    "autoOrients",
-    "fullScreen",
-] as const;
 const INPUT = z.strictObject({
     document: z.string().optional().describe("Open document name; defaults to the only open document"),
     descriptorPath: z.string().optional().describe("Absolute path to an AIR *-app.xml descriptor"),
@@ -32,6 +24,7 @@ const INPUT = z.strictObject({
     InfoAdditions: z.string().nullable().optional(),
     dryRun: z.boolean().optional().default(false),
 });
+type SetAirDescriptorInput = Parameters<ToolCallback<typeof INPUT>>[0];
 
 type Node = {
     name: string;
@@ -44,6 +37,59 @@ type Node = {
 };
 type Edit = { start: number; end: number; text: string };
 const descriptorLocks = new Map<string, Promise<void>>();
+
+/**
+ * Resolves the nearest existing path ancestor, following symlinks.
+ * @param path Candidate path.
+ * @returns The real path of the nearest existing ancestor, or undefined for an unresolved symlink.
+ */
+async function nearestExistingRealPath(path: string): Promise<string | undefined> {
+    let candidate = path;
+    while (true) {
+        try {
+            return await realpath(candidate);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+                throw error;
+            }
+            try {
+                if ((await lstat(candidate)).isSymbolicLink()) {
+                    return undefined;
+                }
+            } catch (lstatError) {
+                if ((lstatError as NodeJS.ErrnoException).code !== "ENOENT") {
+                    throw lstatError;
+                }
+            }
+            const parent = dirname(candidate);
+            if (parent === candidate) {
+                return undefined;
+            }
+            candidate = parent;
+        }
+    }
+}
+
+/**
+ * Extracts the namespace prefix from an element's opening tag.
+ * @param opening Element opening tag.
+ * @returns Namespace prefix, if present.
+ */
+function namespacePrefix(opening: string): string {
+    return opening.match(/^<([^\s/>:]+:)?[^\s/>]+/)?.[1] ?? "";
+}
+
+/**
+ * Rejects a CDATA terminator in CDATA content.
+ * @param value Content to write.
+ * @param field AIR descriptor field name.
+ * @returns Nothing.
+ */
+function assertCdataSafe(value: string, field: string): void {
+    if (value.includes("]]>")) {
+        throw new Error(`${field} cannot contain the CDATA terminator ]]>.`);
+    }
+}
 
 /**
  * Serializes descriptor updates within this process.
@@ -130,10 +176,7 @@ function escapeXml(value: string): string {
  * @param deps Tool dependencies for Animate target resolution.
  * @returns The resulting diff or updated descriptor fields.
  */
-export async function runSetAirDescriptor(
-    args: Record<string, unknown> & { document?: string; descriptorPath?: string; dryRun?: boolean },
-    deps: ToolDeps,
-) {
+export async function runSetAirDescriptor(args: SetAirDescriptorInput, deps: ToolDeps) {
     const { path, playerTarget } = await resolveAirDescriptor(args, deps);
     return withDescriptorLock(path, () => setAirDescriptorAtPath(args, path, playerTarget));
 }
@@ -145,53 +188,32 @@ export async function runSetAirDescriptor(
  * @param playerTarget Current Animate target.
  * @returns The resulting diff or updated descriptor fields.
  */
-async function setAirDescriptorAtPath(
-    args: Record<string, unknown> & { document?: string; descriptorPath?: string; dryRun?: boolean },
-    path: string,
-    playerTarget: string | undefined,
-) {
+async function setAirDescriptorAtPath(args: SetAirDescriptorInput, path: string, playerTarget: string | undefined) {
     const xml = await readFile(path, "utf8").catch((error: unknown) => {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-            throw new Error("AIR descriptor is not present; Animate generates it during Publish.");
+        const detail = missingAirDescriptorDetail(error, path);
+        if (detail) {
+            throw new Error(detail);
         }
         throw error;
     });
-    const values = Object.fromEntries(
-        Object.entries(args).filter(([key]) => key !== "document" && key !== "descriptorPath" && key !== "dryRun"),
-    );
-    const allowed = new Set([...FIELDS, "icon", "extensions", "manifestAdditions", "InfoAdditions"]);
-    for (const key of Object.keys(values)) {
-        if (!allowed.has(key)) {
-            throw new Error(`Unsupported AIR descriptor field: ${key}.`);
-        }
-    }
-    if (!Object.keys(values).length) {
+    const patch = {
+        id: args.id,
+        versionNumber: args.versionNumber,
+        versionLabel: args.versionLabel,
+        renderMode: args.renderMode,
+        aspectRatio: args.aspectRatio,
+        autoOrients: args.autoOrients,
+        fullScreen: args.fullScreen,
+        icon: args.icon,
+        extensions: args.extensions,
+        manifestAdditions: args.manifestAdditions,
+        InfoAdditions: args.InfoAdditions,
+    };
+    if (Object.values(patch).every((value) => value === undefined)) {
         throw new Error("Supply at least one AIR descriptor field.");
     }
-    if (values.id === null || values.versionNumber === null) {
-        throw new Error("id and versionNumber cannot be deleted.");
-    }
-    if (
-        values.renderMode !== undefined &&
-        values.renderMode !== null &&
-        !["auto", "cpu", "direct", "gpu"].includes(String(values.renderMode))
-    ) {
-        throw new Error("renderMode must be auto, cpu, direct, or gpu.");
-    }
-    if (
-        values.aspectRatio !== undefined &&
-        values.aspectRatio !== null &&
-        !["portrait", "landscape", "any"].includes(String(values.aspectRatio))
-    ) {
-        throw new Error("aspectRatio must be portrait, landscape, or any.");
-    }
-    for (const key of ["id", "versionNumber"] as const) {
-        if (values[key] !== undefined && (typeof values[key] !== "string" || !values[key].trim())) {
-            throw new Error(`${key} must be a non-empty string.`);
-        }
-    }
-    const dir = dirname(path);
-    if (values.icon && typeof values.icon === "object" && !Array.isArray(values.icon)) {
+    const descriptorFolder = resolve(dirname(path));
+    if (patch.icon) {
         const iconNames = new Set([
             "image16x16",
             "image29x29",
@@ -228,15 +250,19 @@ async function setAirDescriptorAtPath(
             "image732x412",
             "image1024x1024",
         ]);
-        for (const [name, file] of Object.entries(values.icon)) {
+        const realDescriptorFolder = await realpath(descriptorFolder);
+        for (const [name, file] of Object.entries(patch.icon)) {
             if (!iconNames.has(name)) {
                 throw new Error(`Invalid AIR icon size name: ${name}.`);
             }
+            const resolvedPath = resolve(descriptorFolder, file);
+            if (!file || isAbsolute(file) || !isInside(descriptorFolder, resolvedPath)) {
+                throw new Error(`Icon path must be inside the descriptor folder: ${String(file)}.`);
+            }
+            const existingPath = await nearestExistingRealPath(resolvedPath);
             if (
-                !file ||
-                typeof file !== "string" ||
-                isAbsolute(file) ||
-                relative(resolve(dir), resolve(dir, file)).startsWith("..")
+                !existingPath ||
+                (existingPath !== realDescriptorFolder && !isInside(realDescriptorFolder, existingPath))
             ) {
                 throw new Error(`Icon path must be inside the descriptor folder: ${String(file)}.`);
             }
@@ -249,15 +275,15 @@ async function setAirDescriptorAtPath(
      * @param name Child element name.
      * @returns Matching children.
      */
-    const direct = (node: Node, name: string) => node.children.filter((child) => child.name === name);
+    const childrenNamed = (node: Node, name: string) => node.children.filter((child) => child.name === name);
     /**
      * Finds a unique direct child element.
      * @param node Parent XML element.
      * @param name Child element name.
      * @returns Matching child if present.
      */
-    const one = (node: Node, name: string) => {
-        const found = direct(node, name);
+    const uniqueChild = (node: Node, name: string) => {
+        const found = childrenNamed(node, name);
         if (found.length > 1) {
             throw new Error(`AIR descriptor has ambiguous duplicate <${name}> elements.`);
         }
@@ -272,8 +298,8 @@ async function setAirDescriptorAtPath(
      * @param encoded Whether the value is XML text or already serialized markup.
      * @returns Nothing.
      */
-    const set = (parent: Node, name: string, value: string | null, encoded = true) => {
-        const found = one(parent, name);
+    const patchChild = (parent: Node, name: string, value: string | null, encoded = true) => {
+        const found = uniqueChild(parent, name);
         if (value === null) {
             if (found) {
                 edits.push({ start: found.start, end: found.end, text: "" });
@@ -289,7 +315,7 @@ async function setAirDescriptorAtPath(
             }
         } else {
             const opening = xml.slice(parent.start, parent.openEnd);
-            const prefix = opening.match(/^<([^\s/>:]+:)?[^\s/>]+/)?.[1] ?? "";
+            const prefix = namespacePrefix(opening);
             const childName = `${prefix}${name}`;
             const childText = `${encoded ? escapeXml(value) : value}`;
             if (parent.selfClosing) {
@@ -322,95 +348,81 @@ async function setAirDescriptorAtPath(
             });
         }
     };
-    const initialWindow = one(root, "initialWindow");
-    for (const name of FIELDS) {
-        if (values[name] !== undefined) {
-            const parent =
-                name === "renderMode" || name === "aspectRatio" || name === "autoOrients" || name === "fullScreen"
-                    ? initialWindow
-                    : root;
+    const initialWindow = uniqueChild(root, "initialWindow");
+    for (const field of AIR_DESCRIPTOR_FIELDS) {
+        if (!field.writable) {
+            continue;
+        }
+        const { name, parent: parentName } = field;
+        const value = patch[name];
+        if (value !== undefined) {
+            if (name === "id" || name === "versionNumber") {
+                if (value === null) {
+                    throw new Error("id and versionNumber cannot be deleted.");
+                }
+                if (typeof value !== "string" || !value.trim()) {
+                    throw new Error(`${name} must be a non-empty string.`);
+                }
+            }
+            if (
+                name === "renderMode" &&
+                value !== null &&
+                typeof value === "string" &&
+                !["auto", "cpu", "direct", "gpu"].includes(value)
+            ) {
+                throw new Error("renderMode must be auto, cpu, direct, or gpu.");
+            }
+            const parent = parentName === "initialWindow" ? initialWindow : root;
             if (!parent) {
                 throw new Error("AIR descriptor has no <initialWindow> element.");
             }
-            if (
-                (name === "autoOrients" || name === "fullScreen") &&
-                values[name] !== null &&
-                typeof values[name] !== "boolean"
-            ) {
-                throw new Error(`${name} must be boolean or null.`);
-            }
-            if (
-                values[name] !== null &&
-                !["autoOrients", "fullScreen"].includes(name) &&
-                typeof values[name] !== "string"
-            ) {
-                throw new Error(`${name} must be a string or null.`);
-            }
-            set(parent, name, values[name] === null ? null : String(values[name]));
+            patchChild(parent, name, value === null ? null : String(value));
         }
     }
     for (const name of ["icon", "extensions"] as const) {
-        if (values[name] === undefined) {
+        const data = patch[name];
+        if (data === undefined) {
             continue;
         }
-        const data = values[name];
-        const container = one(root, name);
+        const container = uniqueChild(root, name);
         if (container && /<!--|<!\[CDATA\[/.test(xml.slice(container.openEnd, container.closeStart))) {
             throw new Error(`Cannot replace <${name}> because it contains comments or CDATA.`);
         }
         if (data === null) {
-            set(root, name, null);
+            patchChild(root, name, null);
             continue;
         }
-        if (name === "icon") {
-            if (!data || typeof data !== "object" || Array.isArray(data)) {
-                throw new Error("icon must be an object or null.");
-            }
-            const opening = xml.slice(container?.start ?? root.start, container?.openEnd ?? root.openEnd);
-            const prefix = opening.match(/^<([^\s/>:]+:)?[^\s/>]+/)?.[1] ?? "";
-            const body = Object.entries(data)
-                .map(([key, val]) => `\n            <${prefix}${key}>${escapeXml(String(val))}</${prefix}${key}>`)
-                .join("");
-            set(root, name, body ? `${body}\n        ` : "", false);
-        } else {
-            if (!Array.isArray(data) || data.some((item) => typeof item !== "string" || !item)) {
-                throw new Error("extensions must be an array of non-empty strings or null.");
-            }
-            const opening = xml.slice(container?.start ?? root.start, container?.openEnd ?? root.openEnd);
-            const prefix = opening.match(/^<([^\s/>:]+:)?[^\s/>]+/)?.[1] ?? "";
-            set(
-                root,
-                name,
-                data.length
-                    ? `\n            ${data.map((id) => `<${prefix}extensionID>${escapeXml(id)}</${prefix}extensionID>`).join("\n            ")}\n        `
-                    : "",
-                false,
-            );
+        if (name === "extensions" && (!Array.isArray(data) || data.some((item) => !item))) {
+            throw new Error("extensions must be an array of non-empty strings or null.");
         }
+        const opening = xml.slice(container?.start ?? root.start, container?.openEnd ?? root.openEnd);
+        const prefix = namespacePrefix(opening);
+        const items = Array.isArray(data)
+            ? data.map((id) => `<${prefix}extensionID>${escapeXml(id)}</${prefix}extensionID>`)
+            : Object.entries(data).map(([key, value]) => `<${prefix}${key}>${escapeXml(value)}</${prefix}${key}>`);
+        const body = items.length ? `\n            ${items.join("\n            ")}\n        ` : "";
+        patchChild(root, name, body, false);
     }
     for (const [key, blockName] of [
         ["manifestAdditions", "android"],
         ["InfoAdditions", "iPhone"],
     ] as const) {
-        if (values[key] === undefined) {
+        if (patch[key] === undefined) {
             continue;
         }
-        const parent = one(root, blockName);
+        const parent = uniqueChild(root, blockName);
         if (!parent) {
             const closing = xml.lastIndexOf("</", root.end);
             const indent = xml.slice(xml.lastIndexOf("\n", root.start) + 1, root.start).match(/^\s*/)?.[0] ?? "";
-            const value = values[key];
-            if (value !== null && typeof value !== "string") {
-                throw new Error(`${key} must be a string or null.`);
-            }
-            if (typeof value === "string" && value.includes("]]>")) {
-                throw new Error(`${key} cannot contain the CDATA terminator ]]>.`);
+            const value = patch[key];
+            if (value !== null) {
+                assertCdataSafe(value, key);
             }
             if (value === null) {
                 continue;
             }
             const rootOpening = xml.slice(root.start, root.openEnd);
-            const prefix = rootOpening.match(/^<([^\s/>:]+:)?[^\s/>]+/)?.[1] ?? "";
+            const prefix = namespacePrefix(rootOpening);
             const qualifiedBlock = `${prefix}${blockName}`;
             const qualifiedKey = `${prefix}${key}`;
             const child = `<${qualifiedKey}><![CDATA[${String(value)}]]></${qualifiedKey}>`;
@@ -421,18 +433,13 @@ async function setAirDescriptorAtPath(
             });
             continue;
         }
-        const value = values[key];
-        if (value !== null && typeof value !== "string") {
-            throw new Error(`${key} must be a string or null.`);
-        }
-        let inner = value as string | null;
+        const value = patch[key];
+        let inner = value;
         if (inner !== null) {
-            if (inner.includes("]]>")) {
-                throw new Error(`${key} cannot contain the CDATA terminator ]]>.`);
-            }
+            assertCdataSafe(inner, key);
             inner = `<![CDATA[${inner}]]>`;
         }
-        set(parent, key, inner, false);
+        patchChild(parent, key, inner, false);
     }
     const groupedEdits = new Map<string, Edit>();
     for (const edit of edits) {
@@ -463,8 +470,8 @@ async function setAirDescriptorAtPath(
                   )
                   .join("\n")}`;
     const editedPlatforms = [
-        ...(values.manifestAdditions !== undefined ? ["Android"] : []),
-        ...(values.InfoAdditions !== undefined ? ["iOS"] : []),
+        ...(patch.manifestAdditions !== undefined ? ["Android"] : []),
+        ...(patch.InfoAdditions !== undefined ? ["iOS"] : []),
     ];
     const notes = playerTarget
         ? editedPlatforms
@@ -487,7 +494,6 @@ async function setAirDescriptorAtPath(
         await writeFile(temporary, next, "utf8");
         await rename(temporary, path);
     } catch (error) {
-        const { unlink } = await import("node:fs/promises");
         await unlink(temporary).catch(() => undefined);
         throw error;
     }
@@ -510,10 +516,7 @@ export const setAirDescriptorTool: ToolDefinition<typeof INPUT> = {
     },
     inputSchema: INPUT,
     run: async (args: Parameters<ToolCallback<typeof INPUT>>[0], deps: ToolDeps) => ({
-        data: await runSetAirDescriptor(
-            args as Record<string, unknown> & { document?: string; descriptorPath?: string; dryRun?: boolean },
-            deps,
-        ),
+        data: await runSetAirDescriptor(args, deps),
     }),
 };
 

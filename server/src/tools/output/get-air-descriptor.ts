@@ -10,21 +10,52 @@ const INPUT = {
     descriptorPath: z.string().optional().describe("Absolute path to an AIR *-app.xml descriptor"),
 };
 
-type Element = { name: string; text: string; children: Element[] };
-const FIELDS = ["id", "versionNumber", "versionLabel", "filename"] as const;
-const WINDOW_FIELDS = ["renderMode", "aspectRatio", "autoOrients", "fullScreen"] as const;
+export type AirDescriptorElement = { name: string; text: string; children: AirDescriptorElement[] };
 
 /**
- * Parses an AIR descriptor and returns only its documented fields.
- * @param xml Descriptor XML.
- * @returns The application descriptor fields.
+ * Derives the adjacent AIR descriptor path from a saved FLA path.
+ * @param flaPath Saved FLA path.
+ * @returns The adjacent *-app.xml descriptor path.
  */
-export function parseAirDescriptor(xml: string) {
-    let root: Element | undefined;
-    const stack: Element[] = [];
+export function airDescriptorPathForFla(flaPath: string): string {
+    return join(dirname(flaPath), `${basename(flaPath).replace(/\.fla$/i, "")}-app.xml`);
+}
+
+/**
+ * unverified: Animate may create a missing AIR descriptor during Publish.
+ * @param error The descriptor read error.
+ * @param path Expected descriptor path.
+ * @returns Missing-descriptor detail for ENOENT, otherwise undefined.
+ */
+export function missingAirDescriptorDetail(error: unknown, path: string): string | undefined {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return `AIR descriptor not found at ${path}. Animate may create it during Publish (unverified).`;
+    }
+    return undefined;
+}
+
+export const AIR_DESCRIPTOR_FIELDS = [
+    { name: "id", parent: "root", type: "string", writable: true },
+    { name: "versionNumber", parent: "root", type: "string", writable: true },
+    { name: "versionLabel", parent: "root", type: "string", writable: true },
+    { name: "filename", parent: "root", type: "string", writable: false },
+    { name: "renderMode", parent: "initialWindow", type: "string", writable: true },
+    { name: "aspectRatio", parent: "initialWindow", type: "string", writable: true },
+    { name: "autoOrients", parent: "initialWindow", type: "boolean", writable: true },
+    { name: "fullScreen", parent: "initialWindow", type: "boolean", writable: true },
+] as const;
+
+/**
+ * Parses XML elements into a tree while preserving the text content of each element.
+ * @param xml Descriptor XML.
+ * @returns The root element, if present.
+ */
+export function parseAirDescriptorElements(xml: string): AirDescriptorElement | undefined {
+    let root: AirDescriptorElement | undefined;
+    const stack: AirDescriptorElement[] = [];
     const parser = new SaxesParser({ xmlns: true });
     parser.on("opentag", (tag) => {
-        const element: Element = { name: tag.local ?? tag.name, text: "", children: [] };
+        const element: AirDescriptorElement = { name: tag.local ?? tag.name, text: "", children: [] };
         if (stack.length) {
             stack[stack.length - 1].children.push(element);
         } else {
@@ -46,6 +77,16 @@ export function parseAirDescriptor(xml: string) {
     parser.on("cdata", addText);
     parser.on("closetag", () => stack.pop());
     parser.write(xml).close();
+    return root;
+}
+
+/**
+ * Parses an AIR descriptor and returns only its documented fields.
+ * @param xml Descriptor XML.
+ * @returns The application descriptor fields.
+ */
+export function parseAirDescriptor(xml: string) {
+    const root = parseAirDescriptorElements(xml);
     if (root?.name !== "application") {
         throw new Error("AIR descriptor root element must be application.");
     }
@@ -55,7 +96,7 @@ export function parseAirDescriptor(xml: string) {
      * @param name Child element name.
      * @returns The matching child, if present.
      */
-    const child = (parent: Element | undefined, name: string) =>
+    const child = (parent: AirDescriptorElement | undefined, name: string) =>
         parent?.children.find((element) => element.name === name);
     /**
      * Reads trimmed text from a direct child element.
@@ -63,19 +104,13 @@ export function parseAirDescriptor(xml: string) {
      * @param name Child element name.
      * @returns The child's text, if present.
      */
-    const text = (parent: Element | undefined, name: string) => child(parent, name)?.text.trim();
-    const result: Record<string, unknown> = {};
-    for (const name of FIELDS) {
-        const value = text(root, name);
-        if (value !== undefined) {
-            result[name] = value;
-        }
-    }
+    const text = (parent: AirDescriptorElement | undefined, name: string) => child(parent, name)?.text.trim();
     const initialWindow = child(root, "initialWindow");
-    for (const name of WINDOW_FIELDS) {
-        const value = text(initialWindow, name);
+    const result: Record<string, unknown> = {};
+    for (const { name, parent, type } of AIR_DESCRIPTOR_FIELDS) {
+        const value = text(parent === "root" ? root : initialWindow, name);
         if (value !== undefined) {
-            result[name] = name === "autoOrients" || name === "fullScreen" ? value === "true" || value === "1" : value;
+            result[name] = type === "boolean" ? value === "true" || value === "1" : value;
         }
     }
     const icon = child(root, "icon");
@@ -128,7 +163,7 @@ export async function resolveAirDescriptor(
         throw new Error("Document has no AIR descriptor path.");
     }
     return {
-        path: join(dirname(info.platformPath), `${basename(info.platformPath).replace(/\.fla$/i, "")}-app.xml`),
+        path: airDescriptorPathForFla(info.platformPath),
         playerTarget: info.playerTarget,
     };
 }
@@ -144,8 +179,9 @@ export async function resolveAirDescriptor(
 export async function runGetAirDescriptor(args: { document?: string; descriptorPath?: string }, deps: ToolDeps) {
     const { path, playerTarget } = await resolveAirDescriptor(args, deps);
     const xml = await readFile(path, "utf8").catch((error: unknown) => {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-            throw new Error("AIR descriptor is not present; Animate generates it during Publish.");
+        const detail = missingAirDescriptorDetail(error, path);
+        if (detail) {
+            throw new Error(detail);
         }
         throw error;
     });
