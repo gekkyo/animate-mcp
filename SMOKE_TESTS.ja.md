@@ -49,6 +49,8 @@ Mac で Animate を起動し、リポジトリのルートから実行します�
 `server/verification/readme-e2e/` は、README の例文を Claude または Codex CLI と制限付き MCP サーバー経由で実機 Animate に渡す、別のハーネスです。既定は Claude です。Codex は `README_PROMPT_E2E_PROVIDER=codex` で明示的に選択します。
 
 - **非課金チェック:** `npm run test:readme-e2e` はサーバーをビルドし、フィクスチャ・ファイル操作制限・MCP探索・偽CLIのテストを実行します。実際の Claude/Codex CLI や Animate は起動しません。CIでは独立ステップで実行し、`npm test` の対象は変更しません。
+- **Codex パーサー／ハンドシェイクの事前確認（モデル・Animate 不使用）:** `npm run build` の後、`README_PROMPT_E2E_SCENARIO=stage node server/verification/readme-e2e/runner.mjs --codex-preflight` を実行します。新規の一時 `HOME`／`CODEX_HOME` と、本番 `codexArgs` が生成するインライン設定・無害な fake MCP コマンドでインストール済み Codex のパーサーを確認し、明示的に制限した子プロセス環境で SDK ハンドシェイクと入口の許可リストを確認します。通常の Codex 設定は読み込まず、認証・Animate ツール実行は不要です。設定のパースだけで書き込み承認を証明するものではありません。
+- **実機 Animate フィクスチャの事前確認（モデル不使用）:** ドキュメントを開いていない Animate を起動し、`npm run build` の後、`README_PROMPT_E2E_SCENARIO=capture node server/verification/readme-e2e/runner.mjs --fixture-preflight` を実行します。使い捨て FLA を作成・終了し、本番フィクスチャを確認したうえで、制限 MCP 経由のフレーム12キャプチャだけを実行して PNG ピクセルを検証します。`README_PROMPT_E2E_SCENARIO` で他のシナリオも選択できます。`canvas` には Chrome も必要です。
 - **永続診断ログ:** 使い捨てワークスペース外の `~/.animate-mcp/readme-e2e-diagnostics/diagnostics.jsonl` に、private 権限・直近64 KiBの保持で結果メタデータを保存します。既定では固定の許可リスト項目、分類済み失敗理由／終了コード、隔離した一時ホームで一度だけ確認する CLI バージョン（検証できない場合は `unavailable`）を記録します。`README_E2E_DIAGNOSTICS=1` を設定すると、追加の許可済みカウンターと列挙値も記録します。CLI の生出力、認証情報、認証内容、MCP URL は記録しません。
 - **実機E2E（明示的な承認が必要）:** Animate をドキュメントが開いていない状態にし、選択した CLI の認証を済ませて、リポジトリのルートで実行します。
 
