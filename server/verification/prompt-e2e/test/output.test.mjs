@@ -235,10 +235,19 @@ test("test_movie is scoped to the disposable FLA, validates its result, and clos
         assertTestMovieReply("README_TEST_MOVIE_OK。コンパイルエラーはありません。");
         assertTestMovieReply("README_TEST_MOVIE_OK; no compile errors.");
         assertTestMovieReply("README_TEST_MOVIE_OK — エラーなし。");
+        assertTestMovieReply(
+            "Test Movie を実行しました。\n- コンパイル結果：エラー 0 件、警告 0 件\n- 起動直後の出力：`README_TEST_MOVIE_OK`",
+        );
         for (const reply of [
             "README_TEST_MOVIE_OK; compile error found.",
             "コンパイルエラーはありません。",
             "README_TEST_MOVIE_OK",
+            "README_TEST_MOVIE_OK。コンパイル結果：エラー 1 件、警告 0 件",
+            "README_TEST_MOVIE_OK。コンパイル結果：エラー 10 件、警告 0 件",
+            "README_TEST_MOVIE_OK。コンパイル結果：警告 0 件",
+            "README_TEST_MOVIE_OK。コンパイル結果：エラー 0 件ではありません",
+            "README_TEST_MOVIE_OK。コンパイル結果：エラー0件とは確認できない",
+            "README_TEST_MOVIE_OK。コンパイル結果：エラー0件か不明",
         ]) {
             assert.throws(() => assertTestMovieReply(reply));
         }

@@ -84,13 +84,13 @@ export function assertPublishReply(result) {
  * @param result Claude's parsed final result, held in memory only.
  */
 export function assertTestMovieReply(result) {
-    assert.equal(typeof result, "string", "Claude final result is missing");
-    assert.ok(result.includes(TEST_MOVIE_MARKER), "Claude final result omitted the startup output marker");
+    assert.equal(typeof result, "string", "Final result is missing");
+    assert.ok(result.includes(TEST_MOVIE_MARKER), "Final result omitted the startup output marker");
     assert.ok(
-        /(?:コンパイル)?エラー(?:(?:は|が)?ありません|(?:は|が)?なし)|(?:no|zero)\s+(?:compil(?:e|ation)\s+)?errors?/i.test(
+        /(?:コンパイル)?エラー(?:(?:は|が)?ありません|(?:は|が)?なし)|(?:no|zero)\s+(?:compil(?:e|ation)\s+)?errors?|コンパイル結果\s*[:：]\s*エラー\s*0\s*件(?=\s*(?:[、,。.;]|$))/im.test(
             result,
         ),
-        "Claude final result did not report that there are no compile errors",
+        "Final result did not report that there are no compile errors",
     );
 }
 
