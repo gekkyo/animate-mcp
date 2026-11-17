@@ -14,6 +14,7 @@ import { registerEditTween } from "../../../dist/tools/timeline/edit-tween.js";
 import { registerInspectTimeline } from "../../../dist/tools/timeline/inspect-timeline.js";
 import {
     closeDocumentByPath,
+    closeUnsavedDocumentByName,
     createSavedAs3Document,
     createSavedHtmlCanvasDocument,
     toolHandler,
@@ -236,9 +237,7 @@ try {
         assert.equal(unsavedCanvas.checks.saved.status, "fail");
         console.log("PASS preflight_publish unsaved Canvas: saved check failed as designed.");
     } finally {
-        await run(
-            `(function(){var docs=fl.documents; for(var i=0;i<docs.length;i++) if(docs[i].name===${JSON.stringify(unsavedCanvasName)}) {docs[i].close(false); return true;} return true;})()`,
-        );
+        await closeUnsavedDocumentByName(runJsfl, unsavedCanvasName);
         await run(
             `(function(){var docs=fl.documents; for(var i=0;i<docs.length;i++) if(docs[i].pathURI===${JSON.stringify(savedPath)}) {fl.setActiveWindow(docs[i]); return true;} throw new Error("Saved smoke document not found");})()`,
         );
@@ -252,9 +251,7 @@ try {
         assert.equal(unsaved.checks.saved.status, "fail");
         console.log("PASS preflight_publish unsaved document: saved check failed as designed.");
     } finally {
-        await run(
-            `(function(){var docs=fl.documents; for(var i=0;i<docs.length;i++) if(docs[i].name===${JSON.stringify(unsavedName)}) {docs[i].close(false); return true;} return true;})()`,
-        );
+        await closeUnsavedDocumentByName(runJsfl, unsavedName);
         await run(
             `(function(){var docs=fl.documents; for(var i=0;i<docs.length;i++) if(docs[i].pathURI===${JSON.stringify(savedPath)}) {fl.setActiveWindow(docs[i]); return true;} throw new Error("Saved smoke document not found");})()`,
         );

@@ -24,7 +24,7 @@ function statusFor(pathURI) {
 function jsflResponses(pathURI, responses) {
     let index = 0;
     return async () => ({
-        structuredContent: { result: responses[index++] ?? `preflight\t${pathURI}` },
+        structuredContent: { result: responses[index++] ?? `OK\tpreflight\t${pathURI}` },
     });
 }
 
@@ -38,7 +38,7 @@ test("shared fixture setup dispatches capture, initial-script, Canvas, and asset
         const capture = await prepareReadmeE2eScenario(
             "capture",
             {
-                runJsfl: jsflResponses(pathURI, [`preflight.fla\t${pathURI}`, "READY", captureReport]),
+                runJsfl: jsflResponses(pathURI, [`OK\tpreflight.fla\t${pathURI}`, "READY", captureReport]),
                 status,
                 flaPath: join(directory, "capture.fla"),
                 outDir: directory,
@@ -55,7 +55,7 @@ test("shared fixture setup dispatches capture, initial-script, Canvas, and asset
         const script = await prepareReadmeE2eScenario(
             "testmovie",
             {
-                runJsfl: jsflResponses(pathURI, [`preflight.fla\t${pathURI}`, scriptSource]),
+                runJsfl: jsflResponses(pathURI, [`OK\tpreflight.fla\t${pathURI}`, scriptSource]),
                 status,
                 flaPath: join(directory, "testmovie.fla"),
                 outDir: directory,
@@ -86,7 +86,7 @@ test("shared fixture setup dispatches capture, initial-script, Canvas, and asset
             "assets",
             {
                 runJsfl: jsflResponses(pathURI, [
-                    `preflight.fla\t${pathURI}`,
+                    `OK\tpreflight.fla\t${pathURI}`,
                     "550\t400\t24\t#FFFFFF\n--LIBRARY--\n\n--STAGE--\n",
                 ]),
                 status,
@@ -131,7 +131,7 @@ test("fixture-preflight runner reaches selected scenario setup through fake serv
             jsflCalls += 1;
             if (jsflCalls === 1) {
                 documentOpen = true;
-                return { structuredContent: { result: `preflight.fla\t${pathURI}` } };
+                return { structuredContent: { result: `OK\tpreflight.fla\t${pathURI}` } };
             }
             return { structuredContent: { result: "trace('README_TEST_MOVIE_OK');" } };
         },
@@ -172,7 +172,7 @@ test("fixture-preflight classifies a cleanup-only failure as cleanup", async () 
             }),
             runJsfl: async () => {
                 documentOpen = true;
-                return { structuredContent: { result: `preflight.fla\t${pathURI}` } };
+                return { structuredContent: { result: `OK\tpreflight.fla\t${pathURI}` } };
             },
             checkRestrictedMcpHandshake: async () => ({ toolsCount: 3 }),
             closeDocumentByPath: async () => {

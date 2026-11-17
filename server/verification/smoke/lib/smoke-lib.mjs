@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { jsflRun } from "../../../dist/runtime/jsfl-bundle.js";
 
 const execFileAsync = promisify(execFile);
 const serverPath = fileURLToPath(new URL("../../../dist/index.js", import.meta.url));
@@ -95,7 +96,7 @@ function modalHint(diagnostic) {
  */
 async function createSavedDocument(runJsfl, fileUri, type, actionScript) {
     const result = await runJsfl({
-        code: `(function () { var doc = null, created = false, existing = []; for (var i = 0; i < fl.documents.length; i++) existing.push(fl.documents[i]); try { fl.createDocument(${JSON.stringify(type)}, 550, 400, 24); doc = fl.getDocumentDOM(); var wasExisting = false; for (var j = 0; j < existing.length; j++) if (existing[j] === doc) wasExisting = true; if (!doc || wasExisting) throw new Error("Animate did not create a new document"); created = true; if (${JSON.stringify(type)} === "timeline" && (doc.type !== "Flash" || String(doc.asVersion).indexOf("3") < 0)) throw new Error("Created document is not AS3"); if (${JSON.stringify(type)} === "htmlcanvas" && doc.type !== "htmlcanvas") throw new Error("Created document is not HTML5 Canvas"); ${actionScript === undefined ? "" : `doc.getTimeline().layers[0].frames[0].actionScript = ${JSON.stringify(actionScript)};`} if (fl.saveDocument(doc, ${JSON.stringify(fileUri)}) !== true) throw new Error("fl.saveDocument returned false"); if (!doc.name || !doc.pathURI) throw new Error("Saved document has no name or pathURI"); return doc.name + "\\t" + doc.pathURI; } catch (error) { if (created) { try { doc.close(false); } catch (cleanupError) { throw new Error(String(error) + "; closing disposable document also failed: " + String(cleanupError)); } } throw error; } })()`,
+        code: `(function () { var doc = null, created = false, existing = []; for (var i = 0; i < fl.documents.length; i++) existing.push(fl.documents[i]); try { fl.createDocument(${JSON.stringify(type)}, 550, 400, 24); doc = fl.getDocumentDOM(); var wasExisting = false; for (var j = 0; j < existing.length; j++) if (existing[j] === doc) wasExisting = true; if (!doc || wasExisting) throw new Error("Animate did not create a new document"); created = true; if (${JSON.stringify(type)} === "timeline" && (doc.type !== "Flash" || String(doc.asVersion).indexOf("3") < 0)) throw new Error("Created document is not AS3"); if (${JSON.stringify(type)} === "htmlcanvas" && doc.type !== "htmlcanvas") throw new Error("Created document is not HTML5 Canvas"); ${actionScript === undefined ? "" : `doc.getTimeline().layers[0].frames[0].actionScript = ${JSON.stringify(actionScript)};`} if (fl.saveDocument(doc, ${JSON.stringify(fileUri)}) !== true) throw new Error("fl.saveDocument returned false"); if (!doc.name || !doc.pathURI) throw new Error("Saved document has no name or pathURI"); return "OK\\t" + doc.name + "\\t" + doc.pathURI; } catch (error) { if (created) return "ERROR\\t" + doc.name + "\\t" + (doc.pathURI || "") + "\\t" + String(error); throw error; } })()`,
     });
     if (result.isError) {
         throw new Error(result.content?.[0]?.text ?? "run_jsfl failed");
@@ -104,10 +105,21 @@ async function createSavedDocument(runJsfl, fileUri, type, actionScript) {
     if (typeof value !== "string") {
         throw new Error("Could not read saved document details from Animate");
     }
-    const separator = value.indexOf("\t");
-    const name = value.slice(0, separator);
-    const pathURI = value.slice(separator + 1);
-    if (separator < 1 || !pathURI) {
+    const [status, name, pathURI, ...errorParts] = value.split("\t");
+    if (status === "ERROR") {
+        const failure = new Error(errorParts.join("\t") || "Could not prepare disposable document");
+        try {
+            if (pathURI) {
+                await closeDocumentByPath(runJsfl, pathURI);
+            } else if (name) {
+                await closeUnsavedDocumentByName(runJsfl, name);
+            }
+        } catch (cleanupError) {
+            throw new AggregateError([failure, cleanupError], "Disposable document setup and cleanup failed");
+        }
+        throw failure;
+    }
+    if (status !== "OK" || !name || !pathURI) {
         throw new Error("Animate returned invalid saved document details");
     }
     return { name, pathURI };
@@ -141,15 +153,53 @@ export async function closeDocumentByPath(runJsfl, pathURI) {
     if (typeof pathURI !== "string" || !pathURI) {
         throw new Error("A document pathURI is required for cleanup");
     }
-    const result = await runJsfl({
-        code: `(function () { var hits = []; for (var i = 0; i < fl.documents.length; i++) if (fl.documents[i].pathURI === ${JSON.stringify(pathURI)}) hits.push(fl.documents[i]); if (hits.length !== 1) throw new Error("Expected exactly one disposable document at pathURI; found " + hits.length); hits[0].close(false); for (var j = 0; j < fl.documents.length; j++) if (fl.documents[j].pathURI === ${JSON.stringify(pathURI)}) throw new Error("Disposable document remained open after close"); return true; })()`,
-    });
+    const result = await closeDisposableDocument(runJsfl, pathURI, false);
+    if (result.path !== pathURI) {
+        throw new Error("Animate closed a document other than the exact disposable pathURI");
+    }
+}
+
+/** Closes only the unique unsaved document with this exact name.
+ * @param runJsfl run_jsfl tool handler.
+ * @param name Exact unsaved disposable document name.
+ * @returns Resolves when Animate confirms the document is closed.
+ */
+export async function closeUnsavedDocumentByName(runJsfl, name) {
+    if (typeof name !== "string" || !name) {
+        throw new Error("An exact unsaved disposable document name is required");
+    }
+    const result = await closeDisposableDocument(runJsfl, name, true);
+    if (result.name !== name || result.path !== null) {
+        throw new Error("Animate closed a document other than the exact unsaved disposable document");
+    }
+}
+
+/** Runs the shared two-Run close sequence for one exact disposable target.
+ * @param runJsfl run_jsfl tool handler.
+ * @param target Exact saved path or unsaved name.
+ * @param requireUnsaved Whether the target must still be unsaved.
+ * @returns The closed document name and path.
+ */
+async function closeDisposableDocument(runJsfl, target, requireUnsaved) {
+    const vars = { __closeDocumentTarget: target, __closeDocumentRequireUnsaved: requireUnsaved };
+    const prepared = await runJsfl({ code: jsflRun("document/prepare-close", vars) });
+    if (prepared.isError || prepared.structuredContent?.result !== true) {
+        throw new Error(prepared.content?.[0]?.text ?? "Animate did not confirm Arrow tool selection before close");
+    }
+    const result = await runJsfl({ code: jsflRun("document/close-document", vars) });
     if (result.isError) {
         throw new Error(result.content?.[0]?.text ?? "run_jsfl failed while closing disposable document");
     }
-    if (result.structuredContent?.result !== true) {
-        throw new Error("Animate did not confirm disposable document cleanup");
+    let closed;
+    try {
+        closed = JSON.parse(result.structuredContent?.result);
+    } catch {
+        throw new Error("Animate returned invalid close-document details");
     }
+    if (!closed || typeof closed.name !== "string" || !(typeof closed.path === "string" || closed.path === null)) {
+        throw new Error("Animate returned incomplete close-document details");
+    }
+    return closed;
 }
 
 /** Starts the shared production MCP client on its first request.

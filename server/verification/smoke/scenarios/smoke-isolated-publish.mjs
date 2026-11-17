@@ -8,7 +8,7 @@ import { registerRunJsfl } from "../../../dist/tools/core/run-jsfl.js";
 import { registerOpenDocument } from "../../../dist/tools/document/open-document.js";
 import { registerSaveDocument } from "../../../dist/tools/document/save-document.js";
 import { registerPublish } from "../../../dist/tools/output/publish.js";
-import { closeDocumentByPath, toolHandler } from "../lib/smoke-lib.mjs";
+import { closeDocumentByPath, closeUnsavedDocumentByName, toolHandler } from "../lib/smoke-lib.mjs";
 
 assert.equal(await isAnimateRunning(), true, "Animate must already be running; refusing to launch it");
 
@@ -116,10 +116,7 @@ try {
             if (savedPath) {
                 await closeDocumentByPath(runJsfl, savedPath);
             } else {
-                await runValue(
-                    `(function () { var __docs = fl.documents || [], __matches = []; for (var __i = 0; __i < __docs.length; __i++) if (__docs[__i].name === ${JSON.stringify(documentName)} && !__docs[__i].pathURI) __matches.push(__docs[__i]); if (__matches.length > 1) throw new Error("Multiple matching disposable documents found"); if (__matches.length) __matches[0].close(false); return __matches.length; })()`,
-                    "close disposable document without saving",
-                );
+                await closeUnsavedDocumentByName(runJsfl, documentName);
             }
         } catch (error) {
             failure = failure ? new AggregateError([failure, error], "Smoke and document cleanup failed") : error;

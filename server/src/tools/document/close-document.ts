@@ -14,7 +14,7 @@ const CLOSE_DOCUMENT_RESULT = z.object({ name: z.string(), path: z.string().null
 export const closeDocumentTool: ToolDefinition<typeof CLOSE_DOCUMENT_INPUT> = {
     name: "close_document",
     description:
-        "Close exactly one open document by its exact name or saved path. This never defaults to the active document or saves; all unsaved changes are discarded without a prompt, so require explicit user consent and set discardUnsavedChanges to true only when that loss is intended. Otherwise call save_document first.",
+        "Close exactly one open document by its exact name or saved path. This never defaults to the active document or saves; it selects the Arrow tool in a separate Run before closing and leaves it selected. All unsaved changes are discarded without a prompt, so require explicit user consent and set discardUnsavedChanges to true only when that loss is intended. Otherwise call save_document first.",
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     inputSchema: CLOSE_DOCUMENT_INPUT,
     guidance: {},
@@ -35,6 +35,12 @@ export const closeDocumentTool: ToolDefinition<typeof CLOSE_DOCUMENT_INPUT> = {
             );
         }
 
+        // unverified: A separate Arrow-tool Run avoided a crash once in isolation; the integrated close path has not been real-tested.
+        await jsfl.run(
+            "document/prepare-close",
+            { __closeDocumentTarget: document, __closeDocumentRequireUnsaved: false },
+            z.literal(true),
+        );
         const result = await jsfl.run(
             "document/close-document",
             { __closeDocumentTarget: document },

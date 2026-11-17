@@ -9,7 +9,7 @@ import { registerCloseDocument } from "../../../dist/tools/document/close-docume
 import { registerOpenDocument } from "../../../dist/tools/document/open-document.js";
 import { registerSaveDocument } from "../../../dist/tools/document/save-document.js";
 import { registerConvertToSymbol } from "../../../dist/tools/timeline/convert-to-symbol.js";
-import { closeDocumentByPath, toolHandler } from "../lib/smoke-lib.mjs";
+import { closeDocumentByPath, closeUnsavedDocumentByName, toolHandler } from "../lib/smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
 const openDocument = toolHandler(registerOpenDocument);
@@ -214,15 +214,24 @@ try {
 } finally {
     if (initialDocuments) {
         try {
-            const ownedPath = await runValue(
+            const ownedTarget = await runValue(
                 `(function () { var __wantedUri = FLfile.platformPathToURI(${JSON.stringify(flaPath)}), __wantedName = ${JSON.stringify(documentName ?? "")}, __matches = [], __docs = fl.documents || []; /** Converts an Animate document URI or path to a platform URI.
  * @param path Animate document URI or platform path.
  * @returns Normalized platform URI.
- */ function __normalize(path) { return FLfile.platformPathToURI(/^file:\\/\\//i.test(path) ? FLfile.uriToPlatformPath(path) : path); } for (var __i = 0; __i < __docs.length; __i++) { var __doc = __docs[__i], __isOwnedPath = false; if (__doc.pathURI) { try { __isOwnedPath = __normalize(__doc.pathURI) === __wantedUri; } catch (__error) {} } if (__isOwnedPath || (!__doc.pathURI && __wantedName && __doc.name === __wantedName)) __matches.push(__doc); } if (__matches.length > 1) throw new Error("Found multiple matching disposable documents: " + __matches.length); if (!__matches.length) return ""; if (__matches[0].pathURI) return __matches[0].pathURI; __matches[0].close(false); for (var __j = 0; __j < (fl.documents || []).length; __j++) if (fl.documents[__j] === __matches[0]) throw new Error("Disposable document remained open after cleanup"); return ""; })()`,
+ */ function __normalize(path) { return FLfile.platformPathToURI(/^file:\\/\\//i.test(path) ? FLfile.uriToPlatformPath(path) : path); } for (var __i = 0; __i < __docs.length; __i++) { var __doc = __docs[__i], __isOwnedPath = false; if (__doc.pathURI) { try { __isOwnedPath = __normalize(__doc.pathURI) === __wantedUri; } catch (__error) {} } if (__isOwnedPath || (!__doc.pathURI && __wantedName && __doc.name === __wantedName)) __matches.push(__doc); } if (__matches.length > 1) throw new Error("Multiple matching disposable documents: " + __matches.length); if (!__matches.length) return ""; if (__matches[0].pathURI) return "SAVED:" + __matches[0].pathURI; return "UNSAVED:" + __matches[0].name; })()`,
                 "locate disposable document for cleanup",
             );
-            if (ownedPath) {
-                await closeDocumentByPath(runJsfl, ownedPath);
+            if (ownedTarget.startsWith("SAVED:")) {
+                await closeDocumentByPath(runJsfl, ownedTarget.slice("SAVED:".length));
+            } else if (ownedTarget.startsWith("UNSAVED:")) {
+                await closeUnsavedDocumentByName(runJsfl, ownedTarget.slice("UNSAVED:".length));
+            } else if (ownedTarget) {
+                failure = failure
+                    ? new AggregateError(
+                          [failure, new Error("Could not identify the disposable cleanup target")],
+                          "Smoke test cleanup failed",
+                      )
+                    : new Error("Could not identify the disposable cleanup target");
             }
         } catch (error) {
             console.error("Disposable document cleanup failed:", error);

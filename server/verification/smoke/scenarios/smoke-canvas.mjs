@@ -22,7 +22,7 @@ import { registerEditElements } from "../../../dist/tools/timeline/edit-elements
 import { registerEditTimeline } from "../../../dist/tools/timeline/edit-timeline.js";
 import { registerEditTween } from "../../../dist/tools/timeline/edit-tween.js";
 import { registerInspectTimeline } from "../../../dist/tools/timeline/inspect-timeline.js";
-import { closeDocumentByPath, toolHandler } from "../lib/smoke-lib.mjs";
+import { closeDocumentByPath, closeUnsavedDocumentByName, toolHandler } from "../lib/smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);
 const openDocument = toolHandler(registerOpenDocument);
@@ -501,12 +501,21 @@ try {
 } finally {
     if (initialDocuments) {
         try {
-            const ownedPath = await runValue(
-                `(function () { var __wantedPath = ${JSON.stringify(savedPath)}, __wantedName = ${JSON.stringify(documentNameForCleanup.value)}, __matches = [], __docs = fl.documents || []; for (var __i = 0; __i < __docs.length; __i++) { var __doc = __docs[__i]; if ((__wantedPath && __doc.pathURI === __wantedPath) || (!__doc.pathURI && __wantedName && __doc.name === __wantedName)) __matches.push(__doc); } if (__matches.length > 1) throw new Error("Found multiple matching disposable documents: " + __matches.length); if (!__matches.length) return ""; if (__matches[0].pathURI) return __matches[0].pathURI; __matches[0].close(false); for (var __j = 0; __j < (fl.documents || []).length; __j++) if (fl.documents[__j] === __matches[0]) throw new Error("Disposable Canvas document remained open after cleanup"); return ""; })()`,
+            const ownedTarget = await runValue(
+                `(function () { var __wantedPath = ${JSON.stringify(savedPath)}, __wantedName = ${JSON.stringify(documentNameForCleanup.value)}, __matches = [], __docs = fl.documents || []; for (var __i = 0; __i < __docs.length; __i++) { var __doc = __docs[__i]; if ((__wantedPath && __doc.pathURI === __wantedPath) || (!__doc.pathURI && __wantedName && __doc.name === __wantedName)) __matches.push(__doc); } if (__matches.length > 1) throw new Error("Found multiple matching disposable documents: " + __matches.length); if (!__matches.length) return ""; if (__matches[0].pathURI) return "SAVED:" + __matches[0].pathURI; return "UNSAVED:" + __matches[0].name; })()`,
                 "locate disposable Canvas document for cleanup",
             );
-            if (ownedPath) {
-                await closeDocumentByPath(runJsfl, ownedPath);
+            if (ownedTarget.startsWith("SAVED:")) {
+                await closeDocumentByPath(runJsfl, ownedTarget.slice("SAVED:".length));
+            } else if (ownedTarget.startsWith("UNSAVED:")) {
+                await closeUnsavedDocumentByName(runJsfl, ownedTarget.slice("UNSAVED:".length));
+            } else if (ownedTarget) {
+                failure = failure
+                    ? new AggregateError(
+                          [failure, new Error("Could not identify the disposable Canvas cleanup target")],
+                          "Smoke test cleanup failed",
+                      )
+                    : new Error("Could not identify the disposable Canvas cleanup target");
             }
         } catch (error) {
             console.error("Disposable Canvas document cleanup failed:", error);

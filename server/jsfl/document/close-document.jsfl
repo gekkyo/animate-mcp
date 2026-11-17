@@ -4,7 +4,11 @@
  */
 (function () {
   var document = resolveDocumentTarget(__closeDocumentTarget);
+  if (typeof __closeDocumentRequireUnsaved !== "undefined" && __closeDocumentRequireUnsaved && document.pathURI) {
+    throw new Error("Expected the exact disposable document to remain unsaved before close");
+  }
   var result = { name: document.name, path: document.pathURI || null };
+  document.selectNone();
   document.close(false);
   var documents = fl.documents || [];
   for (var i = 0; i < documents.length; i++) {

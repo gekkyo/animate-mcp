@@ -26,7 +26,7 @@ test("smoke-lib creates saved AS3 and Canvas documents through their shared life
     const runJsfl = async ({ code }: { code: string }) => {
         codes.push(code);
         const path = codes.length === 1 ? "file:///tmp/smoke.fla" : "file:///tmp/smoke-canvas.fla";
-        return { isError: false, structuredContent: { result: `Smoke\t${path}` } };
+        return { isError: false, structuredContent: { result: `OK\tSmoke\t${path}` } };
     };
 
     assert.deepEqual(await createSavedAs3Document(runJsfl, "file:///tmp/smoke.fla", "trace('smoke');"), {

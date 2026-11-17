@@ -338,6 +338,11 @@ if (!src.includes("HANG")) runInNewContext(src, {
   fl: {
     /** Provides the no-op trace method used by the fake Animate API. */
     trace() {},
+    /** Accepts the Arrow tool used by the separate close-preparation Run.
+     * @param tool Tool name
+     * @returns Whether the fake Animate API accepted it
+     */
+    selectTool: (tool) => tool === "arrow",
     documents: docs,
     setActiveWindow: (document) => {
       logPublish("activate");
