@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, copyFile, link, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, link, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { test } from "node:test";
@@ -225,6 +225,46 @@ test("launcher succeeds and rejects a nonzero fake launch" /** Checks success an
             );
         },
     ));
+
+test(
+    "macOS launcher opens the running Animate bundle, not the newest installed one",
+    { skip: IS_WINDOWS },
+    /** Fakes pgrep and open, then checks the bundle passed to open -a.
+     * @returns Nothing
+     */
+    async () =>
+        withTempDirectory(
+            "animate-open-running-",
+            /** Runs the launch with fake pgrep/open commands.
+             * @param directory Temporary directory for the fake commands
+             * @returns Nothing
+             */
+            async (directory) => {
+                const app = "/Applications/Adobe Animate 2024/Adobe Animate 2024.app";
+                const argsFile = join(directory, "open-args.json");
+                await createFakeExecutable(
+                    directory,
+                    "pgrep",
+                    `if (process.argv[2] !== "-lf") process.exit(1);\nprocess.stdout.write("123 ${app}/Contents/MacOS/Adobe Animate\\n");\n`,
+                );
+                await createFakeExecutable(
+                    directory,
+                    "open",
+                    `require("node:fs").writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));\n`,
+                );
+                await withEnvironment(
+                    { PATH: pathWithFakeCommands(directory), ANIMATE_MCP_LAUNCH_COMMAND: undefined },
+                    /** Launches and reads the recorded open arguments.
+                     * @returns Nothing
+                     */
+                    async () => {
+                        await launcher()("/tmp/run.jsfl");
+                        assert.deepEqual(JSON.parse(await readFile(argsFile, "utf8")), ["-a", app, "/tmp/run.jsfl"]);
+                    },
+                );
+            },
+        ),
+);
 
 test("launcher rejects when its custom executable is not found" /** Checks that a missing custom executable rejects with ENOENT.
  * @returns Nothing
