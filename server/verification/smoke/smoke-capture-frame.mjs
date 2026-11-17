@@ -1,11 +1,11 @@
-// Real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-capture-frame.mjs [frame] [dir]` or `--range start:end[:step] [dir]`.
+// Real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-capture-frame.mjs [frame] [dir]` or `--range start:end[:step] [dir]`.
 // Creates a temporary 5-frame document, activates it, and closes it with close(false) afterwards; never saves or publishes. Animate must be running.
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { registerCaptureFrame } from "../dist/tools/output/capture-frame.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
+import { registerCaptureFrame } from "../../dist/tools/output/capture-frame.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
 import { toolHandler } from "./smoke-lib.mjs";
 
 const handle = toolHandler(registerCaptureFrame);

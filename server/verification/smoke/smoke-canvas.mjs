@@ -1,27 +1,27 @@
-// Disposable real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-canvas.mjs`.
+// Disposable real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-canvas.mjs`.
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { registerCloseDocument } from "../dist/tools/document/close-document.js";
-import { registerGetDocumentInfo } from "../dist/tools/document/get-document-info.js";
-import { registerOpenDocument } from "../dist/tools/document/open-document.js";
-import { registerSaveDocument } from "../dist/tools/document/save-document.js";
-import { registerEditLibrary } from "../dist/tools/library/edit-library.js";
-import { registerCaptureFrame } from "../dist/tools/output/capture-frame.js";
-import { registerPublish } from "../dist/tools/output/publish.js";
-import { registerReadOutput } from "../dist/tools/output/read-output.js";
-import { registerTestMovie } from "../dist/tools/output/test-movie.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
-import { registerApplyScripts } from "../dist/tools/scripts/apply-scripts.js";
-import { registerExportScripts } from "../dist/tools/scripts/export-scripts.js";
-import { registerInstallGreensock } from "../dist/tools/scripts/install-greensock.js";
-import { registerConvertToSymbol } from "../dist/tools/timeline/convert-to-symbol.js";
-import { registerEditElements } from "../dist/tools/timeline/edit-elements.js";
-import { registerEditTimeline } from "../dist/tools/timeline/edit-timeline.js";
-import { registerEditTween } from "../dist/tools/timeline/edit-tween.js";
-import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
+import { registerCloseDocument } from "../../dist/tools/document/close-document.js";
+import { registerGetDocumentInfo } from "../../dist/tools/document/get-document-info.js";
+import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
+import { registerSaveDocument } from "../../dist/tools/document/save-document.js";
+import { registerEditLibrary } from "../../dist/tools/library/edit-library.js";
+import { registerCaptureFrame } from "../../dist/tools/output/capture-frame.js";
+import { registerPublish } from "../../dist/tools/output/publish.js";
+import { registerReadOutput } from "../../dist/tools/output/read-output.js";
+import { registerTestMovie } from "../../dist/tools/output/test-movie.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
+import { registerApplyScripts } from "../../dist/tools/scripts/apply-scripts.js";
+import { registerExportScripts } from "../../dist/tools/scripts/export-scripts.js";
+import { registerInstallGreensock } from "../../dist/tools/scripts/install-greensock.js";
+import { registerConvertToSymbol } from "../../dist/tools/timeline/convert-to-symbol.js";
+import { registerEditElements } from "../../dist/tools/timeline/edit-elements.js";
+import { registerEditTimeline } from "../../dist/tools/timeline/edit-timeline.js";
+import { registerEditTween } from "../../dist/tools/timeline/edit-tween.js";
+import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timeline.js";
 import { closeDocumentByPath, toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);

@@ -8,7 +8,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const execFileAsync = promisify(execFile);
-const serverPath = fileURLToPath(new URL("../dist/index.js", import.meta.url));
+const serverPath = fileURLToPath(new URL("../../dist/index.js", import.meta.url));
 let client;
 let clientTransport;
 let connecting;

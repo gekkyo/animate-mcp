@@ -1,10 +1,10 @@
-// Real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-edit-elements.mjs`.
+// Real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-edit-elements.mjs`.
 // Creates and closes a disposable document; Animate must be running.
 import assert from "node:assert/strict";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
-import { registerEditElements } from "../dist/tools/timeline/edit-elements.js";
-import { registerEditTween } from "../dist/tools/timeline/edit-tween.js";
-import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
+import { registerEditElements } from "../../dist/tools/timeline/edit-elements.js";
+import { registerEditTween } from "../../dist/tools/timeline/edit-tween.js";
+import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timeline.js";
 import { toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);

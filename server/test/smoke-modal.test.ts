@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { toolHandler } from "../scripts/smoke-lib.mjs";
+import { toolHandler } from "../verification/smoke/smoke-lib.mjs";
 
 /** Builds a smoke-tool wrapper around a callback and modal diagnostic.
  * @param callback Registered tool implementation

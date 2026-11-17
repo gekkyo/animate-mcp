@@ -1,17 +1,17 @@
-// Disposable real-Animate workflow smoke test (not in CI): `npm run build && node server/scripts/smoke-workflow.mjs`.
+// Disposable real-Animate workflow smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-workflow.mjs`.
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { registerCloseDocument } from "../dist/tools/document/close-document.js";
-import { registerOpenDocument } from "../dist/tools/document/open-document.js";
-import { registerSaveDocument } from "../dist/tools/document/save-document.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
-import { registerApplyScripts } from "../dist/tools/scripts/apply-scripts.js";
-import { registerExportScripts } from "../dist/tools/scripts/export-scripts.js";
-import { registerEditTimeline } from "../dist/tools/timeline/edit-timeline.js";
-import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
+import { registerCloseDocument } from "../../dist/tools/document/close-document.js";
+import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
+import { registerSaveDocument } from "../../dist/tools/document/save-document.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
+import { registerApplyScripts } from "../../dist/tools/scripts/apply-scripts.js";
+import { registerExportScripts } from "../../dist/tools/scripts/export-scripts.js";
+import { registerEditTimeline } from "../../dist/tools/timeline/edit-timeline.js";
+import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timeline.js";
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);

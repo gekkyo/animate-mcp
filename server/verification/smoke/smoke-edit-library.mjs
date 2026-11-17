@@ -1,8 +1,8 @@
-// Disposable real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-edit-library.mjs`.
+// Disposable real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-edit-library.mjs`.
 // Creates and closes a temporary AS3 document without saving or publishing it; Animate must be running.
 import assert from "node:assert/strict";
-import { registerEditLibrary } from "../dist/tools/library/edit-library.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
+import { registerEditLibrary } from "../../dist/tools/library/edit-library.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
 import { toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);

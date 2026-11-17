@@ -1,11 +1,11 @@
-// Disposable real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-test-movie.mjs`.
+// Disposable real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-test-movie.mjs`.
 import assert from "node:assert/strict";
 import { mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { registerTestMovie } from "../dist/tools/output/test-movie.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
+import { registerTestMovie } from "../../dist/tools/output/test-movie.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);

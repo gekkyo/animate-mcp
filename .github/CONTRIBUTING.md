@@ -25,7 +25,7 @@ CI uses a fake Animate. For changes to JSFL or tool behavior, also run the match
 smoke script with Animate open (each creates and closes a disposable document):
 
 ```sh
-npm run build && node server/scripts/smoke-edit-elements.mjs
+npm run build && node server/verification/smoke/smoke-edit-elements.mjs
 ```
 
 ## Pull requests

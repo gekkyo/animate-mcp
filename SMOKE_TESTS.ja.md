@@ -20,11 +20,13 @@ Mac で Animate を起動し、リポジトリのルートから実行します�
 ## 必要な場合だけ
 
 - **対象を絞る:** `npm run smoke -- document-ops capture-frame` のように指定できます。
-- **Entrance 経由を確認する:** 使い捨ての AS3 ドキュメントで `[{"tool":"get_status"}]` を `steps.json` に保存し、`node server/scripts/smoke-run.mjs --entrances steps.json` を実行します。Animate 上の振り分けは確認できますが、クライアントの承認ダイアログは確認できません。
+- **Entrance 経由を確認する:** 使い捨ての AS3 ドキュメントで `[{"tool":"get_status"}]` を `steps.json` に保存し、`node server/verification/smoke/smoke-run.mjs --entrances steps.json` を実行します。Animate 上の振り分けは確認できますが、クライアントの承認ダイアログは確認できません。
 - **実行を記録する:** `SMOKE_RECORD_DIR=/path/to/dir` を設定すると、テキストや JSFL を含むツール入力値全体が JSONL に記録されます。機密情報を含まない使い捨てテストデータだけで使用してください。記録はローカルに保存され、自動アップロードされません。
-- **形状フィクスチャを更新する:** `node server/scripts/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>` を実行します。結果形状だけを更新し、レビュー済みのサンプル引数は保持します。`run_jsfl` は安全な実行可能サンプルと形状の組を維持するため自動更新しません。レビュー済みフィクスチャがないツールはエラーになります。
+- **形状フィクスチャを更新する:** `node server/verification/smoke/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>` を実行します。結果形状だけを更新し、レビュー済みのサンプル引数は保持します。`run_jsfl` は安全な実行可能サンプルと形状の組を維持するため自動更新しません。レビュー済みフィクスチャがないツールはエラーになります。
 
 ## 個別スクリプト一覧
+
+以下のファイルは `server/verification/smoke/` にあります。
 
 多くのスクリプトは使い捨ての FLA を作成して操作し、クローズします。手持ちのドキュメントには触れません。例外は `smoke-publish.mjs` で、名前を渡したドキュメントを Publish します。
 
@@ -41,3 +43,15 @@ Mac で Animate を起動し、リポジトリのルートから実行します�
 | `smoke-isolated-publish.mjs` | `publish` と出力 | 使い捨ての保存済み AS3 FLA。Animate は事前に起動しておく |
 | `smoke-verification-tools.mjs` | `audit_document`・`verify_canvas_output`・`capture_frame`・`diff_captures` | 使い捨ての保存済み FLA |
 | `smoke-test-movie.mjs` | `test_movie` | 使い捨ての AS3 FLA。**Test Movie Player は開いたままなので手動で閉じる** |
+
+## README プロンプト E2E
+
+`server/verification/readme-e2e/` は、README の例文を Claude CLI と制限付き MCP サーバー経由で実機 Animate に渡す、別のハーネスです。
+
+- **非課金チェック:** `npm run test:readme-e2e` はサーバーをビルドし、フィクスチャ・ファイル操作制限・MCP探索・偽CLIのテストを実行します。実際の Claude CLI や Animate は起動しません。CIでは独立ステップで実行し、`npm test` の対象は変更しません。
+- **実機E2E（明示的な承認が必要）:** Animate をドキュメントが開いていない状態にし、Claude CLI の認証を済ませて、リポジトリのルートで実行します。
+
+      npm run build
+      RUN_README_PROMPT_E2E=1 README_PROMPT_E2E_SCENARIO=layer node server/verification/readme-e2e/runner.mjs
+
+  この実行は Claude CLI の利用量を消費します。使い捨ての FLA を操作します。実行中は Animate を操作しないでください。他のシナリオは `stage`、`script`、`investigate`、`text`、`tween`、`instance`、`symbol`、`inspect`、`library`、`capture`、`assets`、`publish`、`testmovie`、`canvas` です。GreenSock のインストールは対象外です。`canvas` には Chrome も必要です。

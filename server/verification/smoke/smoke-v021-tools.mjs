@@ -1,17 +1,17 @@
-// Disposable real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-v021-tools.mjs`.
+// Disposable real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-v021-tools.mjs`.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { isAnimateRunning } from "../dist/runtime/animate-launcher.js";
-import { registerGetStatus } from "../dist/tools/document/get-status.js";
-import { registerPreflightPublish } from "../dist/tools/output/preflight-publish.js";
-import { registerVisualRegression } from "../dist/tools/output/visual-regression.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
-import { registerEditTween } from "../dist/tools/timeline/edit-tween.js";
-import { registerInspectTimeline } from "../dist/tools/timeline/inspect-timeline.js";
+import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
+import { registerGetStatus } from "../../dist/tools/document/get-status.js";
+import { registerPreflightPublish } from "../../dist/tools/output/preflight-publish.js";
+import { registerVisualRegression } from "../../dist/tools/output/visual-regression.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
+import { registerEditTween } from "../../dist/tools/timeline/edit-tween.js";
+import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timeline.js";
 import { closeDocumentByPath, toolHandler } from "./smoke-lib.mjs";
 
 assert.equal(await isAnimateRunning(), true, "Animate must already be running; refusing to launch it");

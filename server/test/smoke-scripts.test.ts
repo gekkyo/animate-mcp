@@ -8,7 +8,7 @@ import { test } from "node:test";
 const root = process.cwd();
 
 test("smoke-run uses the production-wrapped handler for --entrances steps", () => {
-    const source = readFileSync(join(root, "server/scripts/smoke-run.mjs"), "utf8");
+    const source = readFileSync(join(root, "server/verification/smoke/smoke-run.mjs"), "utf8");
     assert.match(source, /const result = await handler\(args\);/);
     assert.doesNotMatch(source, /entranceHandlers/);
 });
@@ -35,9 +35,13 @@ test("fixture merge leaves the reviewed run_jsfl fixture unchanged", () => {
     );
 
     try {
-        execFileSync(process.execPath, [join(root, "server/scripts/merge-smoke-shapes.mjs"), records, fixtures], {
-            cwd: root,
-        });
+        execFileSync(
+            process.execPath,
+            [join(root, "server/verification/smoke/merge-smoke-shapes.mjs"), records, fixtures],
+            {
+                cwd: root,
+            },
+        );
         const output = readFileSync(join(fixtures, "run_jsfl.json"), "utf8");
         assert.deepEqual(JSON.parse(output), reviewed);
         for (const privateValue of ["PRIVATE_JSFL", "PRIVATE_TEXT", "/Users/private.fla"]) {
@@ -70,9 +74,13 @@ test("fixture merge updates other result shapes while retaining reviewed argumen
     );
 
     try {
-        execFileSync(process.execPath, [join(root, "server/scripts/merge-smoke-shapes.mjs"), records, fixtures], {
-            cwd: root,
-        });
+        execFileSync(
+            process.execPath,
+            [join(root, "server/verification/smoke/merge-smoke-shapes.mjs"), records, fixtures],
+            {
+                cwd: root,
+            },
+        );
         const output = readFileSync(join(fixtures, "edit_text.json"), "utf8");
         assert.deepEqual(JSON.parse(output), {
             shape: { ok: "boolean" },
@@ -94,7 +102,7 @@ test("fixture merge rejects recorded tools without reviewed replay arguments", (
     try {
         const result = spawnSync(
             process.execPath,
-            [join(root, "server/scripts/merge-smoke-shapes.mjs"), records, join(directory, "fixtures")],
+            [join(root, "server/verification/smoke/merge-smoke-shapes.mjs"), records, join(directory, "fixtures")],
             { cwd: root, encoding: "utf8" },
         );
         assert.notEqual(result.status, 0);

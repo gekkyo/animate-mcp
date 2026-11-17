@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { PNG } from "pngjs";
 import { text, withServer } from "./helpers/fake-animate.js";
 
-// Refresh fixtures after a real-Animate smoke run with node server/scripts/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>.
+// Refresh fixtures after a real-Animate smoke run with node server/verification/smoke/merge-smoke-shapes.mjs <SMOKE_RECORD_DIR>.
 const fixtureDir = join(process.cwd(), "server/test/fixtures/real-shapes");
 const TMP_TOKEN = "$" + "{TMP}";
 const fixtures = readdirSync(fixtureDir)

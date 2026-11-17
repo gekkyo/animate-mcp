@@ -1,17 +1,17 @@
-// Disposable real-Animate verification smoke test (not in CI): `npm run build && node server/scripts/smoke-verification-tools.mjs`.
+// Disposable real-Animate verification smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-verification-tools.mjs`.
 import assert from "node:assert/strict";
 import { access, mkdtemp, readFile, rm, stat, unlink } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { PNG } from "pngjs";
-import { isAnimateRunning } from "../dist/runtime/animate-launcher.js";
-import { registerAuditDocument } from "../dist/tools/document/audit-document.js";
-import { registerOpenDocument } from "../dist/tools/document/open-document.js";
-import { registerSaveDocument } from "../dist/tools/document/save-document.js";
-import { registerCaptureFrame } from "../dist/tools/output/capture-frame.js";
-import { registerDiffCaptures } from "../dist/tools/output/diff-captures.js";
-import { registerVerifyCanvasOutput } from "../dist/tools/output/verify-canvas-output.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
+import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
+import { registerAuditDocument } from "../../dist/tools/document/audit-document.js";
+import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
+import { registerSaveDocument } from "../../dist/tools/document/save-document.js";
+import { registerCaptureFrame } from "../../dist/tools/output/capture-frame.js";
+import { registerDiffCaptures } from "../../dist/tools/output/diff-captures.js";
+import { registerVerifyCanvasOutput } from "../../dist/tools/output/verify-canvas-output.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
 import { toolHandler } from "./smoke-lib.mjs";
 
 assert.equal(await isAnimateRunning(), true, "Animate must already be running; refusing to launch it");

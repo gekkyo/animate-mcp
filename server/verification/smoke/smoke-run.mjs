@@ -1,18 +1,18 @@
-// Disposable real-Animate smoke runner (not in CI): `npm run build && node server/scripts/smoke-run.mjs steps.json`.
+// Disposable real-Animate smoke runner (not in CI): `npm run build && node server/verification/smoke/smoke-run.mjs steps.json`.
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { TOOLS } from "../dist/index.js";
-import { isAnimateRunning } from "../dist/runtime/animate-launcher.js";
-import { createToolRegistry } from "../dist/tools/registry.js";
+import { TOOLS } from "../../dist/index.js";
+import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
+import { createToolRegistry } from "../../dist/tools/registry.js";
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "./smoke-lib.mjs";
 
 /** Prints command usage.
  * @returns Nothing.
  */
 function usage() {
-    console.error("Usage: node server/scripts/smoke-run.mjs [--entrances] <steps.json>");
+    console.error("Usage: node server/verification/smoke/smoke-run.mjs [--entrances] <steps.json>");
     process.exitCode = 2;
 }
 

@@ -1,13 +1,13 @@
-// Disposable real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-isolated-publish.mjs`.
+// Disposable real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-isolated-publish.mjs`.
 import assert from "node:assert/strict";
 import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { isAnimateRunning } from "../dist/runtime/animate-launcher.js";
-import { registerOpenDocument } from "../dist/tools/document/open-document.js";
-import { registerSaveDocument } from "../dist/tools/document/save-document.js";
-import { registerPublish } from "../dist/tools/output/publish.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
+import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
+import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
+import { registerSaveDocument } from "../../dist/tools/document/save-document.js";
+import { registerPublish } from "../../dist/tools/output/publish.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
 import { toolHandler } from "./smoke-lib.mjs";
 
 assert.equal(await isAnimateRunning(), true, "Animate must already be running; refusing to launch it");

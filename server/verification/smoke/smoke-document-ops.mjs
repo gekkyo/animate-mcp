@@ -1,14 +1,14 @@
-// Disposable real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-document-ops.mjs`.
+// Disposable real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-document-ops.mjs`.
 import assert from "node:assert/strict";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { registerCloseDocument } from "../dist/tools/document/close-document.js";
-import { registerOpenDocument } from "../dist/tools/document/open-document.js";
-import { registerSaveDocument } from "../dist/tools/document/save-document.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
-import { registerConvertToSymbol } from "../dist/tools/timeline/convert-to-symbol.js";
+import { registerCloseDocument } from "../../dist/tools/document/close-document.js";
+import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
+import { registerSaveDocument } from "../../dist/tools/document/save-document.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
+import { registerConvertToSymbol } from "../../dist/tools/timeline/convert-to-symbol.js";
 import { closeDocumentByPath, toolHandler } from "./smoke-lib.mjs";
 
 const runJsfl = toolHandler(registerRunJsfl);

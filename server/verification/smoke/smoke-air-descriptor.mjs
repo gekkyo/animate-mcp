@@ -1,13 +1,13 @@
-// Disposable real-Animate smoke test (not in CI): `npm run build && node server/scripts/smoke-air-descriptor.mjs`.
+// Disposable real-Animate smoke test (not in CI): `npm run build && node server/verification/smoke/smoke-air-descriptor.mjs`.
 import assert from "node:assert/strict";
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isAnimateRunning } from "../dist/runtime/animate-launcher.js";
-import { registerOpenDocument } from "../dist/tools/document/open-document.js";
-import { registerGetAirDescriptor } from "../dist/tools/output/get-air-descriptor.js";
-import { registerSetAirDescriptor } from "../dist/tools/output/set-air-descriptor.js";
-import { registerRunJsfl } from "../dist/tools/run-jsfl.js";
+import { isAnimateRunning } from "../../dist/runtime/animate-launcher.js";
+import { registerOpenDocument } from "../../dist/tools/document/open-document.js";
+import { registerGetAirDescriptor } from "../../dist/tools/output/get-air-descriptor.js";
+import { registerSetAirDescriptor } from "../../dist/tools/output/set-air-descriptor.js";
+import { registerRunJsfl } from "../../dist/tools/run-jsfl.js";
 import { closeDocumentByPath, toolHandler } from "./smoke-lib.mjs";
 
 assert.equal(await isAnimateRunning(), true, "Animate must already be running; refusing to launch it");

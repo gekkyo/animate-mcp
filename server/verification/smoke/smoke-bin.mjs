@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("../..", import.meta.url));
+const root = fileURLToPath(new URL("../../..", import.meta.url));
 const { version } = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const temp = await mkdtemp(join(tmpdir(), "animate-mcp-smoke-bin-"));
 
