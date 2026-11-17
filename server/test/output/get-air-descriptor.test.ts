@@ -26,7 +26,7 @@ test("reads the whitelisted AIR descriptor fields without Animate", async () => 
     try {
         for (const platform of ["desktop", "android", "ios"]) {
             const path = join(dir, `${platform}-app.xml`);
-            await writeFile(path, await readFile(`air-sample/${platform}-app.xml`));
+            await writeFile(path, await readFile(`server/test/fixtures/air/${platform}-app.xml`));
             const result = await runGetAirDescriptor({ descriptorPath: path }, deps);
             assert.equal(result.id, expectedIds[platform as keyof typeof expectedIds]);
             assert.equal(result.filename, platform);
@@ -74,7 +74,7 @@ test("rejects ambiguous, invalid, missing, and malformed descriptor paths", asyn
 test("document resolution uses Animate and reports playerTarget", async () => {
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {
-        await writeFile(join(dir, "desktop-app.xml"), await readFile("air-sample/desktop-app.xml"));
+        await writeFile(join(dir, "desktop-app.xml"), await readFile("server/test/fixtures/air/desktop-app.xml"));
         const fake = createFakeJsfl({
             "output/preflight-publish": {
                 name: "desktop.fla",

@@ -26,7 +26,7 @@ test("patches fields while preserving comments and creates a backup; dry run wri
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {
         const path = join(dir, "desktop-app.xml");
-        const original = await readFile("air-sample/desktop-app.xml", "utf8");
+        const original = await readFile("server/test/fixtures/air/desktop-app.xml", "utf8");
         await writeFile(path, original);
         const preview = await runSetAirDescriptor({ descriptorPath: path, id: "updated&app", dryRun: true }, deps);
         assert.equal(await readFile(path, "utf8"), original);
@@ -49,7 +49,7 @@ test("deletes optional fields and rejects invalid values and ambiguous input", a
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {
         const path = join(dir, "desktop-app.xml");
-        const sample = (await readFile("air-sample/desktop-app.xml", "utf8")).replace(
+        const sample = (await readFile("server/test/fixtures/air/desktop-app.xml", "utf8")).replace(
             "<versionNumber>1.0</versionNumber>",
             "<versionNumber>1.0</versionNumber>\n    <versionLabel/>",
         );
@@ -79,7 +79,10 @@ test("updates self-closing target elements and refuses whole-list replacement ov
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {
         const path = join(dir, "desktop-app.xml");
-        const xml = (await readFile("air-sample/desktop-app.xml", "utf8")).replace(/<icon>[\s\S]*?<\/icon>/, "<icon/>");
+        const xml = (await readFile("server/test/fixtures/air/desktop-app.xml", "utf8")).replace(
+            /<icon>[\s\S]*?<\/icon>/,
+            "<icon/>",
+        );
         await writeFile(path, xml);
         await runSetAirDescriptor({ descriptorPath: path, icon: { image128x128: "icon/new.png" } }, deps);
         assert.match(await readFile(path, "utf8"), /<icon>\s*<image128x128>icon\/new\.png<\/image128x128>\s*<\/icon>/);
@@ -99,7 +102,7 @@ test("rejects deletion of icon/extensions containing comments or CDATA", async (
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {
         const path = join(dir, "desktop-app.xml");
-        const xml = (await readFile("air-sample/desktop-app.xml", "utf8")).replace(
+        const xml = (await readFile("server/test/fixtures/air/desktop-app.xml", "utf8")).replace(
             "<icon>",
             "<icon><!-- retain this comment -->",
         );
@@ -124,7 +127,7 @@ test("rejects deletion of icon/extensions containing comments or CDATA", async (
 test("registered set_air_descriptor rejects unknown and read-only fields before writing", async () => {
     await withServer({}, async (client, tempDir) => {
         const path = join(tempDir, "strict-app.xml");
-        const original = await readFile("air-sample/desktop-app.xml", "utf8");
+        const original = await readFile("server/test/fixtures/air/desktop-app.xml", "utf8");
         await writeFile(path, original);
         for (const field of ["unexpected", "filename"]) {
             const result = await client.callTool({
@@ -142,7 +145,7 @@ test("creates missing platform additions and validates icon locations", async ()
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {
         const path = join(dir, "desktop-app.xml");
-        await writeFile(path, await readFile("air-sample/desktop-app.xml"));
+        await writeFile(path, await readFile("server/test/fixtures/air/desktop-app.xml"));
         await runSetAirDescriptor({ descriptorPath: path, manifestAdditions: "<manifest/>" }, deps);
         const updated = await readFile(path, "utf8");
         assert.match(
@@ -170,7 +173,7 @@ test("rejects icon paths that escape through a symlink", async () => {
         const path = join(descriptorDir, "desktop-app.xml");
         const outsideIcon = join(dir, "outside.png");
         await mkdir(iconDir, { recursive: true });
-        await writeFile(path, await readFile("air-sample/desktop-app.xml"));
+        await writeFile(path, await readFile("server/test/fixtures/air/desktop-app.xml"));
         await writeFile(outsideIcon, "outside");
         await symlink(outsideIcon, join(iconDir, "escape.png"));
 
@@ -255,7 +258,7 @@ test("serializes concurrent edits and accepts AIR 51.3 icon sizes", async () => 
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {
         const path = join(dir, "concurrent-app.xml");
-        await writeFile(path, await readFile("air-sample/desktop-app.xml"));
+        await writeFile(path, await readFile("server/test/fixtures/air/desktop-app.xml"));
         await Promise.all([
             runSetAirDescriptor({ descriptorPath: path, versionLabel: "Concurrent" }, deps),
             runSetAirDescriptor(
@@ -281,7 +284,7 @@ test("supports document resolution, cross-platform notes, icons, and extensions"
     const dir = await mkdtemp(join(tmpdir(), "air-descriptor-"));
     try {
         const path = join(dir, "desktop-app.xml");
-        await writeFile(path, await readFile("air-sample/desktop-app.xml"));
+        await writeFile(path, await readFile("server/test/fixtures/air/desktop-app.xml"));
         const fake = createFakeJsfl({
             "output/preflight-publish": {
                 name: "desktop.fla",
