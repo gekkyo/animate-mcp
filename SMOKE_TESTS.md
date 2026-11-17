@@ -49,6 +49,7 @@ Most scripts create a disposable FLA, exercise it and close it without touching 
 `server/verification/readme-e2e/` holds a separate harness: it sends README prompts through Claude or Codex CLI and a restricted MCP server to real Animate. Claude remains the default; select Codex explicitly with `README_PROMPT_E2E_PROVIDER=codex`.
 
 - **Nonpaid checks:** `npm run test:readme-e2e` builds the server and runs fixture, file-scope, MCP discovery and fake-CLI tests. It does not launch a real Claude/Codex CLI or Animate, and runs as a separate CI step; `npm test` is unchanged.
+- **Persistent diagnostics:** Failure/success metadata is written outside disposable workspaces to `~/.animate-mcp/readme-e2e-diagnostics/diagnostics.jsonl` with private directory/file permissions and rolling 64 KiB retention. Default records contain fixed allowlisted metadata, a categorical failure reason/exit code, and a validated CLI version (or `unavailable`), probed once in an isolated temporary home. Set `README_E2E_DIAGNOSTICS=1` to include additional allowlisted counters and enum fields; raw CLI output, credentials, authentication content, and MCP URLs are never recorded.
 - **Real E2E (explicit approval required):** Start Animate with no documents open, authenticate the selected CLI, then run from the repository root:
 
       npm run build

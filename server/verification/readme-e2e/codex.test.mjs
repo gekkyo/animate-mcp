@@ -329,6 +329,8 @@ test("Codex nonzero and JSONL error events fail with only safe diagnostics", asy
                 assert.match(error.message, /exit=7/);
                 assert.match(error.message, /jsonl=valid/);
                 assert.match(error.message, /turn_completed=true/);
+                assert.equal(error.diagnostic.errorCategory, "cli");
+                assert.equal(error.diagnostic.stderrCategory, "unknown");
                 assert.doesNotMatch(error.message, /private .* marker|private result marker/);
                 return true;
             },

@@ -27,6 +27,13 @@ const CODEX_FLAGS = new Set([
     "-c",
     "-o",
 ]);
+export const CODEX_MCP_ENV_VARS = [
+    "README_E2E_TRACE_PATH",
+    "README_E2E_DOCUMENT_URI",
+    "README_E2E_OUT_DIR",
+    "README_E2E_ASSET_PATHS",
+    "README_PROMPT_E2E_SCENARIO",
+];
 const CODEX_CONFIG_KEYS = [
     "approval_policy",
     "sandbox_mode",
@@ -66,29 +73,70 @@ export async function runCodex(
     const workingDirectory = await mkdtemp(join(tmpdir(), "animate-mcp-codex-cwd-"));
     try {
         const outputPath = join(outDir, "codex-last-message.txt");
-        const events = await runProcess(
-            codexArgs(serverPath, outputPath, workingDirectory, scenario.prompt),
-            workingDirectory,
-            {
-                env: {
-                    ...env,
-                    README_E2E_TRACE_PATH: tracePath,
-                    README_E2E_DOCUMENT_URI: documentPath,
-                    README_E2E_OUT_DIR: outDir,
-                    ...(assetPaths ? { README_E2E_ASSET_PATHS: JSON.stringify(assetPaths) } : {}),
+        let events;
+        try {
+            events = await runProcess(
+                codexArgs(serverPath, outputPath, workingDirectory, scenario.prompt),
+                workingDirectory,
+                {
+                    env: {
+                        ...env,
+                        README_E2E_TRACE_PATH: tracePath,
+                        README_E2E_DOCUMENT_URI: documentPath,
+                        README_E2E_OUT_DIR: outDir,
+                        ...(assetPaths ? { README_E2E_ASSET_PATHS: JSON.stringify(assetPaths) } : {}),
+                    },
+                    timeoutMs,
                 },
-                timeoutMs,
-            },
-        );
+            );
+        } catch (error) {
+            const timedOut = error.message.startsWith("Codex CLI timed out");
+            throw diagnosticError(error.message, error.diagnostic ?? { errorCategory: timedOut ? "timeout" : "spawn" });
+        }
         const result = parseEvents(events.stdout, events.stdoutTruncated);
         const failureEvents = result.failureEvents;
         const stderrDiagnosis = classifyStderr(events.stderr);
         if (events.code !== 0 || events.signal || !result.valid || failureEvents > 0 || !result.turnCompleted) {
-            throw new Error(
+            throw diagnosticError(
                 `Codex CLI failed (exit=${events.code ?? "unknown"}, signal=${events.signal ?? "none"}, stdout=${events.stdoutBytes}B, stderr=${events.stderrBytes}B; jsonl=${result.status}, turn_completed=${result.turnCompleted}, failure_events=${failureEvents}, stderr_category=${stderrDiagnosis.category}${stderrDiagnosis.details ? `, ${stderrDiagnosis.details}` : ""}, stderr_capture_truncated=${events.stderrTruncated})`,
+                {
+                    exitCode: events.code,
+                    signal: events.signal,
+                    stdoutBytes: events.stdoutBytes,
+                    stderrBytes: events.stderrBytes,
+                    stdoutTruncated: events.stdoutTruncated,
+                    stderrTruncated: events.stderrTruncated,
+                    jsonlStatus: result.status,
+                    turnCompleted: result.turnCompleted,
+                    failureEvents,
+                    stderrCategory: stderrDiagnosis.category,
+                    stderrConfigKey: CODEX_CONFIG_KEYS.find((key) =>
+                        stderrDiagnosis.details.includes(`config_key=${key}`),
+                    ),
+                    stderrConfigIssue: ["value", "type", "key"].find((issue) =>
+                        stderrDiagnosis.details.includes(`config_issue=${issue}`),
+                    ),
+                    errorCategory: "cli",
+                },
             );
         }
-        return RESULT_SCENARIOS.includes(scenario) ? await readFinalResult(outputPath) : undefined;
+        if (RESULT_SCENARIOS.includes(scenario)) {
+            try {
+                return await readFinalResult(outputPath);
+            } catch (error) {
+                throw diagnosticError(error.message, {
+                    exitCode: events.code,
+                    stdoutBytes: events.stdoutBytes,
+                    stderrBytes: events.stderrBytes,
+                    jsonlStatus: result.status,
+                    turnCompleted: result.turnCompleted,
+                    failureEvents,
+                    stderrCategory: stderrDiagnosis.category,
+                    errorCategory: "verification",
+                });
+            }
+        }
+        return undefined;
     } finally {
         await rm(workingDirectory, { recursive: true, force: true });
     }
@@ -150,11 +198,21 @@ function runProcess(args, cwd, { env, timeoutMs }) {
                 // Wait for close even if the process exited between the timeout and the kill.
             }
             await closed;
-            reject(new Error(`Codex CLI timed out; CLI exited (stdout=${stdoutBytes}B, stderr=${stderrBytes}B)`));
+            reject(
+                diagnosticError(`Codex CLI timed out; CLI exited (stdout=${stdoutBytes}B, stderr=${stderrBytes}B)`, {
+                    stdoutBytes,
+                    stderrBytes,
+                    errorCategory: "timeout",
+                }),
+            );
         }, timeoutMs);
         child.once("error", (error) => {
             clearTimeout(timer);
-            reject(new Error(`Codex CLI could not start (${error.code ?? "spawn error"})`));
+            reject(
+                diagnosticError(`Codex CLI could not start (${error.code ?? "spawn error"})`, {
+                    errorCategory: "spawn",
+                }),
+            );
         });
         child.once("close", (code, signal) => {
             close();
@@ -190,7 +248,7 @@ export function codexArgs(serverPath, outputPath, workingDirectory, selectedProm
         "required=true",
         'enabled_tools=["search_tools", "execute_readonly", "execute_write"]',
         'tools={execute_write={approval_mode="approve"}}',
-        'env_vars=["README_E2E_TRACE_PATH", "README_E2E_DOCUMENT_URI", "README_E2E_OUT_DIR", "README_E2E_ASSET_PATHS", "README_PROMPT_E2E_SCENARIO"]',
+        `env_vars=[${CODEX_MCP_ENV_VARS.map(tomlString).join(", ")}]`,
     ].join(",");
     return [
         "exec",
@@ -349,6 +407,17 @@ function classifyStderr(stderr) {
         return { category: "sandbox", details: "" };
     }
     return { category: "unknown", details: "" };
+}
+
+/** Attaches only allowlisted diagnostic metadata to a safe adapter error.
+ * @param message Fixed adapter error message.
+ * @param diagnostic Safe metadata values.
+ * @returns Error carrying the safe metadata for the runner.
+ */
+function diagnosticError(message, diagnostic) {
+    const error = new Error(message);
+    error.diagnostic = diagnostic;
+    return error;
 }
 
 /** Reads a regular, non-symlink final-message file with a strict size limit.

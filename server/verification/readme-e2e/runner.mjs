@@ -17,6 +17,7 @@ import { registerInspectTimeline } from "../../dist/tools/timeline/inspect-timel
 import { closeDocumentByPath, createSavedAs3Document, toolHandler } from "../smoke/smoke-lib.mjs";
 import { runClaude } from "./claude.mjs";
 import { runCodex } from "./codex.mjs";
+import { writeReadmeDiagnostic } from "./diagnostics.mjs";
 import { serveRestricted } from "./mcp-server.mjs";
 import { assertChromeInstalled, closeTestMoviePlayer } from "./output.mjs";
 import {
@@ -41,6 +42,21 @@ export function readmeE2eProvider(provider = process.env.README_PROMPT_E2E_PROVI
         throw new Error('README_PROMPT_E2E_PROVIDER must be "claude" or "codex".');
     }
     return provider;
+}
+
+/** Combines cleanup errors without discarding safe diagnostics from the primary failure.
+ * @param primary Original E2E or fixture failure.
+ * @param cleanup Cleanup failure.
+ * @param message Aggregate error message.
+ * @returns Combined error preserving the first safe diagnostic.
+ */
+export function aggregateFailure(primary, cleanup, message) {
+    const aggregate = new AggregateError([primary, cleanup], message);
+    const diagnostic = primary?.diagnostic ?? cleanup?.diagnostic;
+    if (diagnostic) {
+        aggregate.diagnostic = diagnostic;
+    }
+    return aggregate;
 }
 
 /** Runs the manually approved CLI/Animate E2E.
@@ -82,6 +98,7 @@ async function main() {
     const state = {};
     let pathURI = "";
     let failure;
+    let stage = "fixture";
     try {
         const assetsFixture = scenario === scenarios.assets ? await createAssetsFixture(outDir) : undefined;
         if (provider === "claude") {
@@ -128,6 +145,7 @@ async function main() {
             throw new Error("Safety check failed: the only open Animate document is not the disposable FLA.");
         }
         const runScenario = assetsFixture ? { ...scenario, prompt: assetsFixture.prompt } : scenario;
+        stage = "cli";
         const cliResult =
             provider === "claude"
                 ? await runClaude(configPath, tracePath, pathURI, {
@@ -140,6 +158,7 @@ async function main() {
                       outDir,
                       assetPaths: assetsFixture?.paths,
                   });
+        stage = "verify";
         if (scenarioNeedsPlayerCleanup(scenarioName)) {
             await closeTestMoviePlayer(runJsfl, status, pathURI);
         }
@@ -173,20 +192,29 @@ async function main() {
                 try {
                     await closeTestMoviePlayer(runJsfl, status, pathURI);
                 } catch (error) {
-                    failure = failure ? new AggregateError([failure, error], "E2E and Player cleanup failed") : error;
+                    if (!failure) {
+                        stage = "cleanup";
+                    }
+                    failure = failure ? aggregateFailure(failure, error, "E2E and Player cleanup failed") : error;
                 }
             }
             try {
                 await closeDocumentByPath(runJsfl, pathURI);
                 pathURI = "";
             } catch (error) {
-                failure = failure ? new AggregateError([failure, error], "E2E and document cleanup failed") : error;
+                if (!failure) {
+                    stage = "cleanup";
+                }
+                failure = failure ? aggregateFailure(failure, error, "E2E and document cleanup failed") : error;
             }
         }
         if (!pathURI) {
             try {
                 const finalStatus = (await status({})).structuredContent;
                 if (finalStatus?.documents?.length !== 0) {
+                    if (!failure) {
+                        stage = "cleanup";
+                    }
                     failure = failure ?? new Error("Animate state is uncertain; temporary files left intact.");
                 } else {
                     const trace = await readFile(tracePath, "utf8").catch(() => "");
@@ -196,13 +224,38 @@ async function main() {
                     await rm(outDir, { recursive: true });
                 }
             } catch (error) {
-                failure = failure
-                    ? new AggregateError([failure, error], "E2E and temporary-file cleanup failed")
-                    : error;
+                if (!failure) {
+                    stage = "cleanup";
+                }
+                failure = failure ? aggregateFailure(failure, error, "E2E and temporary-file cleanup failed") : error;
             }
         } else {
+            if (!failure) {
+                stage = "cleanup";
+            }
             failure = failure ?? new Error(`Disposable FLA remains open; files left at ${outDir}`);
         }
+        let fallbackErrorCategory;
+        if (failure) {
+            if (stage === "cli") {
+                fallbackErrorCategory = "cli";
+            } else if (stage === "verify") {
+                fallbackErrorCategory = "verification";
+            } else if (stage === "cleanup") {
+                fallbackErrorCategory = "cleanup";
+            } else {
+                fallbackErrorCategory = "fixture";
+            }
+        }
+        await writeReadmeDiagnostic({
+            ...(failure?.diagnostic ?? {}),
+            event: "run",
+            outcome: failure ? "failed" : "passed",
+            stage: failure ? stage : "cleanup",
+            provider,
+            scenario: scenarioName,
+            errorCategory: failure?.diagnostic?.errorCategory ?? fallbackErrorCategory,
+        });
     }
     if (failure) {
         throw failure;

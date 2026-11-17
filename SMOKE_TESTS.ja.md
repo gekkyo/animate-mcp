@@ -49,6 +49,7 @@ Mac で Animate を起動し、リポジトリのルートから実行します�
 `server/verification/readme-e2e/` は、README の例文を Claude または Codex CLI と制限付き MCP サーバー経由で実機 Animate に渡す、別のハーネスです。既定は Claude です。Codex は `README_PROMPT_E2E_PROVIDER=codex` で明示的に選択します。
 
 - **非課金チェック:** `npm run test:readme-e2e` はサーバーをビルドし、フィクスチャ・ファイル操作制限・MCP探索・偽CLIのテストを実行します。実際の Claude/Codex CLI や Animate は起動しません。CIでは独立ステップで実行し、`npm test` の対象は変更しません。
+- **永続診断ログ:** 使い捨てワークスペース外の `~/.animate-mcp/readme-e2e-diagnostics/diagnostics.jsonl` に、private 権限・直近64 KiBの保持で結果メタデータを保存します。既定では固定の許可リスト項目、分類済み失敗理由／終了コード、隔離した一時ホームで一度だけ確認する CLI バージョン（検証できない場合は `unavailable`）を記録します。`README_E2E_DIAGNOSTICS=1` を設定すると、追加の許可済みカウンターと列挙値も記録します。CLI の生出力、認証情報、認証内容、MCP URL は記録しません。
 - **実機E2E（明示的な承認が必要）:** Animate をドキュメントが開いていない状態にし、選択した CLI の認証を済ませて、リポジトリのルートで実行します。
 
       npm run build

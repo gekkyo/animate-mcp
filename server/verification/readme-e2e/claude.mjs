@@ -70,11 +70,21 @@ export function runClaude(
                 // Still wait for close: deleting the FLA before process termination is unsafe.
             }
             await closed;
-            reject(new Error(`Claude CLI timed out; CLI exited (stdout=${stdoutBytes}B, stderr=${stderrBytes}B)`));
+            reject(
+                diagnosticError(`Claude CLI timed out; CLI exited (stdout=${stdoutBytes}B, stderr=${stderrBytes}B)`, {
+                    stdoutBytes,
+                    stderrBytes,
+                    errorCategory: "timeout",
+                }),
+            );
         }, timeoutMs);
         child.once("error", (error) => {
             clearTimeout(timer);
-            reject(new Error(`Claude CLI could not start (${error.code ?? "spawn error"})`));
+            reject(
+                diagnosticError(`Claude CLI could not start (${error.code ?? "spawn error"})`, {
+                    errorCategory: "spawn",
+                }),
+            );
         });
         child.once("close", (code, signal) => {
             close();
@@ -101,20 +111,45 @@ export function runClaude(
                         }
                         resolve(result);
                     } catch {
-                        reject(new Error("Claude CLI returned no readable final result"));
+                        reject(
+                            diagnosticError("Claude CLI returned no readable final result", {
+                                exitCode: code,
+                                stdoutBytes,
+                                stderrBytes,
+                                errorCategory: "verification",
+                            }),
+                        );
                     }
                 } else {
                     resolve();
                 }
             } else {
                 reject(
-                    new Error(
+                    diagnosticError(
                         `Claude CLI failed (exit=${code ?? "unknown"}, signal=${signal ?? "none"}, stdout=${stdoutBytes}B, stderr=${stderrBytes}B; ${claudeFailureDetails(stdout)})`,
+                        {
+                            exitCode: code,
+                            signal,
+                            stdoutBytes,
+                            stderrBytes,
+                            errorCategory: "cli",
+                        },
                     ),
                 );
             }
         });
     });
+}
+
+/** Attaches only allowlisted diagnostic metadata to a safe adapter error.
+ * @param message Fixed adapter error message.
+ * @param diagnostic Safe metadata values.
+ * @returns Error carrying the safe metadata for the runner.
+ */
+function diagnosticError(message, diagnostic) {
+    const error = new Error(message);
+    error.diagnostic = diagnostic;
+    return error;
 }
 
 /** Extracts only bounded enum-like failure fields from Claude's JSON output.
