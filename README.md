@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="animate-mcp" width="140">
+<img src="assets/sns.jpg" alt="animate-mcp" width="720">
 
 # animate-mcp
 
